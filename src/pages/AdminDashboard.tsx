@@ -1,0 +1,13013 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import QRCode from 'react-qr-code';
+import Barcode from 'react-barcode';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import ReactMarkdown from 'react-markdown';
+import { auth, db, handleFirestoreError, OperationType, storage } from '../firebase';
+import { signOut, getAuth, createUserWithEmailAndPassword, updateEmail, updatePassword } from 'firebase/auth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { initializeApp, deleteApp } from 'firebase/app';
+import firebaseConfig from '../../firebase-applet-config.json';
+import { useLanguage } from '../lib/LanguageContext';
+import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSnapshot, serverTimestamp, limit, setDoc, deleteDoc, orderBy, arrayUnion } from 'firebase/firestore';
+import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff } from 'lucide-react';
+import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
+
+const Magnetic = ({ children, className }: { children: React.ReactNode, className?: string, key?: any }) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  const springConfig = { damping: 15, stiffness: 150 };
+  const springX = useSpring(x, springConfig);
+  const springY = useSpring(y, springConfig);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!ref.current) return;
+    const { clientX, clientY } = e;
+    const { width, height, left, top } = ref.current.getBoundingClientRect();
+    const centerX = left + width / 2;
+    const centerY = top + height / 2;
+    const distanceX = clientX - centerX;
+    const distanceY = clientY - centerY;
+    
+    x.set(distanceX * 0.35);
+    y.set(distanceY * 0.35);
+  };
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{ x: springX, y: springY }}
+      className={`w-full ${className || ''}`}
+    >
+      {children}
+    </motion.div>
+  );
+};
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { jsPDF } from 'jspdf';
+import * as htmlToImage from 'html-to-image';
+import { useAuth } from '../components/FirebaseProvider';
+import Marketplace from '../components/Marketplace';
+import ShareApp from '../components/ShareApp';
+
+export const normalizePhone = (phone: string) => {
+  let clean = phone.trim().replace(/\D/g, '');
+  if (clean.startsWith('251')) {
+    clean = '0' + clean.substring(3);
+  } else if (clean.length === 9 && (clean.startsWith('9') || clean.startsWith('7'))) {
+    clean = '0' + clean;
+  }
+  return clean;
+};
+
+export default function AdminDashboard() {
+  const { user, isSuperAdmin, userData } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
+  const [groups, setGroups] = useState<any[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [allGuarantors, setAllGuarantors] = useState<any[]>([]);
+  const [archivedMembers, setArchivedMembers] = useState<any[]>([]);
+  const [showArchivedFilter, setShowArchivedFilter] = useState('All');
+  const [admins, setAdmins] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [allPayments, setAllPayments] = useState<any[]>([]);
+  const [notification, setNotification] = useState({ title: '', message: '', recipientId: '' });
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [showScheduleDrawModal, setShowScheduleDrawModal] = useState(false);
+  const [ineligibleMembers, setIneligibleMembers] = useState<any[]>([]);
+  const [scheduledDrawGroup, setScheduledDrawGroup] = useState<any>(null);
+  const [drawScheduleDate, setDrawScheduleDate] = useState('');
+  const [drawScheduleTime, setDrawScheduleTime] = useState('');
+  const [paymentReviewModal, setPaymentReviewModal] = useState<any>(null);
+  const [paymentReviewMessage, setPaymentReviewMessage] = useState('');
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [showKYCModal, setShowKYCModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('pending');
+  const [smsMessage, setSmsMessage] = useState('');
+  const [smsRecipients, setSmsRecipients] = useState<string[]>([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [selectedRegionFilter, setSelectedRegionFilter] = useState<string>('All');
+  const [paymentHistoryView, setPaymentHistoryView] = useState<'pending' | 'history'>('pending');
+  const [paymentSearch, setPaymentSearch] = useState('');
+  const [penalties, setPenalties] = useState<any[]>([]);
+  const [allPenalties, setAllPenalties] = useState<any[]>([]);
+  const [penaltiesView, setPenaltiesView] = useState<'pending' | 'history'>('pending');
+  const [penaltySearch, setPenaltySearch] = useState('');
+  const [showIssuePenaltyModal, setShowIssuePenaltyModal] = useState(false);
+  const [issuePenaltyForm, setIssuePenaltyForm] = useState({ userId: '', userName: '', amount: 0, reason: '', type: 'Late Payment' });
+  const [isIssuingPenalty, setIsIssuingPenalty] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [allNotifications, setAllNotifications] = useState<any[]>([]);
+  const [rejectedUsers, setRejectedUsers] = useState<any[]>([]);
+  const [notifView, setNotifView] = useState<'unread' | 'history'>('unread');
+  const [notifSearch, setNotifSearch] = useState('');
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
+  const [allSupportTickets, setAllSupportTickets] = useState<any[]>([]);
+  const [supportSubTab, setSupportSubTab] = useState<'tickets' | 'forms'>('tickets');
+  const [supportView, setSupportView] = useState<'open' | 'closed'>('open');
+  const [supportSearch, setSupportSearch] = useState('');
+  const [isUpdatingTicket, setIsUpdatingTicket] = useState(false);
+  
+  const [adminForms, setAdminForms] = useState<any[]>([]);
+  const [allAdminForms, setAllAdminForms] = useState<any[]>([]);
+  const [legalRules, setLegalRules] = useState<any[]>([]);
+  const [isAddingRule, setIsAddingRule] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [newRuleForm, setNewRuleForm] = useState({ title: '', description: '', amTitle: '', amDescription: '', category: 'general' });
+  const [formsView, setFormsView] = useState<'pending' | 'resolved'>('pending');
+  const [isUpdatingForm, setIsUpdatingForm] = useState(false);
+
+  const [landingSettings, setLandingSettings] = useState<any>({
+    heroTitle: 'Community Credit,',
+    heroTitleModern: 'Modernized.',
+    heroTitleAm: 'ዘመናዊ የገንዘብ ቁጠባ እና መረዳጃ',
+    heroTitleModernAm: 'በአዲስ መልክ',
+    heroSubtitle: 'Leading Decentralized Equb Platform in Ethiopia',
+    heroSubtitleAm: 'ደህንነቱ የተጠበቀ እና ግልጽነት ያለው ዘመናዊ የእቁብ መድረክ',
+    welcomeText: t('admin.welcome_to_app'),
+    welcomeTextAm: t('admin.welcome_to_app_am'),
+    primaryColor: 'emerald-600',
+    footerAddress: 'Addis Ababa, Ethiopia',
+    footerPhone: '+251 911 000 000',
+    footerEmail: 'support@melikekub.com',
+    footerBrandName: 'Meliq Ekub',
+    footerDescription: 'Revolutionizing the traditional culture of saving through digital excellence and unparalleled community trust.',
+    footerDescriptionAm: 'የአባቶቻችንን የቁጠባ ባህል ወደ ዲጂታል ዓለም በማሸጋገር ማህበረሰባችንን በአስተማማኝ መሠረት ላይ እናበለጽጋለን።',
+    footerSections: [
+      {
+        id: 'quick-links',
+        title: 'Quick Links',
+        titleAm: 'ፈጣን አገናኞች',
+        links: [
+          { label: 'About Us', am: 'ስለ እኛ', slug: 'About Us' },
+          { label: 'Services', am: 'አገልግሎቶቻችን', slug: 'Services' },
+          { label: 'Stories', am: 'የደንበኞች አስተያየት', slug: 'Stories' },
+          { label: 'Payments', am: 'የክፍያ አማራጮች', slug: 'Payments' },
+        ]
+      },
+      {
+        id: 'resources',
+        title: 'Resources',
+        titleAm: 'ጠቃሚ መረጃዎች',
+        links: [
+          { label: 'Privacy Policy', am: 'የግላዊነት መመሪያ', slug: 'Privacy Policy' },
+          { label: 'Terms & Conditions', am: 'ውልና ደንቦች', slug: 'Terms & Conditions' },
+          { label: 'Security Guide', am: 'የደህንነት መመሪያ', slug: 'Security Guide' },
+          { label: 'Help Center', am: 'እርዳታ ለማግኘት', slug: 'Help Center' },
+        ]
+      }
+    ],
+    footerInfoItems: [
+      { id: 'community', title: 'Community', titleAm: 'የማህበረሰብ ደንብ', slug: 'Community' },
+      { id: 'history', title: 'Ekub History', titleAm: 'የእቁብ ታሪክ', slug: 'Ekub History' }
+    ],
+    footerInfoMap: {
+      'About Us': { am: 'ስለ እኛ', content: 'Revolutionizing the traditional culture of saving through digital excellence and unparalleled community trust.', contentAm: 'የአባቶቻችንን የቁጠባ ባህል ወደ ዲጂታል ዓለም በማሸጋገር ማህበረሰባችንን በአስተማማኝ መሠረት ላይ እናበለጽጋለን።' },
+      'Services': { am: 'አገልግሎቶቻችን', content: 'Join dynamic saving circles (Ekubs) tailored to your financial goals with transparent management.', contentAm: 'ከእርስዎ የፋይናንስ አቅም ጋር የሚስማማ እና ግልጽነት ያለው የእቁብ አገልግሎት ያግኙ።' },
+      'Stories': { am: 'የደንበኞች አስተያየት', content: 'Real stories from our members who achieved financial freedom through our digital platform.', contentAm: 'የመሊቅ እቁብ ተጠቃሚዎች የደረሱበትን ስኬት እና የደንበኞች ምስክርነት እዚህ ያገኛሉ።' },
+      'Payments': { am: 'የክፍያ አማራጮች', content: 'Secure and seamless payment integration with major banks and mobile wallets in Ethiopia.', contentAm: 'በአስተማማኝ የባንክ እና የሞባይል ክፍያ አማራጮች በቀላሉ ክፍያዎን ይፈጽሙ።' },
+      'Privacy Policy': { am: 'የግላዊነት መመሪያ', content: 'Your privacy is our priority. We employ state-of-the-art encryption to protect your data.', contentAm: 'የእርስዎን ግላዊነት መጠበቅ የእኛ ቅድሚያ የሚሰጠው ተግባር ነው።' },
+      'Terms & Conditions': { am: 'ውልና ደንቦች', content: 'Rules and regulations governing the use of our platform to ensure a fair community for all.', contentAm: 'የእቁብ አባላት ሊከተሏቸው የሚገቡ ግዴታዎች እና መመሪያዎች ስብስብ።' },
+      'Security Guide': { am: 'የደህንነት መመሪያ', content: 'Learn how we keep your funds secure and how you can protect your account.', contentAm: 'መረጃዎን እና ገንዘብዎን ደህንነቱ የተጠበቀ ለማድረግ የተዘጋጁ መመሪያዎች።' },
+      'Help Center': { am: 'እርዳታ ለማግኘት', content: 'Need assistance? Our support team is available 24/7 to guide you through any challenges.', contentAm: 'ጥያቄ አለዎት? የደንበኞች ድጋፍ ቡድናችንን በማንኛውም ሰዓት ያግኙ።' }
+    }
+  });
+  const [newSliderImageUrl, setNewSliderImageUrl] = useState('');
+  const [viewingGroupId, setViewingGroupId] = useState<string | null>(null);
+  const [aiInsights, setAiInsights] = useState<string>('');
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'landing_settings', 'main'), (docSnap) => {
+      if (docSnap.exists()) {
+        setLandingSettings(docSnap.data());
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // ... previous code
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const uploadImage = async (file: File) => {
+    if (!file) return null;
+    const storageRef = ref(storage, 'landing_images/' + Date.now() + '_' + file.name);
+    const snapshot = await uploadBytes(storageRef, file);
+    return await getDownloadURL(snapshot.ref);
+  };
+
+  const saveLandingSettings = async () => {
+    try {
+      await setDoc(doc(db, 'landing_settings', 'main'), {
+        ...landingSettings,
+        updatedAt: new Date().toISOString()
+      });
+      alert(language === 'am' ? 'ቅንብሮች ተቀምጠዋል!' : 'Landing page settings saved!');
+    } catch (error) {
+      console.error('Error saving landing settings:', error);
+    }
+  };
+// ... later in the UI, replace the text input for images with the upload button
+
+  const generateAIInsights = async () => {
+    if (isGeneratingInsights) return;
+    setIsGeneratingInsights(true);
+    try {
+      const dataSummary = {
+        users: allUsers.length,
+        pendingKYC: pendingUsers.length,
+        groups: groups.map(g => ({ name: g.name, type: g.type, members: allUsers.filter(u => u.groupId === g.id).length, limit: g.memberCount, amount: g.amount })),
+        recentPayments: allPayments.slice(0, 10).map(p => ({ amount: p.amount, status: p.status })),
+        payoutsPending: payouts.length,
+        totalCapital: groups.reduce((acc, g) => acc + ((parseInt(g.amount) || 0) * (g.memberCount || 10)), 0)
+      };
+
+      const response = await fetch('/api/gemini-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataSummary, language })
+      });
+
+      const result = await response.json();
+      if (result.error) {
+        setAiInsights(result.error);
+      } else {
+        setAiInsights(result.text || 'Failed');
+      }
+    } catch (error) {
+      console.error('AI Insight Error:', error);
+      setAiInsights(language === 'am' ? 'ለጊዜው ትንታኔ ማመንጨት አልተቻለም። ድጋሚ ይሞክሩ።' : 'Error generating insights. Please try again later.');
+    } finally {
+      setIsGeneratingInsights(false);
+    }
+  };
+
+  const [itemsCount, setItemsCount] = useState(0);
+  const [payouts, setPayouts] = useState<any[]>([]);
+  const [allPayouts, setAllPayouts] = useState<any[]>([]);
+  const [payoutsView, setPayoutsView] = useState<'pending' | 'history'>('pending');
+  const [payoutSearch, setPayoutSearch] = useState('');
+  const [reportSearch, setReportSearch] = useState('');
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditFilter, setAuditFilter] = useState<'all' | 'payment' | 'security'>('all');
+  const [selectedAuditLog, setSelectedAuditLog] = useState<any>(null);
+  const [systemSettings, setSystemSettings] = useState<any>({
+     currency: 'ETB',
+     autoApprove: false,
+     notifyRegistrations: true,
+     maintenanceMode: false,
+     maxGroupSize: 10,
+     theme: 'light',
+     require2FA: false,
+     strictLogin: true,
+     detailedAudit: true,
+     defaultUserPassword: 'Password@123',
+     signupShowBirthplace: true,
+     signupShowAddress: true,
+     signupShowGroup: true,
+     signupShowKYC: true,
+     signupCustomFields: [] as any[],
+     shareLink: '',
+  });
+  
+  const [adminProfileEdits, setAdminProfileEdits] = useState<any>({});
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [isSettingsChanged, setIsSettingsChanged] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  
+  // Combine users and admins to ensure we can find the current logged-in user profile even if they are in the admins list
+  const adminProfile = [...allUsers, ...admins].find(u => u.uid === auth.currentUser?.uid) || {};
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'system_settings', 'main'), (docSnap) => {
+      if (docSnap.exists()) {
+        setSystemSettings(prev => ({ ...prev, ...docSnap.data() }));
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'system_settings/main');
+    });
+    return () => unsub();
+  }, []);
+
+  const saveSystemSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      if (isSettingsChanged) {
+        await setDoc(doc(db, 'system_settings', 'main'), systemSettings, { merge: true });
+      }
+      
+      if (Object.keys(adminProfileEdits).length > 0 && auth.currentUser) {
+        // Only sync Password with Auth. Email update is restricted in some Firebase projects.
+        // We will handle the phone/email mapping during the Login process by keeping 'email' field updated in Firestore.
+        if (adminProfileEdits.password) {
+          // Re-authenticate if password is being changed
+          if (!currentPassword) {
+            throw new Error('CURRENT_PASSWORD_REQUIRED');
+          }
+          
+          const { EmailAuthProvider, reauthenticateWithCredential } = await import('firebase/auth');
+          const credential = EmailAuthProvider.credential(auth.currentUser.email!, currentPassword);
+          await reauthenticateWithCredential(auth.currentUser, credential);
+          
+          await updatePassword(auth.currentUser, adminProfileEdits.password);
+        }
+
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        // Prepare clean edits for Firestore (remove password, add authEmail to ensure we never lose it)
+        const { password: _, phone: editedPhone, _isChangingPassword: __, ...firestoreEdits } = adminProfileEdits;
+        
+        // Normalize phone if changed
+        const cleanPhone = editedPhone ? normalizePhone(editedPhone) : undefined;
+        
+        // Always ensure the email field in Firestore matches the current Auth email 
+        // even if they change their phone, so Login.tsx can resolve it.
+        const finalFirestoreEdits = {
+          ...firestoreEdits,
+          ...(cleanPhone ? { phone: cleanPhone } : {}),
+          email: auth.currentUser.email,
+          authEmail: auth.currentUser.email, // Backup
+          updatedAt: serverTimestamp()
+        };
+        
+        await updateDoc(userRef, finalFirestoreEdits);
+        
+        // Optimistic UI update to prevent flicker ("ተካልኝ")
+        setAllUsers(prev => prev.map(u => u.uid === auth.currentUser?.uid ? { ...u, ...finalFirestoreEdits } : u));
+        setAdmins(prev => prev.map(a => a.uid === auth.currentUser?.uid ? { ...a, ...finalFirestoreEdits } : a));
+        
+        setAdminProfileEdits({});
+        setCurrentPassword('');
+      }
+      
+      setIsSettingsChanged(false);
+      alert(language === 'am' ? 'ቅንብሮች በተሳካ ሁኔታ ተቀምጠዋል!' : 'Settings saved successfully!');
+    } catch (error: any) {
+      console.error('Error saving settings:', error);
+      if (error.message === 'CURRENT_PASSWORD_REQUIRED') {
+        alert(language === 'am' ? 'የአሁኑን የይለፍ ቃል ማስገባት ግድ ነው!' : 'Current password is required to save changes!');
+      } else if (error.code === 'auth/requires-recent-login' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+         alert(language === 'am' ? 'የተሳሳተ የይለፍ ቃል ወይም ዳግመኛ መግባት ያስፈልጋል። እባክዎ የአሁኑን የይለፍ ቃል በትክክል ያስገቡ።' : 'Wrong password or session expired. Please re-enter your current password correctly.');
+      } else {
+         alert(language === 'am' ? 'ቅንብሮችን ማሳወቅ አልተቻለም። ድጋሚ ይሞክሩ።' : 'Failed to save settings. Please try again.');
+      }
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const updateSetting = (key: string, value: any) => {
+    setSystemSettings(s => ({ ...s, [key]: value }));
+    setIsSettingsChanged(true);
+  };
+
+
+  const groupsWithMembers = useMemo(() => {
+    return groups.map(group => ({
+      ...group,
+      members: allUsers.filter(u => u.groupId === group.id)
+    }));
+  }, [groups, allUsers]);
+
+  const [chatSearch, setChatSearch] = useState('');
+
+  const menuSections = useMemo(() => [
+    { 
+      group: language === 'am' ? 'አስተዳደር' : t('admin.management'), 
+      items: [
+        { id: 'analytics', label: language === 'am' ? 'ዳሽቦርድ' : t('menu.admin.analytics'), icon: LayoutDashboard },
+        { 
+          id: 'pending', 
+          label: language === 'am' ? 'ማረጋገጫ የሚጠብቁ (KYC)' : t('menu.admin.pending'), 
+          icon: ShieldCheck, 
+          badge: pendingUsers.length > 0 ? pendingUsers.length : null,
+          description: language === 'am' ? 'አዳዲስ የአባላት ምዝገባ ማረጋገጫ' : 'Review new member applications',
+          className: "hover:bg-amber-50/50 border-amber-100"
+        },
+        { 
+          id: 'users', 
+          label: language === 'am' ? 'ሁሉም አባላት' : 'All Members', 
+          icon: Users,
+          description: language === 'am' ? 'የተመዘገቡ አባላት ዝርዝር እና መረጃ' : 'Manage registered members',
+          className: "hover:bg-slate-50 border-slate-100" 
+        },
+        { 
+          id: 'rejected', 
+          label: language === 'am' ? 'ውድቅ የተደረጉ' : 'Rejected Members', 
+          icon: XCircle,
+          badge: rejectedUsers.length > 0 ? rejectedUsers.length : null,
+          description: language === 'am' ? 'ውድቅ የተደረጉ አባላት ዝርዝር' : 'List of rejected member applications',
+          className: "hover:bg-rose-50/50 border-rose-100" 
+        },
+        { 
+          id: 'groups', 
+          label: language === 'am' ? 'የምድቦች ስብስብ' : t('menu.admin.groups'), 
+          icon: Folder, 
+          description: language === 'am' ? 'የእቁብ ቡድኖች እና ክፍያዎች ቅንብር' : 'Configure ekub groups and cycles',
+          className: "hover:bg-indigo-50/50 border-indigo-100" 
+        },
+        { 
+          id: 'draws', 
+          label: language === 'am' ? 'የእጣ ውጤቶች' : t('menu.admin.draws'), 
+          icon: Trophy, 
+          description: language === 'am' ? 'የእጣ ማውጫ እና አሸናፊዎች ታሪክ' : 'Conduct draws and view winners',
+          className: "hover:bg-amber-50 group-hover:text-amber-600 border-amber-100"
+        },
+        { 
+          id: 'guarantors', 
+          label: language === 'am' ? 'የዋስ መረጃዎች' : t('menu.admin.guarantors'), 
+          icon: Shield, 
+          description: language === 'am' ? 'የዋሶች ፎርም እና የአሸናፊዎች ዋስ' : 'Legal guarantor management',
+          className: "hover:bg-emerald-50/50 border-emerald-100" 
+        },
+        { 
+          id: 'admins', 
+          label: language === 'am' ? 'የአድሚን ቡድን' : t('menu.admin.admins'), 
+          icon: Lock, 
+          description: language === 'am' ? 'የአስተዳዳሪዎች ዝርዝር እና ስልጣን' : 'System administrators and roles',
+          superOnly: true,
+          className: "hover:bg-rose-50/50 border-rose-100"
+        },
+        { 
+          id: 'legal', 
+          label: language === 'am' ? 'ህግና ደንቦች' : 'Legal & Rules', 
+          icon: Scale, 
+          description: language === 'am' ? 'የእቁብ ህጎችን እና ደንቦችን ማስተዳደሪያ' : 'Manage legal framework and rules',
+          className: "hover:bg-indigo-50/50 border-indigo-100" 
+        },
+      ]
+    },
+    { 
+      group: t('admin.operations'), 
+      items: [
+        { 
+          id: 'payments', 
+          label: language === 'am' ? 'መዋጮዎች' : t('menu.admin.payments'), 
+          icon: DollarSign, 
+          badge: payments.length > 0 ? payments.length : null,
+          description: language === 'am' ? 'የአባላት ወርሃዊ መዋጮ ቁጥጥር' : 'Monitor member contributions',
+          className: "hover:bg-blue-50/50 border-blue-100"
+        },
+        { 
+          id: 'payouts', 
+          label: language === 'am' ? 'የአሸናፊዎች ክፍያ' : t('menu.admin.payouts'), 
+          icon: CreditCard,
+          badge: payouts.length > 0 ? payouts.length : null,
+          description: language === 'am' ? 'እጣ ለደረሳቸው አባላት የሚደረግ ክፍያ' : 'Winner disbursement management',
+          className: "hover:bg-amber-50/50 border-amber-100"
+        },
+        { 
+          id: 'penalties', 
+          label: language === 'am' ? 'ቅጣቶች' : t('menu.admin.penalties'), 
+          icon: AlertOctagon,
+          badge: penalties.length > 0 ? penalties.length : null,
+          description: language === 'am' ? 'ክፍያ ያዘገዩ አባላት መቆጣጠሪያ' : 'Manage late payment penalties',
+          className: "hover:bg-rose-50/50 border-rose-100" 
+        },
+      ]
+    },
+    { 
+      group: language === 'am' ? 'መገናኛ' : t('admin.communication'), 
+      items: [
+        { 
+          id: 'chat', 
+          label: language === 'am' ? 'መልእክቶች' : t('menu.admin.chat'), 
+          icon: MessageCircle, 
+          description: language === 'am' ? 'ከአባላት ጋር የሚደረግ ግንኙነት' : 'Communicate with members',
+          className: "hover:bg-indigo-50/50 border-indigo-100" 
+        },
+        { 
+          id: 'notifications', 
+          label: language === 'am' ? 'ማሳወቂያዎች' : t('menu.admin.notifications'), 
+          icon: Bell, 
+          description: language === 'am' ? 'ጠቃሚ መልእክቶችን ለአባላት መላኪያ' : 'Send important alerts to members',
+          className: "hover:bg-blue-50/50 border-blue-100" 
+        },
+        { 
+          id: 'sms', 
+          label: language === 'am' ? 'የአጭር መልዕክት (SMS)' : 'SMS Messages', 
+          icon: MessageCircle, 
+          description: language === 'am' ? 'በስልክ ቁጥር አጭር መልዕክት መላኪያ' : 'Send SMS messages to members',
+          className: "hover:bg-emerald-50/50 border-emerald-100" 
+        },
+        { 
+          id: 'support', 
+          label: language === 'am' ? 'እርዳታ' : t('menu.admin.support'), 
+          icon: HelpCircle, 
+          badge: supportTickets.length > 0 ? supportTickets.length : null,
+          description: language === 'am' ? 'የአባላት የቴክኒክ እና ሌሎች ቅሬታዎች' : 'Member feedback and technical issues',
+          className: "hover:bg-slate-50 border-slate-100" 
+        },
+        { 
+          id: 'share',
+          label: language === 'am' ? 'አጋራ (Share)' : 'Share App',
+          icon: Share2,
+          description: language === 'am' ? 'አፕሊኬሽኑን ያጋሩ' : 'Share the app',
+          className: "hover:bg-amber-50/50 border-amber-100"
+        },
+      ]
+    },
+    { 
+      group: language === 'am' ? 'ስርዓት' : t('admin.system'), 
+      items: [
+        { 
+          id: 'market', 
+          label: language === 'am' ? 'ገበያ' : t('menu.admin.market'), 
+          icon: ShoppingBag, 
+          badge: itemsCount > 0 ? itemsCount : null,
+          description: language === 'am' ? 'የአባላት የንግድ ልውውጥ መቆጣጠሪያ' : 'Manage member trade listings',
+          className: "hover:bg-emerald-50/50 border-emerald-100" 
+        },
+        { 
+          id: 'reports', 
+          label: language === 'am' ? 'ሪፖርቶች' : t('menu.admin.reports'), 
+          icon: FileText, 
+          description: language === 'am' ? 'የፋይናንስ እና የአባላት ዝርዝር ሪፖርቶች' : 'Detailed financial and member analytics',
+          className: "hover:bg-slate-50 border-slate-100" 
+        },
+        { 
+          id: 'audit', 
+          label: language === 'am' ? 'ኦዲት' : t('menu.admin.audit'), 
+          icon: Eye, 
+          description: language === 'am' ? 'የስርዓት እንቅስቃሴዎች እና የደህንነት መዝገቦች' : 'System activity logs and security audit',
+          className: "hover:bg-indigo-50/50 border-indigo-100" 
+        },
+        { 
+          id: 'archive', 
+          label: language === 'am' ? 'ዙር ማህደር' : 'Cycles Archive', 
+          icon: Archive, 
+          description: language === 'am' ? 'ያለቁ ዙሮች እና አባላት ታሪክ' : 'Finished cycles and archived members history',
+          className: "hover:bg-amber-50/50 border-amber-100" 
+        },
+        { 
+          id: 'settings', 
+          label: language === 'am' ? 'ቅንብሮች' : t('menu.admin.settings'), 
+          icon: Settings, 
+          description: language === 'am' ? 'የስርዓት አጠቃላይ ማስተካከያዎች እና ውቅሮች' : 'System configurations and general settings',
+          className: "hover:bg-slate-50 border-slate-100" 
+        },
+        { 
+          id: 'landing', 
+          label: language === 'am' ? 'ላንዲንግ ፔጅ' : 'Landing Page', 
+          icon: Globe, 
+          description: language === 'am' ? 'የመጀመሪያውን ገጽ ይዘቶች ማስተካከያ' : 'Customize landing page content',
+          className: "hover:bg-emerald-50/50 border-emerald-100" 
+        },
+        { 
+          id: 'ai_advisor', 
+          label: language === 'am' ? 'AI አማካሪ' : 'AI Advisor', 
+          icon: Sparkles, 
+          description: language === 'am' ? 'በአርቴፊሻል ኢንተለጀንስ የታገዘ የዳታ ትንተና' : 'AI-powered data insights and recommendations',
+          className: "hover:bg-violet-50/50 border-violet-100" 
+        },
+      ]
+    }
+  ], [t, pendingUsers.length, payments.length, payouts.length, penalties.length, itemsCount, language]);
+
+  const defaultGuarantorForm = `--------------------------------------------------
+መሊቅ እቁብ - የዋስ መረጃ መሙያ ፎርም
+--------------------------------------------------
+ይህ ፎርም እቁቡን የደረሳቸው አባላት ገንዘባቸውን ከመውሰዳቸው በፊት የሚሞላ ህጋዊ ማረጋገጫ ሲሆን የዋሶቹ ኃላፊነት ከተጠቀሰው አባል ጋር በመተባበር ማንኛውንም አይነት የገንዘብ ክፍያ መዘግየት ወይም አለመከፈል ቢከሰት ሙሉ ሀላፊነቱን እንደሚወስዱ ማረጋገጫ ነው።
+
+ቀን: ${new Date().toLocaleDateString('am-ET')}
+
+የአባሉ ስም: ____________________________
+የእቁብ አይነት: _____________________________
+
+የ1ኛው ዋስ መረጃ:
+ሙሉ ስም: ______________________________
+ስልክ ቁጥር: ___________________________
+መታወቂያ ቁጥር: ______________________________
+ፊርማ: ______________________________
+
+የ2ኛው ዋስ መረጃ:
+ሙሉ ስም: ______________________________
+ስልክ ቁጥር: ___________________________
+መታወቂያ ቁጥር: ______________________________
+ፊርማ: ______________________________
+
+የ3ኛው ዋስ መረጃ:
+ሙሉ ስም: ______________________________
+ስልክ ቁጥር: ___________________________
+መታወቂያ ቁጥር: ______________________________
+ፊርማ: ______________________________
+
+ማሳሰቢያ: ይህንን ፎርም በመፈረም ዋሶቹ በአባሉ ላይ የሚመጣውን 
+ማንኛውንም ግዴታ በመሊቅ እቁብ የህግ ማዕቀፍ እና በሚመለከተው የመንግስት አካል ፊት 
+ኃላፊነት ለመውሰድ በሙሉ ፈቃደኝነት ተስማምተዋል።
+--------------------------------------------------`;
+
+  const [showDrawModal, setShowDrawModal] = useState(false);
+  const [guarantorFormContent, setGuarantorFormContent] = useState<string>(defaultGuarantorForm);
+  const [selectedDrawGroup, setSelectedDrawGroup] = useState<any>(null);
+  const [drawStage, setDrawStage] = useState<'select' | 'animating' | 'result'>('select');
+  const [drawWinner, setDrawWinner] = useState<any>(null);
+  const [manualWinnerId, setManualWinnerId] = useState('');
+
+  const getTimeSince = (date: any) => {
+    if (!date) return t('time.unknown');
+    const now = new Date();
+    const created = date.toDate ? date.toDate() : new Date(date);
+    const diff = now.getTime() - created.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    if (days === 0) {
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      if (hours === 0) return t('time.just_now');
+      return t('time.hours_ago').replace('{hours}', hours.toString());
+    }
+    return t('time.days_ago').replace('{days}', days.toString());
+  };
+
+  const calculateIntegrityScore = (userId: string) => {
+    const userPayments = allPayments.filter(p => p.userId === userId && p.status === 'approved').length;
+    const userPenalties = allPenalties.filter(p => p.userId === userId && (p.status === 'pending' || p.status === 'active' || p.status === 'settled')).length;
+    const activePenalties = allPenalties.filter(p => p.userId === userId && (p.status === 'pending' || p.status === 'active')).length;
+    
+    // Integrity is 100% minus 20% for each active (unsettled) penalty, plus 5% for each on-time payment
+    const baseScore = 80;
+    const paymentPower = Math.min(20, userPayments * 4);
+    const penaltyPenalty = activePenalties * 25;
+    
+    const finalScore = Math.min(100, Math.max(0, baseScore + paymentPower - penaltyPenalty));
+    return finalScore;
+  };
+
+  useEffect(() => {
+    if (isSuperAdmin) return;
+    if (userData?.permissions) {
+      if (userData.permissions.manageUsers) setActiveTab('pending');
+      else if (userData.permissions.manageGroups) setActiveTab('groups');
+      else if (userData.permissions.approvePayments) setActiveTab('payments');
+    }
+  }, [isSuperAdmin, userData]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [userViewMode, setUserViewMode] = useState<'grid' | 'list'>('grid');
+  const [userSortBy, setUserSortBy] = useState<'name' | 'date' | 'slots' | 'region'>('name');
+  const [userSortOrder, setUserSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUserIds(prev => 
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const selectAllUsers = (filteredUsers: any[]) => {
+    if (selectedUserIds.length === filteredUsers.length) {
+      setSelectedUserIds([]);
+    } else {
+      setSelectedUserIds(filteredUsers.map(u => u.id));
+    }
+  };
+
+  const handleExportUsers = (usersToExport: any[]) => {
+    try {
+      const headers = ['Full Name', 'Phone', 'Region', 'Status', 'Verified', 'Slots', 'Joined Date'];
+      const csvContent = [
+        headers.join(','),
+        ...usersToExport.map(u => [
+          `"${u.fullName || ''}"`,
+          `"${u.phone || ''}"`,
+          `"${u.addressRegion || 'Not Set'}"`,
+          `"${u.status || 'pending'}"`,
+          u.isVerified ? 'Yes' : 'No',
+          u.slots || 1,
+          u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate().toLocaleDateString() : new Date(u.createdAt).toLocaleDateString()) : 'N/A'
+        ].join(','))
+      ].join('\\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `members_report_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    }
+  };
+
+  const handleBulkVerify = async () => {
+    if (selectedUserIds.length === 0) return;
+    if (!confirm(language === 'am' ? `${selectedUserIds.length} አባላትን ማረጋገጥ ይፈልጋሉ?` : `Are you sure you want to verify ${selectedUserIds.length} members?`)) return;
+    
+    try {
+      const promises = selectedUserIds.map(userId => 
+        updateDoc(doc(db, 'users', userId), { 
+          isVerified: true,
+          verifiedAt: serverTimestamp()
+        })
+      );
+      await Promise.all(promises);
+      setSelectedUserIds([]);
+      alert(language === 'am' ? 'ሁሉም አባላት በተሳካ ሁኔታ ተረጋግጠዋል!' : 'All selected members verified successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/bulk`);
+    }
+  };
+
+  const [insightFilter, setInsightFilter] = useState<{type: 'region' | 'status' | 'verification' | 'slots' | null, value: string | null}>({type: null, value: null});
+
+  const escapeRegExp = (string: string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  };
+
+  const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 800): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width *= ratio;
+          height *= ratio;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'medium';
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+    });
+  };
+
+  const highlightText = (text: string, highlight: string) => {
+    if (!highlight.trim()) return text;
+    const escapedHighlight = escapeRegExp(highlight);
+    const regex = new RegExp(`(${escapedHighlight})`, 'gi');
+    const parts = text.split(regex);
+    return (
+      <>
+        {parts.map((part, i) => 
+          regex.test(part) ? (
+            <mark key={i} className="bg-yellow-200 text-slate-900 rounded-sm px-0.5">{part}</mark>
+          ) : (
+            <span key={i}>{part}</span>
+          )
+        )}
+      </>
+    );
+  };
+  
+  const [adminChatTarget, setAdminChatTarget] = useState<{ type: 'private' | 'group' | 'all', id: string, name: string }>({ type: 'all', id: 'all', name: t('chat.all_members') });
+
+  const filteredUsers = useMemo(() => {
+    return allUsers.filter(u => {
+      const matchesSearch = (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (u.phone || '').includes(searchTerm);
+      const matchesRegionFilter = selectedRegionFilter === 'All' || u.addressRegion === selectedRegionFilter;
+      
+      let matchesInsight = true;
+      if (insightFilter.type === 'region') matchesInsight = (u.addressRegion || 'Not Specified') === insightFilter.value;
+      if (insightFilter.type === 'status') matchesInsight = u.status === insightFilter.value;
+      if (insightFilter.type === 'verification') matchesInsight = insightFilter.value === 'verified' ? u.isVerified : !u.isVerified;
+      if (insightFilter.type === 'slots') matchesInsight = u.slots > 1;
+
+      return matchesSearch && matchesRegionFilter && matchesInsight;
+    }).sort((a, b) => {
+      let valA: any, valB: any;
+      if (userSortBy === 'name') { valA = a.fullName || ''; valB = b.fullName || ''; }
+      else if (userSortBy === 'date') { valA = a.createdAt?.seconds || 0; valB = b.createdAt?.seconds || 0; }
+      else if (userSortBy === 'slots') { valA = a.slots || 1; valB = b.slots || 1; }
+      else if (userSortBy === 'region') { valA = a.addressRegion || ''; valB = b.addressRegion || ''; }
+      
+      if (userSortOrder === 'asc') return valA > valB ? 1 : -1;
+      return valA < valB ? 1 : -1;
+    });
+  }, [allUsers, searchTerm, selectedRegionFilter, insightFilter, userSortBy, userSortOrder]);
+
+  const [deleteMsgConfig, setDeleteMsgConfig] = useState<{isOpen: boolean, messageId: string | null}>({isOpen: false, messageId: null});
+  const [messages, setMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
+  const [upcomingDraws, setUpcomingDraws] = useState<any[]>([]);
+  const [showAddUpcomingModal, setShowAddUpcomingModal] = useState(false);
+  const [newUpcomingDraw, setNewUpcomingDraw] = useState({ title: '', titleAm: '', description: '', descriptionAm: '', date: '', amount: '50,000' });
+  const [selectedGuarantorDocsUser, setSelectedGuarantorDocsUser] = useState<any>(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'upcoming_draws'), (snapshot) => {
+      setUpcomingDraws(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const handleAddUpcomingDraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await addDoc(collection(db, 'upcoming_draws'), {
+        ...newUpcomingDraw,
+        createdAt: serverTimestamp(),
+        active: true
+      });
+      setShowAddUpcomingModal(false);
+      setNewUpcomingDraw({ title: '', titleAm: '', description: '', descriptionAm: '', date: '', amount: '50,000' });
+      alert(language === 'am' ? 'እጣው በተሳካ ሁኔታ ተመዝግቧል!' : 'Upcoming draw added successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'upcoming_draws');
+    }
+  };
+
+  const deleteUpcomingDraw = async (id: string) => {
+    if (!window.confirm(language === 'am' ? 'ይህንን እጣ መሰረዝዎን እርግጠኛ ነዎት?' : 'Are you sure you want to delete this upcoming draw?')) return;
+    try {
+      await deleteDoc(doc(db, 'upcoming_draws', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `upcoming_draws/${id}`);
+    }
+  };
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      let chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64Audio = reader.result as string;
+          if (!user) return;
+          try {
+            const payload: any = {
+              senderId: user.uid,
+              senderName: t('chat.admin') + ' (' + (user.displayName || 'Admin') + ')',
+              senderRole: 'admin',
+              text: '🎤 ' + t('chat.voice_message'),
+              audioUrl: base64Audio,
+              createdAt: serverTimestamp(),
+              targetType: adminChatTarget.type
+            };
+
+            if (adminChatTarget.type === 'private') {
+              payload.targetUserId = adminChatTarget.id;
+            } else if (adminChatTarget.type === 'group') {
+              payload.groupId = adminChatTarget.id;
+            }
+
+            await addDoc(collection(db, 'messages'), payload);
+          } catch (error) {
+            console.error(error);
+          }
+        };
+        stream.getTracks().forEach(track => track.stop());
+      };
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (err) {
+      console.error(err);
+      alert("ማይክሮፎን መጠቀም አልተቻለም!");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleAdminFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    
+    // Higher limit for high-quality images, but still mindful of Firestore document size (1MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert(language === 'am' ? 'የፋይሉ መጠን ከ 2MB መብለጥ የለበትም።' : 'File size must not exceed 2MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onloadend = async () => {
+      let base64Data = reader.result as string;
+      
+      if (type === 'image') {
+        const compressed = await compressImage(base64Data);
+        base64Data = compressed;
+      }
+
+      try {
+        const payload: any = {
+          senderId: user.uid,
+          senderName: t('admin.admin_label') + ' (' + (user.displayName || 'Admin') + ')',
+          senderRole: 'admin',
+          text: type === 'image' ? '📸 ፎቶ (Image)' : `📄 ፋይል (File: ${file.name})`,
+          [type === 'image' ? 'imageUrl' : 'fileUrl']: base64Data,
+          fileName: file.name,
+          createdAt: serverTimestamp(),
+          targetType: adminChatTarget.type
+        };
+
+        if (adminChatTarget.type === 'private') {
+          payload.targetUserId = adminChatTarget.id;
+        } else if (adminChatTarget.type === 'group') {
+          payload.groupId = adminChatTarget.id;
+        }
+
+        await addDoc(collection(db, 'messages'), payload);
+      } catch (error) {
+        console.error(error);
+        alert(language === 'am' ? 'ፋይል መላክ አልተቻለም!' : 'Failed to send file. File may be too large.');
+      }
+    };
+  };
+
+  useEffect(() => {
+    if (activeTab === 'chat' || (activeTab === 'groups' && viewingGroupId)) {
+      if (chatEndRef.current) {
+        chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [messages, activeTab, viewingGroupId]);
+
+  useEffect(() => {
+    if (activeTab !== 'chat' && !(activeTab === 'groups' && viewingGroupId)) {
+      if (unsubMessages) {
+        unsubMessages();
+        setUnsubMessages(null);
+      }
+      return;
+    }
+
+    let q;
+    if (adminChatTarget.type === 'private') {
+      // For private, we can either use targetUserId or a specific user logic
+      // In Dashboard.tsx we added targetUserId for private messages
+      // We will pull all messages sent by this user OR sent to this user
+      q = query(collection(db, 'messages'), 
+         where('targetUserId', '==', adminChatTarget.id)
+      );
+    } else if (adminChatTarget.type === 'group') {
+      q = query(collection(db, 'messages'), where('groupId', '==', adminChatTarget.id));
+    } else {
+      q = query(collection(db, 'messages'), where('targetType', '==', 'all'));
+    }
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      let msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+      if (user) {
+         msgs = msgs.filter(m => !m.deletedFor?.includes(user.uid));
+      }
+
+      // Sort
+      msgs = msgs.sort((a: any, b: any) => {
+        const aT = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt||0).getTime();
+        const bT = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt||0).getTime();
+        return aT - bT;
+      });
+      setMessages(msgs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'messages');
+    });
+
+    setUnsubMessages(() => unsub);
+
+    return () => unsub();
+  }, [adminChatTarget, activeTab, viewingGroupId]);
+
+  const openGroupDetails = (group: any) => {
+    setViewingGroupId(group.id);
+    setAdminChatTarget({ type: 'group', id: group.id, name: group.name });
+  };
+
+  const openChat = (group: any) => {
+    setActiveTab('chat');
+    setAdminChatTarget({ type: 'group', id: group.id, name: group.name });
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !user) return;
+    try {
+      if (editingMessageId) {
+        await updateDoc(doc(db, 'messages', editingMessageId), {
+          text: newMessage,
+          isEdited: true,
+          updatedAt: serverTimestamp()
+        });
+        setEditingMessageId(null);
+      } else {
+        const payload: any = {
+          senderId: user.uid,
+          senderName: t('admin.admin_label') + ' (' + (user.displayName || 'Admin') + ')',
+          senderRole: 'admin',
+          text: newMessage,
+          createdAt: serverTimestamp(),
+          targetType: adminChatTarget.type
+        };
+
+        if (adminChatTarget.type === 'private') {
+          payload.targetUserId = adminChatTarget.id;
+        } else if (adminChatTarget.type === 'group') {
+          payload.groupId = adminChatTarget.id;
+        }
+
+        await addDoc(collection(db, 'messages'), payload);
+      }
+      setNewMessage('');
+    } catch (error) {
+      if (editingMessageId) {
+        handleFirestoreError(error, OperationType.UPDATE, `messages/${editingMessageId}`);
+      } else {
+        handleFirestoreError(error, OperationType.CREATE, 'messages');
+      }
+    }
+  };
+
+  const handleDeleteMessage = (messageId: string) => {
+    setDeleteMsgConfig({ isOpen: true, messageId });
+  };
+
+  const confirmDeleteMessage = async (deleteType: 'forMe' | 'forEveryone') => {
+    if (!deleteMsgConfig.messageId) return;
+    try {
+      if (deleteType === 'forEveryone') {
+        await deleteDoc(doc(db, 'messages', deleteMsgConfig.messageId));
+      } else {
+        await updateDoc(doc(db, 'messages', deleteMsgConfig.messageId), {
+          deletedFor: arrayUnion(user?.uid)
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `messages/${deleteMsgConfig.messageId}`);
+    } finally {
+      setDeleteMsgConfig({ isOpen: false, messageId: null });
+    }
+  };
+
+  useEffect(() => {
+    // Listen for groups
+    const unsubGroups = onSnapshot(collection(db, 'groups'), (snapshot) => {
+      const groupsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setGroups(groupsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'groups');
+    });
+
+    // Listen for pending users
+    const unsubPending = onSnapshot(query(collection(db, 'users'), where('status', '==', 'pending')), (snapshot) => {
+      setPendingUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
+
+    // Listen for all users
+    const unsubAllUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const usersList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      setAllUsers(usersList.filter(u => u.role !== 'admin' && u.role !== 'super_admin'));
+      setAdmins(usersList.filter(u => u.role === 'admin' || u.role === 'super_admin'));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
+
+    const unsubGuarantors = onSnapshot(collection(db, 'guarantors'), (snapshot) => {
+      setAllGuarantors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'guarantors');
+    });
+
+    const unsubArchived = onSnapshot(collection(db, 'archived_members'), (snapshot) => {
+      setArchivedMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'archived_members');
+    });
+
+    // Listen for pending payments
+    const unsubPayments = onSnapshot(query(collection(db, 'payments'), where('status', '==', 'pending')), (snapshot) => {
+      setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'payments');
+    });
+
+    const unsubAllPayments = onSnapshot(query(collection(db, 'payments'), where('status', '==', 'active'), limit(50)), (snapshot) => {
+      setAllPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'payments');
+    });
+
+    const unsubPayouts = onSnapshot(query(collection(db, 'payouts'), where('status', '==', 'pending')), (snapshot) => {
+      setPayouts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'payouts');
+    });
+
+    const unsubAllPayouts = onSnapshot(query(collection(db, 'payouts'), where('status', 'in', ['active', 'cancelled']), limit(50)), (snapshot) => {
+      setAllPayouts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'payouts');
+    });
+
+    const unsubPenalties = onSnapshot(query(collection(db, 'penalties'), where('status', '==', 'pending')), (snapshot) => {
+      setPenalties(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'penalties');
+    });
+
+    const unsubAllPenalties = onSnapshot(query(collection(db, 'penalties'), where('status', '==', 'settled'), limit(50)), (snapshot) => {
+      setAllPenalties(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'penalties');
+    });
+
+    const unsubSupport = onSnapshot(query(collection(db, 'support_tickets'), orderBy('createdAt', 'desc')), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSupportTickets(data.filter((t: any) => t.status === 'open'));
+      setAllSupportTickets(data);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'support_tickets');
+    });
+
+    const unsubForms = onSnapshot(query(collection(db, 'admin_forms'), orderBy('createdAt', 'desc')), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAdminForms(data.filter((t: any) => t.status === 'pending'));
+      setAllAdminForms(data);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'admin_forms');
+    });
+
+    const unsubRejected = onSnapshot(query(collection(db, 'rejected_members'), orderBy('rejectedAt', 'desc')), (snapshot) => {
+      setRejectedUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'rejected_members');
+    });
+
+    return () => {
+      unsubGroups();
+      unsubPending();
+      unsubAllUsers();
+      unsubGuarantors();
+      unsubArchived();
+      unsubPayments();
+      unsubAllPayments();
+      unsubPayouts();
+      unsubAllPayouts();
+      unsubPenalties();
+      unsubAllPenalties();
+      unsubSupport();
+      unsubForms();
+      unsubRejected();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubNotifs = onSnapshot(query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(100)), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setNotifications(data.filter((n: any) => !n.read));
+      setAllNotifications(data);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'notifications');
+    });
+
+    return () => unsubNotifs();
+  }, []);
+
+  useEffect(() => {
+    const unsubMarket = onSnapshot(collection(db, 'marketplace'), (snapshot) => {
+      setItemsCount(snapshot.size);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'marketplace');
+    });
+
+    const unsubAudit = onSnapshot(query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(100)), (snapshot) => {
+      setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'audit_logs');
+    });
+
+    const unsubLegal = onSnapshot(query(collection(db, 'legal_rules'), orderBy('createdAt', 'asc')), (snapshot) => {
+      setLegalRules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'legal_rules');
+    });
+
+    return () => {
+      unsubMarket();
+      unsubAudit();
+      unsubLegal();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubSupport = onSnapshot(query(collection(db, 'support_tickets'), orderBy('createdAt', 'desc'), limit(100)), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSupportTickets(data.filter((t: any) => t.status === 'open'));
+      setAllSupportTickets(data);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'support_tickets');
+    });
+
+    return () => unsubSupport();
+  }, []);
+
+  const approvePayout = async (payoutId: string, userId: string) => {
+    try {
+      await updateDoc(doc(db, 'payouts', payoutId), {
+        status: 'active',
+        paidAt: serverTimestamp()
+      });
+      await updateDoc(doc(db, 'users', userId), {
+        payoutStatus: 'completed'
+      });
+      alert(language === 'am' ? 'ክፍያው በተሳካ ሁኔታ ተፈጽሟል!' : 'Payout completed successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `payouts/${payoutId}`);
+    }
+  };
+
+  const rejectPayout = async (payoutId: string, userId: string) => {
+    if (!window.confirm(language === 'am' ? 'ይህንን ክፍያ መሰረዝዎን እርግጠኛ ነዎት?' : 'Confirm cancel this payout?')) return;
+    try {
+      await updateDoc(doc(db, 'payouts', payoutId), {
+        status: 'cancelled',
+        cancelledAt: serverTimestamp()
+      });
+      if (userId) {
+        await updateDoc(doc(db, 'users', userId), {
+          payoutStatus: 'cancelled'
+        });
+      }
+      alert(language === 'am' ? 'ክፍያው ተሰርዟል።' : 'Payout cancelled.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `payouts/${payoutId}`);
+    }
+  };
+
+  const deletePayout = async (payoutId: string) => {
+    // Optimistic UI Update - making it "immediate" as requested
+    setPayouts(prev => prev.filter(p => p.id !== payoutId));
+    setAllPayouts(prev => prev.filter(p => p.id !== payoutId));
+
+    try {
+      await deleteDoc(doc(db, 'payouts', payoutId));
+      // No confirmation modal to keep it "immediate" and smooth
+    } catch (error) {
+      // Revert if failed
+      console.error("Payout deletion error:", error);
+      handleFirestoreError(error, OperationType.DELETE, `payouts/${payoutId}`);
+    }
+  };
+
+  const settlePenalty = async (penaltyId: string) => {
+    try {
+      await updateDoc(doc(db, 'penalties', penaltyId), {
+        status: 'settled',
+        settledAt: serverTimestamp()
+      });
+      alert(language === 'am' ? 'ቅጣቱ ተከፍሏል!' : 'Penalty settled successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `penalties/${penaltyId}`);
+    }
+  };
+
+  const waivePenalty = async (penaltyId: string) => {
+    if (!window.confirm(language === 'am' ? 'ይህንን ቅጣት ይቅር ማለት እርግጠኛ ነዎት?' : 'Are you sure you want to waive this penalty?')) return;
+    try {
+      await updateDoc(doc(db, 'penalties', penaltyId), {
+        status: 'waived',
+        waivedAt: serverTimestamp()
+      });
+      alert(language === 'am' ? 'ቅጣቱ በይቅርታ ተሰርዟል።' : 'Penalty waived.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `penalties/${penaltyId}`);
+    }
+  };
+
+  const handleIssuePenalty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!issuePenaltyForm.userId || issuePenaltyForm.amount <= 0 || !issuePenaltyForm.reason) {
+      alert(language === 'am' ? 'እባክዎ ሁሉንም አስፈላጊ መረጃዎች ይሙሉ!' : 'Please fill all required fields!');
+      return;
+    }
+
+    setIsIssuingPenalty(true);
+    try {
+      const selectedUser = allUsers.find(u => u.id === issuePenaltyForm.userId);
+      await addDoc(collection(db, 'penalties'), {
+        userId: issuePenaltyForm.userId,
+        userName: selectedUser?.fullName || 'Unknown User',
+        amount: Number(issuePenaltyForm.amount),
+        reason: issuePenaltyForm.reason,
+        type: issuePenaltyForm.type,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+
+      // Also send a notification to the user
+      await addDoc(collection(db, 'notifications'), {
+        recipientId: issuePenaltyForm.userId,
+        title: language === 'am' ? 'አዲስ የቅጣት መዝገብ' : 'New Penalty Issued',
+        message: language === 'am' 
+          ? `ምክንያት፡ ${issuePenaltyForm.reason}። መጠን፡ ${issuePenaltyForm.amount} ETB። እባክዎ በቶሎ ይክፈሉ።` 
+          : `Reason: ${issuePenaltyForm.reason}. Amount: ${issuePenaltyForm.amount} ETB. Please settle it soon.`,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+
+      setShowIssuePenaltyModal(false);
+      setIssuePenaltyForm({ userId: '', userName: '', amount: 0, reason: '', type: 'Late Payment' });
+      alert(language === 'am' ? 'ቅጣቱ በተሳካ ሁኔታ ተመዝግቧል!' : 'Penalty issued successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'penalties');
+    } finally {
+      setIsIssuingPenalty(false);
+    }
+  };
+
+  const sendPenaltyReminder = async (penalty: any) => {
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        recipientId: penalty.userId,
+        title: language === 'am' ? 'የቅጣት ማሳሰቢያ' : 'Penalty Reminder',
+        message: language === 'am' 
+          ? `${penalty.reason} ለደረሱብዎት ${penalty.amount} ብር ቅጣት ክፍያ እንድትፈጽሙ እናሳስባለን።` 
+          : `We remind you to pay the penalty of ${penalty.amount} ETB for ${penalty.reason}.`,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+      alert(language === 'am' ? 'ማሳሰቢያው ተልኳል!' : 'Reminder sent!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'notifications');
+    }
+  };
+
+  const handleBroadcastNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notification.title || !notification.message) {
+      alert(language === 'am' ? 'እባክዎ ርዕስ እና መልእክት ያስገቡ!' : 'Please enter title and message!');
+      return;
+    }
+
+    setIsBroadcasting(true);
+    try {
+      const recipients = notification.recipientId === 'all' 
+        ? allUsers.map(u => u.id)
+        : [notification.recipientId];
+
+      const batch = recipients.map(uid => addDoc(collection(db, 'notifications'), {
+        recipientId: uid,
+        title: notification.title,
+        message: notification.message,
+        createdAt: new Date().toISOString(),
+        read: false,
+        type: 'broadcast'
+      }));
+
+      await Promise.all(batch);
+      setShowNotifModal(false);
+      setNotification({ title: '', message: '', recipientId: '' });
+      alert(language === 'am' ? 'ማሳወቅያው በተሳካ ሁኔታ ተልኳል!' : 'Broadcast successful!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'notifications');
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
+
+  const markNotifAsRead = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'notifications', id), { read: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `notifications/${id}`);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    if (!window.confirm(language === 'am' ? 'ይህንን ማሳወቂያ መሰረዝ እርግጠኛ ነዎት?' : 'Are you sure you want to delete this notification?')) return;
+    try {
+      await deleteDoc(doc(db, 'notifications', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `notifications/${id}`);
+    }
+  };
+
+  const updateTicketStatus = async (id: string, status: 'open' | 'closed') => {
+    setIsUpdatingTicket(true);
+    try {
+      let adminNote = '';
+      if (status === 'closed') {
+        adminNote = window.prompt(language === 'am' ? 'እባክዎ የመልስ ማስታወሻ ያስገቡ (አማራጭ):' : 'Enter resolution note (optional):') || '';
+      }
+      
+      const updateData: any = {
+        status,
+        updatedAt: serverTimestamp(),
+        resolvedBy: user?.uid
+      };
+      
+      if (adminNote) updateData.adminNote = adminNote;
+
+      await updateDoc(doc(db, 'support_tickets', id), updateData);
+      alert(language === 'am' ? 'የጥያቄው ሁኔታ ተቀይሯል' : 'Ticket status updated');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `support_tickets/${id}`);
+    } finally {
+      setIsUpdatingTicket(false);
+    }
+  };
+
+  const deleteTicket = async (id: string) => {
+    if (!window.confirm(language === 'am' ? 'ይህንን ጥያቄ መሰረዝ እርግጠኛ ነዎት?' : 'Confirm delete this ticket?')) return;
+    try {
+      await deleteDoc(doc(db, 'support_tickets', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `support_tickets/${id}`);
+    }
+  };
+
+  const updateFormStatus = async (form: any, newStatus: 'approved' | 'rejected' | 'pending') => {
+    setIsUpdatingForm(true);
+    try {
+      const updateData: any = {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+        resolvedBy: user?.uid
+      };
+      
+      let adminNote = window.prompt(language === 'am' ? 'ማስታወሻ (አማራጭ):' : 'Note (optional):') || '';
+      if (adminNote) updateData.adminNote = adminNote;
+
+      if (newStatus === 'approved' && form.type === 'profile_update') {
+        const userRef = doc(db, 'users', form.userId);
+        
+        // Ensure type matching.
+        const mergedBase = {
+          fullName: form.newData.fullName || form.previousData.fullName || '',
+          phone: form.newData.phone || form.previousData.phone || '',
+          addressRegion: form.newData.addressRegion || form.previousData.addressRegion || '',
+          addressZone: form.newData.addressZone || form.previousData.addressZone || '',
+          addressWoreda: form.newData.addressWoreda || form.previousData.addressWoreda || '',
+          addressKebele: form.newData.addressKebele || form.previousData.addressKebele || '',
+          idFront: form.newData.idFront || form.previousData.idFront || '',
+          idBack: form.newData.idBack || form.previousData.idBack || ''
+        };
+
+        let dbUpdates: any = {...mergedBase};
+        if (form.newData.password) {
+           dbUpdates.password = form.newData.password;
+        }
+        await updateDoc(userRef, dbUpdates);
+      }
+
+      await updateDoc(doc(db, 'admin_forms', form.id), updateData);
+      
+      // Notify
+      await addDoc(collection(db, 'notifications'), {
+        recipientId: form.userId,
+        title: language === 'am' ? 'የማስተካከያ ጥያቄ' : 'Profile Update Request',
+        message: newStatus === 'approved' 
+           ? (language === 'am' ? 'የግል መረጃ ማስተካከያ ጥያቄዎ ጸድቋል።' : 'Your profile update request has been approved.')
+           : (language === 'am' ? 'የግል መረጃ ማስተካከያ ጥያቄዎ ውድቅ ተደርጓል።' : 'Your profile update request was rejected.'),
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+      alert(language === 'am' ? 'የጥያቄው ሁኔታ ተቀይሯል' : 'Request status updated');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `admin_forms/${form.id}`);
+    } finally {
+      setIsUpdatingForm(false);
+    }
+  };
+
+  const approveUser = async (userId: string) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        status: 'active',
+        isVerified: true,
+        verifiedAt: serverTimestamp()
+      });
+
+      // Send greeting notification
+      await addDoc(collection(db, 'notifications'), {
+        recipientId: userId,
+        title: language === 'am' ? 'እንኳን ደህና መጡ!' : 'Welcome!',
+        message: language === 'am' 
+          ? 'መለያዎ ጸድቋል። አሁን ሁሉንም አገልግሎቶች መጠቀም ይችላሉ።' 
+          : 'Your account has been approved. You can now use all services.',
+        createdAt: serverTimestamp(),
+        read: false,
+        type: 'approval'
+      });
+
+      alert(language === 'am' ? 'አባል በመሳካ ሁኔታ ጸድቋል' : 'User approved successfully');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
+    }
+  };
+
+  const rejectUser = async (userId: string) => {
+    const reason = window.prompt(language === 'am' ? 'ለምን ውድቅ ተደረገ? (አማራጭ)' : 'Reason for rejection? (Optional)');
+    if (reason === null) return; // Cancelled
+
+    try {
+      // Find the user document
+      const docRef = doc(db, 'users', userId);
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        throw new Error('User document not found');
+      }
+
+      const userDocToReject = docSnap.data();
+
+      // Use document ID as the ID for rejected_members
+      const rejectedMemberId = userId;
+
+      // Add to rejected_members using setDoc so we can find it by specific ID
+      await setDoc(doc(db, 'rejected_members', rejectedMemberId), {
+        ...userDocToReject,
+        rejectionReason: reason || '',
+        rejectedAt: serverTimestamp(),
+        rejectedBy: user?.uid
+      });
+
+      // Send rejection notification
+      await addDoc(collection(db, 'notifications'), {
+        recipientId: userId,
+        title: language === 'am' ? 'የምዝገባ ጥያቄዎ ውድቅ ተደርጓል' : 'Registration Rejected',
+        message: language === 'am' 
+          ? `መለያዎ ውድቅ ተደርጓል። ምክንያት፡ ${reason || 'ያልተገለጸ'}` 
+          : `Your account registration was rejected. Reason: ${reason || 'Not specified'}`,
+        createdAt: serverTimestamp(),
+        read: false,
+        type: 'rejection'
+      });
+
+      // Delete from users collection to allow re-registration
+      await deleteDoc(doc(db, 'users', userId));
+
+      alert(language === 'am' ? 'አባል ውድቅ ተደርጓል እና መረጃው ተሰርዟል' : 'User rejected and data cleared');
+    } catch (error) {
+      console.error("Rejection error:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
+    }
+  };
+
+  const toggleAdminPermission = async (adminId: string, permission: string, currentValue: boolean) => {
+    try {
+      // 1. Update directly client-side (logged-in Admin is fully permitted)
+      const adminRef = doc(db, 'users', adminId);
+      await updateDoc(adminRef, {
+        [`permissions.${permission}`]: !currentValue
+      });
+      setAdmins(prev => prev.map(a => a.id === adminId ? { ...a, permissions: { ...a.permissions, [permission]: !currentValue } } : a));
+      triggerSuccess(
+        language === 'am' ? 'ተሳክቷል' : 'Success',
+        language === 'am' ? 'ፈቃድ ተቀይሯል' : 'Permission updated successfully'
+      );
+    } catch (clientErr: any) {
+      console.warn('Direct client-side permission update failed, trying backend fallback:', clientErr);
+      try {
+        const response = await fetch('/api/admin/toggle-permission', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            adminUid: adminId, 
+            permission, 
+            value: !currentValue, 
+            requesterUid: auth.currentUser?.uid 
+          })
+        });
+        if (!response.ok) throw new Error('Backend failed');
+        setAdmins(prev => prev.map(a => a.id === adminId ? { ...a, permissions: { ...a.permissions, [permission]: !currentValue } } : a));
+        triggerSuccess(
+          language === 'am' ? 'ተሳክቷል' : 'Success',
+          language === 'am' ? 'ፈቃድ ተቀይሯል' : 'Permission updated successfully'
+        );
+      } catch (backendErr) {
+        alert(language === 'am' ? 'ፈቃድ መቀየር አልተቻለም' : 'Failed to update permission');
+      }
+    }
+  };
+
+  const hardDeleteAdmin = async (adminId: string) => {
+    try {
+      // 1. Delete Firestore user document from client (logged-in Admin is fully permitted)
+      await deleteDoc(doc(db, 'users', adminId));
+
+      // 2. Try to clean up from Firebase Auth on backend
+      try {
+        const response = await fetch('/api/admin/delete-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            adminUid: adminId, 
+            requesterUid: auth.currentUser?.uid 
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.warn('Backend Auth account deletion warning:', errorData.error || 'Server error');
+        }
+      } catch (backendErr) {
+        console.warn('Backend Auth account deletion failed:', backendErr);
+      }
+
+      setAdmins(prev => prev.filter(a => a.id !== adminId));
+      triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'አድሚኑ ከሲስተሙ ሙሉ በሙሉ ተወግዷል' : 'Admin permanently removed from system');
+    } catch (error: any) {
+      console.error('Error hard deleting admin:', error);
+      alert(language === 'am' ? `ስህተት ተከስቷል: ${error.message}` : `Error: ${error.message}`);
+    }
+  };
+
+  const deleteUserAdmin = (userId: string) => {
+    if (userId === auth.currentUser?.uid) {
+      triggerSuccess(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'ራስዎን መሰረዝ አይችሉም' : 'You cannot delete yourself', language === 'am' ? 'እሺ' : 'Got it');
+      return;
+    }
+    setUserToDelete({ id: userId });
+  };
+
+  const confirmDeleteUserAdmin = async () => {
+    if (!userToDelete) return;
+    const userId = userToDelete.id;
+    setUserToDelete(null);
+
+    // Optimistic update
+    setAllUsers(prev => prev.filter(u => u.id !== userId));
+    setAdmins(prev => prev.filter(a => a.id !== userId));
+    
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+      triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'ተጠቃሚው/አድሚኑ በተሳካ ሁኔታ ተሰርዟል' : 'Deleted successfully');
+      
+      // 2. Clear rejected members if exists
+      try {
+        await deleteDoc(doc(db, 'rejected_members', userId));
+      } catch (e) {}
+
+      // 3. Clean up associated data in the background (no need to await if we want it to be fast)
+      const deleteCollectionDocs = async (collectionName: string, field: string) => {
+        try {
+          const q = query(collection(db, collectionName), where(field, '==', userId));
+          const snap = await getDocs(q);
+          const deletions = snap.docs.map(d => deleteDoc(doc(db, collectionName, d.id)));
+          await Promise.all(deletions);
+        } catch (e) {
+          console.warn(`Failed to clean up ${collectionName}:`, e);
+        }
+      };
+
+      // Run cleanup in background without blocking
+      Promise.all([
+        deleteCollectionDocs('payments', 'userId'),
+        deleteCollectionDocs('penalties', 'userId'),
+        deleteCollectionDocs('notifications', 'recipientId'),
+        deleteCollectionDocs('payouts', 'userId'),
+        deleteCollectionDocs('support_tickets', 'userId'),
+        deleteCollectionDocs('loans', 'userId'),
+        deleteCollectionDocs('guarantors', 'userId'),
+        deleteCollectionDocs('admin_forms', 'userId'),
+        deleteCollectionDocs('messages', 'senderId'),
+        deleteCollectionDocs('messages', 'recipientId')
+      ]);
+
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);
+    }
+  };
+
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<{ id: string } | null>(null);
+  const [showUserPassword, setShowUserPassword] = useState(false);
+  const [showIDCardModal, setShowIDCardModal] = useState(false);
+  const [selectedIDUser, setSelectedIDUser] = useState<any>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [showFullProfileImg, setShowFullProfileImg] = useState<string | null>(null);
+  const [editUserForm, setEditUserForm] = useState<any>(null);
+
+  const calculateAge = (birthDate: string) => {
+    if (!birthDate) return 0;
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const handleBirthDateChange = (date: string) => {
+    const age = calculateAge(date);
+    setAddUserForm({ ...addUserForm, birthDate: date, age });
+  };
+
+  const handleIdPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, side: 'idFront' | 'idBack' | 'faceScan') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      const compressed = await compressImage(base64, 800, 800);
+      setAddUserForm(prev => ({ ...prev, [side]: compressed }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [addUserForm, setAddUserForm] = useState({ 
+    fullName: '', 
+    phone: '', 
+    password: '',
+    birthCountry: 'ኢትዮጵያ', 
+    birthRegion: 'አዲስ አበባ',
+    birthZone: '',
+    birthWoreda: '',
+    birthKebele: '',
+    addressCountry: 'ኢትዮጵያ', 
+    addressRegion: 'አዲስ አበባ', 
+    addressZone: '',
+    addressWoreda: '',
+    addressKebele: '',
+    birthDate: '',
+    birthDateEC: '',
+    age: 0,
+    slots: 1, 
+    groupId: '',
+    ekubType: '',
+    nationalId: '',
+    jobTitle: '',
+    preferredItem: '',
+    idFront: '',
+    idBack: '',
+    faceScan: ''
+  });
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  const [unsubMessages, setUnsubMessages] = useState<any>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalConfig, setSuccessModalConfig] = useState({ title: '', message: '', buttonText: '' });
+
+  const triggerSuccess = (title: string, message: string, btnText?: string) => {
+    setSuccessModalConfig({
+      title,
+      message,
+      buttonText: btnText || (language === 'am' ? 'እሺ' : 'Got it')
+    });
+    setShowSuccessModal(true);
+  };
+
+
+
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
+  const [adminLayoutView, setAdminLayoutView] = useState<'grid' | 'table'>('grid');
+  const [adminRoleFilter, setAdminRoleFilter] = useState<'all' | 'super' | 'admin'>('all');
+  const [copiedAdminId, setCopiedAdminId] = useState<string | null>(null);
+
+  // Immersive voice/video calling state variables
+  const [callState, setCallState] = useState<'idle' | 'ringing' | 'connected' | 'ended'>('idle');
+  const [callType, setCallType] = useState<'voice' | 'video'>('voice');
+  const [callTargetName, setCallTargetName] = useState('');
+  const [callTargetAvatar, setCallTargetAvatar] = useState<string | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const [callIsMuted, setCallIsMuted] = useState(false);
+  const [callIsVideoOff, setCallIsVideoOff] = useState(false);
+  const [callIsSpeakerOn, setCallIsSpeakerOn] = useState(false);
+  const localVideoRef = React.useRef<HTMLVideoElement | null>(null);
+  const localStreamRef = React.useRef<any>(null);
+
+  const [chatSidebarTab, setChatSidebarTab] = useState<'admins' | 'members' | 'groups'>('admins');
+
+  const startCall = (type: 'voice' | 'video', name: string, avatar: string | null) => {
+    setCallType(type);
+    setCallTargetName(name);
+    setCallTargetAvatar(avatar);
+    setCallDuration(0);
+    setCallIsMuted(false);
+    setCallIsVideoOff(false);
+    setCallIsSpeakerOn(true);
+    setCallState('ringing');
+  };
+
+  const endCall = () => {
+    setCallState('idle');
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track: any) => track.stop());
+      localStreamRef.current = null;
+    }
+  };
+
+  // Calling system side effects (timer + stream capturing)
+  useEffect(() => {
+    let timer: any;
+    if (callState === 'ringing') {
+      // Simulate ringing for 3 seconds, then auto-answer for high-fidelity interactive flow!
+      timer = setTimeout(() => {
+        setCallState('connected');
+      }, 3000);
+    } else if (callState === 'connected') {
+      timer = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    }
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(timer);
+    };
+  }, [callState]);
+
+  useEffect(() => {
+    if (callState === 'connected' && callType === 'video' && !callIsVideoOff) {
+      // Try to acquire local webcam stream feed
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+          localStreamRef.current = stream;
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+          }
+        })
+        .catch(err => {
+          console.error("Camera acquisition refused or failed:", err);
+        });
+    } else {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track: any) => track.stop());
+        localStreamRef.current = null;
+      }
+    }
+  }, [callState, callType, callIsVideoOff]);
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
+  const [addAdminForm, setAddAdminForm] = useState({ 
+    fullName: '', 
+    motherName: '',
+    email: '', 
+    phone: '', 
+    password: '',
+    role: 'admin',
+    addressCountry: 'ኢትዮጵያ', 
+    addressRegion: 'አዲስ አበባ', 
+    addressZone: '',
+    addressWoreda: '',
+    addressKebele: '',
+    experience: '',
+    profilePic: '',
+    idFront: '',
+    idBack: '',
+    permissions: { 
+      manageUsers: true, 
+      manageGroups: true, 
+      approvePayments: true,
+      manageDraws: true,
+      manageMessages: true,
+      registerMembers: true
+    }
+  });
+
+  const handleAdminPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'idFront' | 'idBack' | 'profilePic') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      const compressed = await compressImage(base64, 800, 800);
+      setAddAdminForm(prev => ({ ...prev, [field]: compressed }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const [showEditAdminModal, setShowEditAdminModal] = useState(false);
+  const [editAdminForm, setEditAdminForm] = useState<any>(null);
+
+  const handleAddAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addAdminForm.fullName || (!addAdminForm.email && !addAdminForm.phone)) return;
+    try {
+      const cleanPhone = normalizePhone(addAdminForm.phone);
+      const emailToUse = addAdminForm.email ? addAdminForm.email.trim().toLowerCase() : `${cleanPhone}@melikekub.com`;
+      const passToUse = addAdminForm.password || 'Admin123!';
+      
+      // Create Auth account using temporary app instance
+      const tempApp = initializeApp(firebaseConfig, 'tempRegisterAdmin-' + Date.now());
+      const tempAuth = getAuth(tempApp);
+      const userCredential = await createUserWithEmailAndPassword(tempAuth, emailToUse, passToUse);
+      const uid = userCredential.user.uid;
+      
+      await setDoc(doc(db, 'users', uid), {
+        uid: uid,
+        fullName: addAdminForm.fullName,
+        motherName: addAdminForm.motherName || '',
+        email: emailToUse,
+        phone: cleanPhone,
+        role: addAdminForm.role,
+        addressCountry: addAdminForm.addressCountry || 'ኢትዮጵያ', 
+        addressRegion: addAdminForm.addressRegion || 'አዲስ አበባ', 
+        addressZone: addAdminForm.addressZone || '',
+        addressWoreda: addAdminForm.addressWoreda || '',
+        addressKebele: addAdminForm.addressKebele || '',
+        experience: addAdminForm.experience || '',
+        profilePic: addAdminForm.profilePic || '',
+        idFront: addAdminForm.idFront || '',
+        idBack: addAdminForm.idBack || '',
+        permissions: addAdminForm.permissions,
+        status: 'active',
+        isVerified: true,
+        createdAt: serverTimestamp()
+      });
+      
+      // Cleanup temp app
+      await deleteApp(tempApp);
+
+      setShowAddAdminModal(false);
+      setAddAdminForm({ 
+        fullName: '', 
+        motherName: '',
+        email: '', 
+        phone: '', 
+        password: '',
+        role: 'admin',
+        addressCountry: 'ኢትዮጵያ', 
+        addressRegion: 'አዲስ አበባ', 
+        addressZone: '',
+        addressWoreda: '',
+        addressKebele: '',
+        experience: '',
+        profilePic: '',
+        idFront: '',
+        idBack: '',
+        permissions: { 
+          manageUsers: true, 
+          manageGroups: true, 
+          approvePayments: true,
+          manageDraws: true,
+          manageMessages: true,
+          registerMembers: true
+        }
+      });
+      alert(language === 'am' ? 'አድሚን በተሳካ ሁኔታ ተጨምሯል! ጊዜያዊ የይለፍ ቃል: Admin123!' : 'Admin added successfully! Temporary Password: Admin123!');
+    } catch (error: any) {
+      console.error('Error adding admin:', error);
+      if (error.code === 'auth/email-already-in-use') {
+        alert(language === 'am' ? 'ይህ ስልክ ቁጥር ቀድሞ ተመዝግቧል!' : 'This phone number is already registered!');
+      } else {
+        handleFirestoreError(error, OperationType.CREATE, 'users');
+      }
+    }
+  };
+
+  const handleAddGroupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addGroupForm.name || addGroupForm.amount <= 0 || addGroupForm.memberCount <= 0) {
+      alert(t('admin.required_fields'));
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'groups'), {
+        name: addGroupForm.name,
+        amount: addGroupForm.amount,
+        memberCount: addGroupForm.memberCount,
+        type: addGroupForm.type,
+        status: 'registration',
+        createdAt: serverTimestamp()
+      });
+      setShowAddGroupModal(false);
+      setAddGroupForm({ name: '', amount: 1000, memberCount: 10, type: 'weekly' });
+      alert('Group added successfully');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'groups');
+    }
+  };
+
+  const handleEditAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editAdminForm || !editAdminForm.id) return;
+    try {
+      await updateDoc(doc(db, 'users', editAdminForm.id), {
+        permissions: editAdminForm.permissions,
+        fullName: editAdminForm.fullName,
+        phone: editAdminForm.phone,
+        role: editAdminForm.role
+      });
+      setShowEditAdminModal(false);
+      alert(t('admin.admin_permissions_updated'));
+      setAdmins(prev => prev.map(a => a.id === editAdminForm.id ? { ...a, ...editAdminForm } : a));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${editAdminForm.id}`);
+    }
+  };
+
+  const handleAddUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addUserForm.fullName || !addUserForm.phone || !addUserForm.password) {
+      alert(t('admin.required_fields'));
+      return;
+    }
+    
+    setIsAddingUser(true);
+    let tempApp;
+    
+    try {
+      // Generate Member Code based on Group Frequency
+      let frequency = 'weekly';
+      if (addUserForm.groupId) {
+        const groupDoc = groups.find(g => g.id === addUserForm.groupId);
+        if (groupDoc) {
+          frequency = groupDoc.type || 'weekly';
+        }
+      }
+      
+      const prefix = frequency === 'daily' ? 'D' : frequency === 'monthly' ? 'M' : frequency === 'fivedays' ? 'F' : 'W';
+      let isUnique = false;
+      let memberCode = '';
+      while (!isUnique) {
+        const randomPart = Math.floor(10000 + Math.random() * 90000);
+        memberCode = `${prefix}${randomPart}`;
+        try {
+          const qCode = query(collection(db, 'users'), where('memberCode', '==', memberCode));
+          const snapshotCode = await getDocs(qCode);
+          if (snapshotCode.empty) {
+            isUnique = true;
+          }
+        } catch (error) {
+          console.error(error);
+          isUnique = true; // Fallback to avoid infinite loop
+        }
+      }
+
+      // 1. Normalize Phone
+      let cleanPhone = addUserForm.phone.trim().replace(/\D/g, '');
+      if (cleanPhone.startsWith('251')) {
+        cleanPhone = '0' + cleanPhone.substring(3);
+      } else if (cleanPhone.length === 9 && cleanPhone.startsWith('9')) {
+        cleanPhone = '0' + cleanPhone;
+      }
+      
+      // Strict DB check
+      const qPhone = query(collection(db, 'users'), where('phone', '==', cleanPhone));
+      const phoneSnap = await getDocs(qPhone);
+      if (!phoneSnap.empty) {
+        alert(t('admin.phone_registered') || 'Phone already registered');
+        setIsAddingUser(false);
+        return;
+      }
+
+      const dummyEmail = `${cleanPhone}@melikekub.com`;
+      
+      // 2. Create Auth User using secondary app instance
+      // This allows creating another user without signing out the admin
+      tempApp = initializeApp(firebaseConfig, 'tempRegisterApp-' + Date.now());
+      const tempAuth = getAuth(tempApp);
+      
+      let userCredential;
+      try {
+        userCredential = await createUserWithEmailAndPassword(tempAuth, dummyEmail, addUserForm.password);
+      } catch (authError: any) {
+        if (authError.code === 'auth/email-already-in-use') {
+           alert(t('admin.phone_registered') || 'Phone already registered');
+           setIsAddingUser(false);
+           return;
+        } else if (authError.code === 'auth/weak-password') {
+          alert(t('admin.weak_password') || 'Weak password');
+          setIsAddingUser(false);
+          return;
+        } else {
+          alert('Auth Error: ' + authError.message);
+          setIsAddingUser(false);
+          return;
+        }
+      }
+
+      const uid = userCredential.user.uid;
+
+      // 3. Create Firestore Document with UID as ID
+      const slots = parseInt(addUserForm.slots as any) || 1;
+      let amount = 0;
+      let commissionPerSlot = 0;
+      let totalPerSlot = 0;
+      let totalPayoutPerSlot = 0;
+      let totalCyclePayment = 0;
+      
+      if (addUserForm.groupId) {
+        const groupDoc = groups.find(g => g.id === addUserForm.groupId);
+        if (groupDoc) {
+          amount = groupDoc.amount || 0;
+          commissionPerSlot = amount * 0.1;
+          totalPerSlot = amount + commissionPerSlot;
+          const multiplier = groupDoc.frequency === 'fivedays' ? 5 : (groupDoc.frequency === 'tendays' || groupDoc.frequency === 'daily') ? 10 : 1;
+          const limit = groupDoc.limit || groupDoc.memberLimit || 10;
+          totalPayoutPerSlot = amount * multiplier * limit;
+          totalCyclePayment = totalPerSlot * multiplier * limit * slots;
+        }
+      }
+      
+      await setDoc(doc(db, 'users', uid), {
+        uid: uid,
+        fullName: addUserForm.fullName,
+        email: dummyEmail,
+        authEmail: dummyEmail,
+        phone: cleanPhone,
+        birthCountry: addUserForm.birthCountry,
+        birthRegion: addUserForm.birthRegion,
+        birthZone: addUserForm.birthZone,
+        birthWoreda: addUserForm.birthWoreda,
+        birthKebele: addUserForm.birthKebele,
+        addressCountry: addUserForm.addressCountry,
+        addressRegion: addUserForm.addressRegion,
+        addressZone: addUserForm.addressZone,
+        addressWoreda: addUserForm.addressWoreda,
+        addressKebele: addUserForm.addressKebele,
+        birthDate: addUserForm.birthDate,
+        birthDateEC: addUserForm.birthDateEC,
+        age: addUserForm.age,
+        slots: slots,
+        amount: amount,
+        commission: commissionPerSlot,
+        totalPerSlot: totalPerSlot,
+        totalPayout: totalPayoutPerSlot,
+        totalCyclePayment: totalCyclePayment,
+        groupId: addUserForm.groupId || null,
+        ekubType: addUserForm.ekubType,
+        memberCode: memberCode,
+        nationalId: addUserForm.nationalId,
+        jobTitle: addUserForm.jobTitle,
+        preferredItem: addUserForm.preferredItem,
+        idFront: addUserForm.idFront,
+        idBack: addUserForm.idBack,
+        faceScan: addUserForm.faceScan,
+        status: 'active',
+        isVerified: true,
+        verifiedAt: new Date(),
+        isAdmin: false,
+        role: 'user',
+        createdAt: serverTimestamp()
+      });
+
+      setShowAddUserModal(false);
+      setAddUserForm({ 
+        fullName: '', phone: '', password: '', 
+        birthCountry: 'ኢትዮጵያ', birthRegion: 'አዲስ አበባ', birthZone: '', birthWoreda: '', birthKebele: '',
+        addressCountry: 'ኢትዮጵያ', addressRegion: 'አዲስ አበባ', addressZone: '', addressWoreda: '', addressKebele: '',
+        birthDate: '', birthDateEC: '', age: 0, slots: 1, groupId: '', ekubType: '',
+        nationalId: '', jobTitle: '', preferredItem: '',
+        idFront: '', idBack: '', faceScan: ''
+      });
+      alert(t('admin.user_registered_success'));
+      
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.CREATE, 'users');
+    } finally {
+      if (tempApp) {
+        await deleteApp(tempApp).catch(console.error);
+      }
+      setIsAddingUser(false);
+    }
+  };
+
+  const handleEditUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editUserForm || !editUserForm.id) return;
+    try {
+      await updateDoc(doc(db, 'users', editUserForm.id), {
+        fullName: editUserForm.fullName || '',
+        phone: editUserForm.phone || '',
+        password: editUserForm.password || '',
+        slots: parseInt(editUserForm.slots) || 1,
+        addressRegion: editUserForm.addressRegion || '',
+        addressZone: editUserForm.addressZone || '',
+        addressWoreda: editUserForm.addressWoreda || '',
+        addressKebele: editUserForm.addressKebele || '',
+        addressHouseNumber: editUserForm.addressHouseNumber || '',
+        jobTitle: editUserForm.jobTitle || '',
+        ekubType: editUserForm.ekubType || '',
+        memberCode: editUserForm.memberCode || '',
+        amount: parseFloat(editUserForm.amount) || 0,
+        status: editUserForm.status || 'pending'
+      });
+      setShowEditUserModal(false);
+      alert(t('admin.user_updated'));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${editUserForm.id}`);
+    }
+  };
+
+  const approvePayment = async (paymentId: string) => {
+    try {
+      await updateDoc(doc(db, 'payments', paymentId), {
+        status: 'active',
+        approvedAt: new Date(),
+        reviewMessage: paymentReviewMessage || ''
+      });
+      alert(t('admin.payment_approved'));
+      setPaymentReviewModal(null);
+      setPaymentReviewMessage('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `payments/${paymentId}`);
+    }
+  };
+
+  const rejectPayment = async (paymentId: string) => {
+    if (!window.confirm(t('admin.payment_reject_confirm'))) return;
+    try {
+      await updateDoc(doc(db, 'payments', paymentId), {
+        status: 'rejected',
+        reviewMessage: paymentReviewMessage || ''
+      });
+      alert(t('admin.payment_rejected'));
+      setPaymentReviewModal(null);
+      setPaymentReviewMessage('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `payments/${paymentId}`);
+    }
+  };
+
+  const sendNotification = async () => {
+    if (!notification.title || !notification.message || !notification.recipientId) return;
+    await addDoc(collection(db, 'notifications'), {
+      ...notification,
+      createdAt: new Date().toISOString(),
+      read: false
+    });
+    setNotification({ title: '', message: '', recipientId: '' });
+    setShowNotifModal(false);
+    alert(t('admin.notification_sent'));
+  };
+
+  const [showManageGroupModal, setShowManageGroupModal] = useState(false);
+  const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  const [addGroupForm, setAddGroupForm] = useState({ name: '', amount: 1000, memberCount: 10, type: 'weekly' });
+  const [selectedGroup, setSelectedGroup] = useState<any>(null);
+  const [showEndCycleModal, setShowEndCycleModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [showManualPaymentModal, setShowManualPaymentModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<any>(null);
+  const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [paymentCount, setPaymentCount] = useState(1);
+  const [manualPaymentGroup, setManualPaymentGroup] = useState<any>(null);
+
+  const [showSelectUserForPayment, setShowSelectUserForPayment] = useState(false);
+  const [searchTermForPayment, setSearchTermForPayment] = useState('');
+
+  const handleManualPayment = async () => {
+    if (!selectedMember || !manualPaymentGroup) return;
+    try {
+      const amountPerSlot = selectedMember.totalPerSlot || manualPaymentGroup.amount;
+      const totalAmount = amountPerSlot * paymentCount * (selectedMember.slots || 1);
+      
+      const now = new Date();
+      const receiptId = `REC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      await addDoc(collection(db, 'payments'), {
+        userId: selectedMember.id,
+        userName: selectedMember.fullName,
+        groupId: manualPaymentGroup.id,
+        groupName: manualPaymentGroup.name,
+        memberCode: selectedMember.memberCode || '',
+        amount: totalAmount,
+        status: 'active',
+        type: 'manual_contribution',
+        cycles: paymentCount,
+        receiptImage: null,
+        receiptId: receiptId,
+        createdAt: now,
+        approvedAt: now,
+        approvedBy: 'admin',
+        paymentDetails: {
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+          day: now.getDate(),
+          time: now.toLocaleTimeString(),
+          method: 'Manual/Cash'
+        }
+      });
+      
+      alert(t('admin.payment_registered_success')
+        .replace('{paymentCount}', paymentCount.toString())
+        .replace('{receiptId}', receiptId));
+      setShowManualPaymentModal(false);
+      setPaymentCount(1);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'payments');
+    }
+  };
+
+  const handleDownloadReceipt = (payment: any) => {
+    setSelectedPayment(payment);
+    setShowReceiptModal(true);
+  };
+
+  const generateReportPDF = async (id: string, name: string) => {
+    const element = document.getElementById(id);
+    if (!element) return;
+    
+    try {
+      const dataUrl = await htmlToImage.toPng(element, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff'
+      });
+      
+      const img = new window.Image();
+      img.src = dataUrl;
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [img.width / 2, img.height / 2]
+      });
+      
+      pdf.addImage(dataUrl, 'PNG', 0, 0, img.width / 2, img.height / 2);
+      pdf.save(`${name}-${new Date().toLocaleDateString()}.pdf`);
+    } catch (error) {
+      console.error('Error generating report PDF:', error);
+    }
+  };
+
+  const generatePDF = (payment: any) => {
+    try {
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a5'
+      });
+      
+      const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
+      const userName = payment.userName || '';
+      const groupName = payment.groupName || '';
+      const date = payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleDateString() : new Date(payment.createdAt).toLocaleDateString();
+      const time = payment.paymentDetails?.time || (payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleTimeString() : new Date(payment.createdAt).toLocaleTimeString());
+      const amount = (payment.amount || 0).toLocaleString();
+
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, 0, 148, 210, 'F');
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(22);
+      pdf.setTextColor(15, 23, 42); 
+      pdf.text(t('common.appName').toUpperCase(), 20, 30);
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
+      pdf.setTextColor(99, 102, 241); 
+      pdf.text('OFFICIAL RECEIPT', 20, 38);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor(148, 163, 184); 
+      pdf.text('Receipt ID', 100, 30);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(`#${receiptId}`, 100, 35);
+      
+      pdf.setFontSize(8);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Group ID', 100, 42);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(payment.groupId?.slice(0, 8).toUpperCase() || 'N/A', 100, 46);
+
+      pdf.setDrawColor(241, 245, 249); 
+      pdf.line(20, 52, 128, 52);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Member Name', 20, 60);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(userName, 20, 65);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Group/Round', 80, 60);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(groupName, 80, 65);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Payment Date', 20, 75);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(date, 20, 80);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Time', 80, 75);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(time, 80, 80);
+      
+      pdf.setFillColor(15, 23, 42); 
+      pdf.roundedRect(20, 90, 108, 35, 4, 4, 'F');
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Amount Paid', 25, 102);
+      pdf.setFontSize(18);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(`${amount} ETB`, 25, 115);
+      
+      pdf.setFontSize(9);
+      pdf.setTextColor(52, 211, 153); 
+      pdf.text('Status', 100, 102);
+      pdf.setFontSize(12);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('Verified', 100, 115);
+      
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(9);
+      pdf.setTextColor(100, 116, 139); 
+      pdf.text('"Thank you. Your savings are secure."', 35, 140);
+      
+      // Add a digital signature placeholder line
+      pdf.setDrawColor(203, 213, 225);
+      pdf.line(90, 150, 128, 150);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.text('Authorized Signature', 95, 155);
+
+      pdf.setDrawColor(241, 245, 249);
+      pdf.line(20, 160, 128, 160);
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text(`Digital Auth Verified`, 20, 170);
+      pdf.text(`© ${new Date().getFullYear()} ${t('common.appName').toUpperCase()}`, 85, 170);
+      
+      pdf.save(`Receipt-${receiptId}.pdf`);
+      setShowReceiptModal(false);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert(language === 'am' ? 'ደረሰኝ ማመንጨት አልተሳካም' : 'Failed to generate receipt');
+    }
+  };
+  const startGroup = async (groupId: string) => {
+    try {
+      await updateDoc(doc(db, 'groups', groupId), {
+        status: 'active',
+        startDate: new Date(),
+        updatedAt: new Date()
+      });
+      alert(t('admin.group_started'));
+      setShowManageGroupModal(false);
+    } catch (error) {
+      console.error(error);
+      alert(t('admin.group_start_failed'));
+    }
+  };
+
+  const openDrawModal = (group: any) => {
+    // Check for eligibility
+    const groupPenalties = penalties.filter((p: any) => p.groupId === group.id);
+    const unpaidMemberIds = new Set(groupPenalties.map((p: any) => p.userId));
+    
+    // In a real system, we'd also check if they have a 'verified' payment for group.currentRound
+    // For this implementation, we'll use pending penalties as the primary 'missing days' indicator
+    const excluded = group.members.filter((m: any) => unpaidMemberIds.has(m.id) && !m.wonDraw);
+    setIneligibleMembers(excluded);
+
+    setSelectedDrawGroup(group);
+    setShowDrawModal(true);
+    setDrawStage('select');
+    setDrawWinner(null);
+    setManualWinnerId('');
+  };
+
+  const startDrawAnimation = (winnerId: string | 'auto') => {
+    if (!selectedDrawGroup || !selectedDrawGroup.members || selectedDrawGroup.members.length === 0) return;
+
+    // Filter by wonDraw AND eligibility (not in ineligible list)
+    const currentIneligibleIds = new Set(ineligibleMembers.map(m => m.id));
+    const eligibleMembers = selectedDrawGroup.members.filter((m: any) => !m.wonDraw && !currentIneligibleIds.has(m.id));
+
+    if (eligibleMembers.length === 0) {
+      alert(language === 'am' ? 'ምንም የሚሳተፉ አባላት የሉም! (መዋጮ ያልከፈሉ ወይም ሁሉም የደረሳቸው)' : 'No eligible members available! (Unpaid or already won)');
+      return;
+    }
+
+    let finalWinner;
+    if (winnerId === 'auto') {
+      const randomIndex = Math.floor(Math.random() * eligibleMembers.length);
+      finalWinner = eligibleMembers[randomIndex];
+    } else {
+      finalWinner = selectedDrawGroup.members.find((m: any) => m.id === winnerId);
+    }
+
+    if (!finalWinner) return;
+
+    setDrawWinner(finalWinner);
+    setDrawStage('animating');
+
+    setTimeout(() => {
+      setDrawStage('result');
+      executeDrawUpdate(selectedDrawGroup, finalWinner);
+    }, 4000);
+  };
+
+  const openScheduleModal = (group: any) => {
+    setScheduledDrawGroup(group);
+    if (group.nextDrawDate) {
+      const dateObj = new Date(group.nextDrawDate);
+      setDrawScheduleDate(dateObj.toISOString().split('T')[0]);
+      setDrawScheduleTime(dateObj.toTimeString().slice(0, 5));
+    } else {
+      setDrawScheduleDate('');
+      setDrawScheduleTime('');
+    }
+    setShowScheduleDrawModal(true);
+  };
+
+  const handleScheduleDraw = async () => {
+    if (!scheduledDrawGroup || !drawScheduleDate || !drawScheduleTime) {
+      alert(language === 'am' ? 'እባክዎን ቀን እና ሰዓት ይምረጡ!' : 'Please select both date and time!');
+      return;
+    }
+
+    try {
+      const combinedDateTime = new Date(`${drawScheduleDate}T${drawScheduleTime}`);
+      
+      await updateDoc(doc(db, 'groups', scheduledDrawGroup.id), {
+        nextDrawDate: combinedDateTime.toISOString(),
+        updatedAt: serverTimestamp()
+      });
+
+      // Notify members
+      const payload: any = {
+        senderId: user?.uid,
+        senderName: t('admin.admin_label') + ' (' + (user?.displayName || 'Admin') + ')',
+        senderRole: 'admin',
+        text: `📢 ቀጣይ እጣ ፕሮግራም ተቆርጧል/Next Draw Scheduled: ${scheduledDrawGroup.name} - ${combinedDateTime.toLocaleString('am-ET')}. ${language === 'am' ? 'እባክዎ መዋጮዎን በወቅቱ ይክፈሉ!' : 'Please pay your contribution on time!'}`,
+        createdAt: serverTimestamp(),
+        targetType: 'all',
+        groupId: scheduledDrawGroup.id
+      };
+      await addDoc(collection(db, 'messages'), payload);
+
+      alert(language === 'am' ? 'የእጣ ፕሮግራም በተሳካ ሁኔታ ተቆርጧል!' : 'Draw scheduled successfully!');
+      setShowScheduleDrawModal(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'groups');
+    }
+  };
+
+  const executeDrawUpdate = async (group: any, winner: any) => {
+    try {
+      const drawDate = new Date().toISOString();
+      const nextDrawDate = new Date();
+      nextDrawDate.setDate(nextDrawDate.getDate() + (group.type === 'Weekly' ? 7 : 30));
+
+      const newDrawEvent = {
+        winnerId: winner.id,
+        winnerName: winner.fullName,
+        date: drawDate
+      };
+
+      const updatedHistory = [...(group.drawHistory || []), newDrawEvent];
+
+      // Update group
+      await updateDoc(doc(db, 'groups', group.id), {
+        lastWinner: winner.fullName,
+        lastDrawDate: drawDate,
+        nextDrawDate: nextDrawDate.toISOString(),
+        drawHistory: updatedHistory,
+        updatedAt: serverTimestamp()
+      });
+
+      // Update user
+      await updateDoc(doc(db, 'users', winner.id), {
+        wonDraw: true,
+        lastWonDate: drawDate,
+        payoutStatus: 'pending' // Track payout status
+      });
+
+      const multiplier = group.frequency === 'fivedays' ? 5 : (group.frequency === 'tendays' || group.frequency === 'daily') ? 10 : 1;
+      const payoutAmount = (group.amount || 0) * multiplier * (group.limit || 10);
+
+      // Create Payout Record
+      await addDoc(collection(db, 'payouts'), {
+        userId: winner.id,
+        userName: winner.fullName,
+        groupId: group.id,
+        groupName: group.name,
+        amount: payoutAmount,
+        status: 'pending',
+        drawDate: drawDate,
+        createdAt: serverTimestamp()
+      });
+
+      await addDoc(collection(db, 'notifications'), {
+        recipientId: winner.id,
+        title: language === 'am' ? 'እንኳን ደስ አለዎት! እጣ ደርሶዎታል!' : 'Congratulations! You won the draw!',
+        message: language === 'am' ? `የዚህ ዙር የእቁብ አሸናፊ ሆነዋል። እባክዎትን ዋሶችን ለማቅረብ ይዘጋጁ።` : `You have been selected as the winner. Please prepare to provide guarantors.`,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+    } catch (error) {
+      console.error("Error updating draw results: ", error);
+    }
+  };
+
+  const filteredPending = pendingUsers.filter(u => {
+    const matchesSearch = u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || u.phone.includes(searchTerm);
+    const matchesRegion = selectedRegionFilter === 'All' || u.addressRegion === selectedRegionFilter;
+    return matchesSearch && matchesRegion;
+  });
+
+  const rawRegions = ['All', 'Addis Ababa', 'Oromia', 'Amhara', 'Tigray', 'Sidama', 'Somali'];
+  const regions = rawRegions.map(r => r === 'All' ? t('admin.all_regions') : t(`admin.${r.toLowerCase().replace(' ', '_')}`));
+
+  return (
+    <div className="h-screen overflow-hidden bg-slate-50 flex font-sans">
+      {/* Mobile Drawer Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[50] sm:hidden"
+            />
+            <motion.div 
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed left-0 top-0 bottom-0 w-[280px] bg-white z-[51] sm:hidden flex flex-col shadow-2xl p-4"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg">
+                    <ShieldCheck size={18} />
+                  </div>
+                  <span className="text-xs font-black text-slate-900 uppercase tracking-tighter">{t('nav.admin')}</span>
+                </div>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-400"><XCircle size={20} /></button>
+              </div>
+
+               <div className="flex-1 overflow-y-auto space-y-6">
+                <nav className="space-y-1">
+                  {menuSections.map((section, sIndex) => (
+                    <div key={sIndex} className="mb-8">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 px-2">{section.group}</h4>
+                        <div className="space-y-2">
+                          {section.items.map((item) => {
+                            if (item.superOnly && !isSuperAdmin) return null;
+                            const isActive = activeTab === item.id;
+                            return (
+                            <div key={item.id}>
+                              <button
+                                onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
+                                className={`w-full text-left p-4 rounded-3xl border transition-all duration-500 overflow-hidden relative group ${
+                                  isActive 
+                                  ? 'bg-slate-900 border-slate-900 shadow-2xl shadow-indigo-500/20 translate-x-1' 
+                                  : 'bg-white hover:bg-slate-50 border-transparent hover:border-slate-100'
+                                } ${item.className || ''}`}
+                              >
+                                {isActive && (
+                                  <motion.div 
+                                    layoutId="activeTabMobile"
+                                    className="absolute inset-0 bg-gradient-to-br from-indigo-600/20 to-transparent"
+                                    initial={false}
+                                  />
+                                )}
+                                <div className="flex items-center justify-between relative z-10">
+                                  <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+                                      isActive ? 'bg-indigo-500 text-white shadow-lg' : 'bg-slate-50 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'
+                                    }`}>
+                                      <item.icon size={18} />
+                                    </div>
+                                    <div>
+                                      <span className={`block text-[13px] font-black tracking-tight transition-colors ${isActive ? 'text-white' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                                        {item.label}
+                                      </span>
+                                      {item.description && (
+                                        <span className={`block text-[10px] font-bold mt-0.5 leading-tight ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                          {item.description}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {item.badge && (
+                                    <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-rose-500/20">
+                                      {item.badge}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            </div>
+                            );
+                          })}
+                        </div>
+                    </div>
+                  ))}
+                </nav>
+
+                <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-2">
+                  <button 
+                    onClick={() => { setLanguage(language === 'am' ? 'en' : 'am'); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center justify-between p-3 bg-slate-50 rounded-xl"
+                  >
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{t('admin.language_label')}</span>
+                    <div className="flex gap-1">
+                       <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>አ</span>
+                       <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>A</span>
+                    </div>
+                  </button>
+                  <button onClick={async () => { await signOut(auth); window.location.href = '/'; }} className="w-full py-3 bg-rose-50 text-rose-500 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                    <LogOut size={16} /> {t('auth.exit_admin')}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar Navigation */}
+      <aside className="w-16 md:w-56 bg-white border-r border-slate-100 flex flex-col h-screen sticky top-0 z-40 hidden sm:flex shrink-0">
+        <div className="p-4 flex items-center gap-2 border-b border-slate-50 mb-2">
+          <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg">
+            <ShieldCheck size={14} />
+          </div>
+          <span className="text-[10px] font-black text-slate-900 tracking-tighter uppercase hidden md:block">{t('common.appName')} Admin</span>
+        </div>
+
+        <div className="p-2 border-b border-slate-50 mb-2">
+          <button 
+            onClick={() => setLanguage(language === 'am' ? 'en' : 'am')}
+            className="w-full flex items-center justify-center gap-2 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all"
+          >
+            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-300 text-slate-600'}`}>አ</div>
+            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-300 text-slate-600'}`}>A</div>
+          </button>
+        </div>
+        
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto custom-scrollbar no-scrollbar scroll-smooth">
+          {menuSections.map((section, sIndex) => {
+            // Filter section items based on permissions
+            const visibleItems = section.items.filter(tab => {
+              if (['pending', 'users', 'rejected'].includes(tab.id) && !isSuperAdmin && !userData?.permissions?.manageUsers) return false;
+              if (tab.id === 'groups' && !isSuperAdmin && !userData?.permissions?.manageGroups) return false;
+              if (['payments', 'payouts', 'penalties'].includes(tab.id) && !isSuperAdmin && !userData?.permissions?.approvePayments) return false;
+              if (tab.id === 'draws' && !isSuperAdmin && !userData?.permissions?.manageDraws) return false;
+              if (['chat', 'notifications'].includes(tab.id) && !isSuperAdmin && !userData?.permissions?.manageMessages) return false;
+              if (tab.id === 'admins' && !isSuperAdmin) return false;
+              return true;
+            });
+
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <div key={sIndex} className={sIndex > 0 ? 'mt-6 pt-6 border-t border-slate-100/50' : ''}>
+                <p className="px-3 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hidden md:block">{section.group}</p>
+                <div className="space-y-1.5">
+                  {visibleItems.map((item) => {
+                    const isActive = activeTab === item.id;
+                    return (
+                        <div key={item.id}>
+                          <button 
+                           onClick={() => setActiveTab(item.id)}
+                           className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-3xl transition-all duration-500 relative group overflow-hidden ${
+                             isActive 
+                             ? (item.id === 'audit' ? 'bg-gradient-to-r from-indigo-900 to-indigo-800 text-white shadow-2xl shadow-indigo-500/20 translate-x-1 border border-indigo-500/30' : 
+                                item.id === 'settings' ? 'bg-gradient-to-r from-slate-800 to-slate-900 text-white shadow-2xl shadow-slate-900/30 translate-x-1 border border-slate-700' :
+                                'bg-slate-900 text-white shadow-2xl shadow-slate-900/20 translate-x-1') 
+                             : (item.id === 'audit' ? 'bg-indigo-50/50 text-indigo-900 border border-indigo-100 hover:bg-indigo-100/50 hover:border-indigo-200' : 
+                                item.id === 'settings' ? 'bg-slate-50 text-slate-800 border border-slate-200 hover:bg-slate-100/80 hover:border-slate-300' :
+                                'text-slate-500 hover:bg-slate-50 hover:text-slate-900')
+                           }`}
+                         >
+                           {isActive && (
+                             <motion.div 
+                               layoutId="activeBarSidebar"
+                               className={`absolute inset-0 bg-gradient-to-r ${
+                                 item.id === 'audit' ? 'from-indigo-500/20' : 
+                                 item.id === 'settings' ? 'from-slate-500/20' : 
+                                 'from-indigo-600/10'
+                               } to-transparent`}
+                               initial={false}
+                             />
+                           )}
+                           <div className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all duration-500 shrink-0 ${
+                             isActive 
+                             ? (item.id === 'audit' ? 'bg-indigo-400 text-white shadow-lg shadow-indigo-500/30 rotate-0' : 
+                                item.id === 'settings' ? 'bg-slate-700 text-white shadow-lg shadow-slate-900/40 rotate-0 border border-slate-600' :
+                                'bg-indigo-500 text-white shadow-lg rotate-0') 
+                             : (item.id === 'audit' ? 'bg-indigo-100 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white group-hover:scale-110' : 
+                                item.id === 'settings' ? 'bg-white text-slate-600 border border-slate-200 group-hover:bg-slate-800 group-hover:text-white group-hover:scale-110' :
+                                'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 group-hover:rotate-12')
+                           }`}>
+                             <item.icon size={16} />
+                           </div>
+                           <div className="hidden md:block flex-1 text-left relative z-10">
+                             <span className={`block text-[12px] font-black tracking-tight leading-none ${
+                               isActive 
+                               ? 'text-white' 
+                               : (item.id === 'audit' ? 'text-indigo-900' : item.id === 'settings' ? 'text-slate-900' : 'text-slate-700')
+                             }`}>
+                               {item.label}
+                             </span>
+                             {item.id === 'audit' ? (
+                               <span className={`block text-[8px] font-bold mt-1 font-mono uppercase tracking-widest ${isActive ? 'text-indigo-200' : 'text-indigo-500/70'}`}>
+                                 Live Sync <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse ml-1" />
+                               </span>
+                             ) : item.id === 'settings' ? (
+                               <span className={`block text-[8px] font-bold mt-1 font-mono uppercase tracking-widest ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
+                                 System Config <Settings size={8} className="inline ml-1 animate-spin-slow pb-0.5" />
+                               </span>
+                             ) : item.description ? (
+                               <span className={`block text-[9px] font-bold mt-1 opacity-60 line-clamp-1 leading-tight ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                 {item.description}
+                               </span>
+                             ) : null}
+                           </div>
+                           {item.badge && (
+                             <span className={`absolute right-3 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-lg text-[8px] font-black text-white shadow-lg transition-all duration-500 ${
+                               isActive ? 'bg-indigo-600' : 'bg-rose-500 shadow-rose-500/20 group-hover:scale-110'
+                             }`}>
+                               {item.badge}
+                             </span>
+                           )}
+                           {isActive && (
+                             <motion.div 
+                               layoutId="activeSideIndicator"
+                               className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-indigo-500 rounded-r-full"
+                             />
+                           )}
+                         </button>
+                        </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
+
+        {/* System Health / Footer Addition */}
+        <div className="mt-auto p-4 border-t border-slate-50 space-y-4">
+           {/* Profile Preview - Enhanced for Desktop */}
+           <div className="hidden md:flex items-center gap-3 p-2 bg-slate-50/50 rounded-2xl border border-slate-100 group/profile cursor-default hover:bg-white transition-colors">
+              <div className="relative">
+                <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-gold-500 text-[10px] font-black shadow-lg">A</div>
+                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-[10px] font-black text-slate-900 truncate tracking-tight">{user?.displayName || t('admin.administrator')}</p>
+                <div className="flex items-center gap-1">
+                   <p className="text-[7px] font-black text-slate-400 uppercase leading-none">{t('admin.super_access')}</p>
+                   <span className="w-0.5 h-0.5 rounded-full bg-slate-300"></span>
+                   <p className="text-[7px] font-black text-indigo-500 uppercase leading-none">Online</p>
+                </div>
+              </div>
+           </div>
+
+           {/* Mobile Profile Icon Only */}
+           <div className="md:hidden flex flex-col items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-gold-500 text-[10px] font-black shadow-lg relative">
+                 A
+                 <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 border-2 border-white rounded-full"></div>
+              </div>
+           </div>
+
+           <div className="hidden md:block bg-slate-50 p-3 rounded-2xl border border-slate-100 group/health cursor-default">
+              <div className="flex items-center justify-between mb-2">
+                 <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">System Live</span>
+                 </div>
+                 <Activity size={10} className="text-slate-400 group-hover/health:rotate-12 transition-transform" />
+              </div>
+              <div className="flex items-center gap-1">
+                 <div className="h-1 flex-1 bg-emerald-500 rounded-full"></div>
+                 <div className="h-1 flex-1 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+                 <div className="h-1 flex-1 bg-emerald-500 rounded-full"></div>
+                 <div className="h-1 flex-1 bg-slate-200 rounded-full"></div>
+              </div>
+           </div>
+
+           <button 
+             onClick={async () => { await signOut(auth); window.location.href = '/'; }} 
+             className="w-full py-4 bg-rose-50 text-rose-500 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-rose-500 hover:text-white hover:scale-[1.02] active:scale-95 transition-all shadow-sm group/logout overflow-hidden relative"
+             title={t('auth.exit_admin')}
+           >
+             <LogOut size={14} className="relative z-10 group-hover/logout:-translate-x-1 transition-transform" /> 
+             <span className="relative z-10 hidden md:inline">{t('admin.exit')}</span>
+           </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 p-3 md:p-6 lg:p-8 max-h-screen overflow-y-auto custom-scrollbar space-y-4">
+          <div className="sm:hidden flex justify-between items-center mb-4">
+             <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 font-display">{t('admin.panel')}</span>
+             <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-slate-900 text-rose-500 rounded-lg shadow-lg">
+               <Zap size={18} />
+             </button>
+          </div>
+
+      <AnimatePresence mode="wait">
+        {activeTab === 'pending' ? (
+          <motion.div 
+            key="pending"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-8"
+          >
+            {/* Master Header */}
+            <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 rounded-3xl p-6 md:p-8 text-white relative overflow-hidden group shadow-2xl shadow-rose-500/20">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-[80px] rounded-full mix-blend-overlay"></div>
+               <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-amber-300/30 blur-[60px] rounded-full mix-blend-overlay"></div>
+               
+               <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6 text-center md:text-left">
+                  <div className="max-w-2xl mx-auto md:mx-0 flex flex-col items-center md:items-start text-center md:text-left">
+                    <div className="w-14 h-14 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center text-white shadow-2xl border border-white/30 transform -rotate-6 group-hover:rotate-0 transition-transform duration-500 mb-4 mx-auto md:mx-0">
+                       <ShieldAlert size={28} className="drop-shadow-lg" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter leading-none mb-2 text-white drop-shadow-md">
+                        ማረጋገጫ የሚጠብቁ
+                      </h2>
+                      <div className="flex flex-col sm:flex-row items-center gap-3 justify-center md:justify-start">
+                         <span className="flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-white/20 border border-white/20 backdrop-blur-md">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-300 animate-pulse"></span>
+                            <span className="text-[8px] font-black text-amber-100 uppercase tracking-[0.2em]">የማንነት ማረጋገጫ (KYC)</span>
+                         </span>
+                         <div className="flex items-center gap-2">
+                            <div className="h-1 w-1 rounded-full bg-white/50"></div>
+                            <span className="text-[9px] font-black text-white/80 uppercase tracking-widest">{pendingUsers.length} ጥያቄዎች</span>
+                         </div>
+                      </div>
+                    </div>
+                    <p className="mt-4 text-xs font-bold text-white/90 leading-relaxed max-w-xl text-center md:text-left shadow-sm">
+                       አዲስ የተመዘገቡ አባላትን መረጃ ያረጋግጡ። የባንክ እና የማንነት ማረጋገጫ (KYC) በማድረግ ወደ ሲስተሙ ይቀላቅሉ።
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
+                    {[
+                      { label: language === 'am' ? 'ማረጋገጫ የሚጠብቁ' : 'Pending Review', value: pendingUsers.length, icon: Clock, color: 'text-amber-100' },
+                      { label: language === 'am' ? 'በቅርብ የገቡ' : 'New Today', value: pendingUsers.filter(u => new Date(u.createdAt).toDateString() === new Date().toDateString()).length, icon: Activity, color: 'text-rose-100' },
+                    ].map((m, i) => (
+                      <div key={i} className="p-3.5 rounded-2xl bg-white/10 border border-white/20 flex flex-col items-center justify-center text-center backdrop-blur-md group/stat">
+                        <m.icon size={18} className={`mb-2 opacity-80 group-hover/stat:scale-110 transition-transform ${m.color}`} />
+                        <p className="text-xl font-black text-white leading-none mb-0.5 shadow-sm">{m.value}</p>
+                        <p className="text-[7px] font-black uppercase tracking-widest text-white/70">{m.label}</p>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col lg:flex-row items-center justify-between gap-6 bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] relative z-20">
+               <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar no-scrollbar w-full lg:w-auto px-2 pb-2 lg:pb-0">
+                  <div className="flex items-center gap-2 pr-4 border-r border-slate-100 mr-2 shrink-0">
+                    <Filter size={16} className="text-amber-500" />
+                    <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest hidden sm:inline-block">ማጣሪያ:</span>
+                  </div>
+                  {regions.map(r => (
+                    <button 
+                      key={r}
+                      onClick={() => setSelectedRegionFilter(r)}
+                      className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border-2 ${
+                        selectedRegionFilter === r 
+                        ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-md shadow-amber-500/10' 
+                        : 'bg-white border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-slate-100/0 hover:border-slate-100'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+               </div>
+
+               <div className="relative w-full lg:w-[400px] group mx-2 shrink-0">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder={language === 'am' ? "በስም ወይንም በስልክ ቁጥር ይፈልጉ..." : "Search by name or phone..."}
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 hover:border-slate-200 focus:border-amber-400 focus:bg-white rounded-[1.5rem] outline-none transition-all text-xs font-bold text-slate-900 shadow-inner group-focus-within:shadow-xl group-focus-within:shadow-amber-500/10"
+                  />
+               </div>
+            </div>
+
+            {/* Pending Members Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-32">
+               {filteredPending.length === 0 ? (
+                 <motion.div 
+                   initial={{ opacity: 0, scale: 0.9 }}
+                   animate={{ opacity: 1, scale: 1 }}
+                   className="col-span-full py-32 text-center bg-white rounded-[3.5rem] border-2 border-dashed border-slate-200 flex flex-col items-center shadow-sm"
+                 >
+                    <div className="w-28 h-28 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-400 mb-8 shadow-[inset_0_4px_20px_rgba(0,0,0,0.05)] relative">
+                       <CheckCircle size={48} className="drop-shadow-lg" />
+                       <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg text-amber-500">
+                          <Zap size={20} />
+                       </div>
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-3">ማረጋገጫ የሚጠብቁ አባላት የሉም</h3>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest max-w-sm leading-relaxed">ሁሉንም የስርዓት ፍተሻዎች አጠናቀዋል። (All system checks have been completed)</p>
+                 </motion.div>
+               ) : (
+                 filteredPending.map((user, idx) => (
+                   <motion.div 
+                     layout
+                     initial={{ opacity: 0, y: 30 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     transition={{ delay: Math.min(idx * 0.05, 0.4), type: 'spring', damping: 20 }}
+                     key={user.id} 
+                     className="bg-white rounded-3xl border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-2xl hover:shadow-amber-500/15 hover:border-amber-200 transition-all flex flex-col overflow-hidden relative group"
+                   >
+                     {/* Border Gradient Top */}
+                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-rose-400 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                     <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-3xl group-hover:bg-amber-500/10 transition-colors pointer-events-none"></div>
+
+                     <div className="p-4">
+                       <div className="flex gap-4 relative z-10 mb-4">
+                         {/* Avatar Section */}
+                         <div className="relative shrink-0">
+                           <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 border-2 border-white shadow-[0_4px_10px_rgba(0,0,0,0.05)] group-hover:shadow-[0_8px_20px_rgba(245,158,11,0.15)] group-hover:border-amber-100 transition-all overflow-hidden relative">
+                              {user.faceScan ? (
+                                <img src={user.faceScan} alt="" className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700" />
+                              ) : (
+                                <Users size={24} />
+                              )}
+                              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-1">
+                                 <span className="text-[7px] font-black text-white uppercase tracking-widest">እይ</span>
+                              </div>
+                              <div className="bg-white/10 rounded-xl p-2 border border-white/10 shadow-sm">
+                                 <span className="text-[7px] text-white/70 uppercase tracking-widest font-black inline-block mb-1">{language === 'am' ? 'የእቁብ አይነት' : 'Ekub Type'}</span>
+                                 <p className="font-black text-[9px] tracking-tighter text-white leading-none truncate drop-shadow-sm">{selectedIDUser.ekubType || '---'}</p>
+                              </div>
+                              <div className="bg-white/10 rounded-xl p-2 border border-white/10 shadow-sm">
+                                 <span className="text-[7px] text-white/70 uppercase tracking-widest font-black inline-block mb-1">{language === 'am' ? 'መዋጮ' : 'Amount'}</span>
+                                 <p className="font-black text-[9px] tracking-tighter text-blue-300 leading-none uppercase drop-shadow-sm">{selectedIDUser.amount ? `${selectedIDUser.amount.toLocaleString()} ETB` : '---'}</p>
+                              </div>
+                           </div>
+                           <div className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-amber-50 text-amber-500 rounded-lg shadow-lg border border-amber-100 flex items-center justify-center animate-bounce-slow">
+                              <ShieldAlert size={12} />
+                           </div>
+                         </div>
+
+                         {/* Info Section */}
+                         <div className="flex-1 min-w-0 pt-0.5">
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-amber-600 transition-colors truncate mb-1">
+                              {user.fullName}
+                            </h3>
+                           <p className="text-[10px] font-bold text-slate-500 group-hover:text-slate-700 transition-colors mb-2 flex items-center gap-1.5">
+                             <Phone size={10} className="text-slate-400" /> {user.phone}
+                           </p>
+                           
+                           <div className="flex flex-wrap gap-1.5">
+                              <div className="flex items-center gap-1 px-2.5 py-0.5 bg-slate-50 rounded-lg border border-slate-100">
+                                <MapPin size={8} className="text-slate-400" />
+                                <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest">{user.addressRegion || 'Addis'}</span>
+                              </div>
+                              <div className="flex items-center gap-1 px-2.5 py-0.5 bg-amber-50 rounded-lg border border-amber-100/50">
+                                <Clock size={8} className="text-amber-500" />
+                                <span className="text-[7px] font-black text-amber-700 uppercase tracking-widest">{getTimeSince(user.createdAt)}</span>
+                              </div>
+                           </div>
+                         </div>
+                       </div>
+
+                       {/* Verification Checklist */}
+                       <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-100 mb-4">
+                         <div className="grid grid-cols-2 gap-y-2 gap-x-2 relative z-10">
+                            {[
+                              { label: 'መታወቂያ', success: !!user.idCardFront },
+                              { label: 'የህይወት ታሪክ', success: !!user.fullName },
+                              { label: 'ዋስ', success: !!user.waasName },
+                              { label: 'ባንክ', success: !!user.bankAccountNo }
+                            ].map((item, i) => (
+                              <div key={i} className="flex items-center gap-1.5">
+                                {item.success ? (
+                                  <div className="w-4 h-4 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0 border border-emerald-100">
+                                     <CheckCircle size={8} />
+                                  </div>
+                                ) : (
+                                  <div className="w-4 h-4 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center shrink-0 border border-slate-200">
+                                     <XCircle size={8} />
+                                  </div>
+                                )}
+                                <span className={`text-[8px] font-bold uppercase tracking-widest truncate ${item.success ? 'text-slate-700' : 'text-slate-400'}`}>{item.label}</span>
+                              </div>
+                            ))}
+                         </div>
+                       </div>
+                     </div>
+
+                     {/* Actions (Always at bottom) */}
+                     <div className="mt-auto p-3 bg-slate-50/50 border-t border-slate-100/80 grid grid-cols-2 gap-2 relative z-10">
+                        <button 
+                          onClick={() => { setSelectedUser(user); setShowKYCModal(true); }}
+                          className="py-2.5 bg-white text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-amber-50 hover:text-amber-600 transition-all border border-slate-200 hover:border-amber-200 shadow-sm"
+                        >
+                           መረጃ እይ
+                        </button>
+                        <div className="flex gap-1.5">
+                          <button 
+                            onClick={async () => {
+                              if(window.confirm(language === 'am' ? 'ይህንን አባል ማጽደቅ ይፈልጋሉ?' : 'Are you sure you want to approve this member?')) {
+                                await approveUser(user.id);
+                              }
+                            }}
+                            className="flex-1 py-2.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-500 transition-all shadow-md active:scale-95 group/app"
+                          >
+                             አጽድቅ
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if(window.confirm(language === 'am' ? 'ይህንን ጥያቄ ውድቅ ማድረግ ይፈልጋሉ? ይህ እርምጃ አይቀለበስም።' : 'Are you sure you want to reject this request? This action cannot be undone.')) {
+                                await rejectUser(user.id);
+                              }
+                            }}
+                            className="w-10 py-2.5 bg-slate-200 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-300 transition-all border border-slate-200 shadow-sm active:scale-95"
+                            title={language === 'am' ? 'ውድቅ አድርግ' : 'Reject Request'}
+                          >
+                            <XCircle size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="px-3 pb-3">
+                         <button 
+                           onClick={() => deleteUserAdmin(user.id)}
+                           className="w-full py-2 bg-rose-50 text-rose-500 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all border border-rose-100 flex items-center justify-center gap-2"
+                         >
+                           <Trash2 size={12} /> {language === 'am' ? 'በቋሚነት አጥፋ' : 'Delete Member Permanently'}
+                         </button>
+                      </div>
+                    </motion.div>
+                 ))
+               )}
+            </div>
+          </motion.div>
+        ) : activeTab === 'users' ? (
+          <motion.div 
+            key="users"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="space-y-8"
+          >
+            {/* Master Directory Intelligence Header - Re-imagined */}
+            <div className="bg-gradient-to-br from-indigo-700 via-blue-700 to-violet-800 rounded-[2.5rem] p-8 md:p-12 text-white relative overflow-hidden group shadow-2xl">
+               {/* Animated Aesthetic Background */}
+               <div className="absolute -right-40 -top-40 w-[500px] h-[500px] bg-white/10 blur-[130px] rounded-full group-hover:bg-white/20 transition-all duration-1000 animate-pulse"></div>
+               <div className="absolute -left-40 -bottom-40 w-[500px] h-[500px] bg-indigo-400/20 blur-[120px] rounded-full group-hover:bg-indigo-400/30 transition-all duration-1000"></div>
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none"></div>
+               
+               <div className="relative z-10">
+                  <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-10">
+                    <div className="max-w-2xl">
+                      <div className="flex items-center gap-6 mb-8">
+                         <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2rem] flex items-center justify-center text-white shadow-[0_10px_30px_rgba(79,70,229,0.4)] border border-white/20 transform -rotate-6 group-hover:rotate-0 transition-all duration-700">
+                            <Users size={36} />
+                         </div>
+                         <div>
+                           <div className="flex items-center gap-2 mb-2">
+                             <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-md text-[8px] font-black uppercase tracking-[0.2em] border border-indigo-500/30">Member Directory v2.0</span>
+                           </div>
+                           <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter leading-tight text-white mb-2 italic">የአባላት <span className="text-indigo-400">ማህደር</span></h2>
+                           <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-2">
+                                <span className="flex h-3 w-3 items-center justify-center rounded-full bg-emerald-500/20">
+                                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                </span>
+                                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest font-mono">Live Sync Active</p>
+                              </div>
+                              <div className="h-5 w-[1px] bg-white/10 hidden md:block"></div>
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{allUsers.length} የተመዘገቡ አባላት</span>
+                           </div>
+                         </div>
+                      </div>
+                      
+                      <p className="text-sm font-medium text-slate-400 leading-relaxed max-w-lg mb-10">
+                        የእቁብ አባላትን መረጃ በብቃት ያስተዳድሩ። የፋይናንስ እንቅስቃሴን ይከታተሉ፣ አዳዲስ አባላትን ያክሉ እና የአባላትን ሁኔታ በአንድ ገጽ ይመልከቱ።
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-4">
+                         <button 
+                           onClick={() => {
+                             setAddUserForm(prev => ({ ...prev, password: systemSettings.defaultUserPassword || 'Password@123' }));
+                             setShowAddUserModal(true);
+                           }}
+                           className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-[0.1em] shadow-[0_10px_20px_rgba(255,255,255,0.1)] hover:bg-slate-100 hover:-translate-y-1 active:scale-95 transition-all flex items-center gap-3 group/btn"
+                         >
+                           <UserPlus size={18} className="group-hover/btn:rotate-12 transition-transform" /> አዲስ አባል ጨምር
+                         </button>
+                         <button 
+                           onClick={() => handleExportUsers(allUsers)}
+                           className="px-8 py-4 bg-slate-800 text-white border border-slate-700 rounded-2xl font-black text-[10px] uppercase tracking-[0.1em] hover:bg-slate-700 hover:-translate-y-1 active:scale-95 transition-all flex items-center gap-3"
+                         >
+                           <Download size={18} /> ሪፖርት አውርድ (CSV)
+                         </button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 w-full lg:w-[450px]">
+                      {[
+                        { label: 'ንቁ አባላት', value: allUsers.filter(u => u.status === 'active').length, sub: 'Active now', icon: Zap, color: 'text-amber-400', bg: 'bg-amber-400/5 border-amber-400/20' },
+                        { label: 'ያልተረጋገጡ', value: allUsers.filter(u => !u.isVerified).length, sub: 'Needs verification', icon: ShieldAlert, color: 'text-rose-400', bg: 'bg-rose-400/5 border-rose-400/20' },
+                        { label: 'አሸናፊዎች', value: allUsers.filter(u => u.wonDraw).length, sub: 'Draw winners', icon: Trophy, color: 'text-indigo-400', bg: 'bg-indigo-400/5 border-indigo-400/20' },
+                        { label: 'ጠቅላላ እጣ', value: allUsers.reduce((acc, curr) => acc + (curr.slots || 1), 0), sub: 'Total Slots', icon: Folder, color: 'text-emerald-400', bg: 'bg-emerald-400/5 border-emerald-400/20' }
+                      ].map((m, i) => (
+                        <div key={i} className={`p-5 rounded-[2rem] border ${m.bg} flex flex-col items-start justify-between min-h-[140px] hover:bg-white/5 transition-all duration-500 relative group/stat cursor-default`}>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 mb-2 group-hover/stat:rotate-6 group-hover/stat:scale-110 transition-all ${m.color}`}>
+                             <m.icon size={20} />
+                          </div>
+                          <div>
+                            <p className="text-3xl font-black text-white leading-none mb-1 tracking-tighter tabular-nums">{m.value}</p>
+                            <div className="flex flex-col">
+                              <p className="text-[8px] font-black uppercase tracking-widest text-slate-200">{m.label}</p>
+                              <p className="text-[6px] font-bold uppercase tracking-[0.2em] text-slate-500 mt-0.5">{m.sub}</p>
+                            </div>
+                          </div>
+                          <div className="absolute right-4 bottom-4 opacity-10 blur-[2px] group-hover:opacity-20 transition-opacity">
+                            <m.icon size={48} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* Filter & Search Bar - Re-imagined */}
+            <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+               <div className="bg-white p-2 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/40 flex flex-col md:flex-row items-center gap-2 flex-1">
+                  <div className="flex items-center gap-3 pl-6 pr-4 border-r border-slate-100 hidden md:flex">
+                    <Filter size={18} className="text-slate-400" />
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filter By Region:</span>
+                  </div>
+                  <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar no-scrollbar w-full p-1">
+                    {regions.map(r => (
+                      <button 
+                        key={r}
+                        onClick={() => setSelectedRegionFilter(r)}
+                        className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${
+                          selectedRegionFilter === r 
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-900/20' 
+                          : 'bg-white text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100'
+                        }`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+               </div>
+
+               <div className="flex items-center gap-3">
+                  <div className="bg-white p-2 rounded-2xl border border-slate-100 shadow-lg flex items-center gap-1">
+                     <button 
+                        onClick={() => setUserViewMode('grid')}
+                        className={`p-2 rounded-xl transition-all ${userViewMode === 'grid' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                        title="Grid View"
+                     >
+                        <LayoutGrid size={18} />
+                     </button>
+                     <button 
+                        onClick={() => setUserViewMode('list')}
+                        className={`p-2 rounded-xl transition-all ${userViewMode === 'list' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                        title="List View"
+                     >
+                        <FileText size={18} />
+                     </button>
+                  </div>
+
+                  <div className="bg-white p-2 rounded-2xl border border-slate-100 shadow-lg flex items-center gap-2">
+                     <p className="text-[8px] font-black uppercase text-slate-400 ml-2 tracking-widest">Sort By:</p>
+                     <select 
+                        value={userSortBy}
+                        onChange={(e: any) => setUserSortBy(e.target.value)}
+                        className="bg-slate-50 border-none outline-none text-[9px] font-black uppercase tracking-widest p-2 pr-6 rounded-xl text-slate-900 appearance-none cursor-pointer"
+                     >
+                        <option value="name">Name / ስም</option>
+                        <option value="date">Date / ቀን</option>
+                        <option value="slots">Slots / እጣ</option>
+                        <option value="region">Region / ክልል</option>
+                     </select>
+                     <button 
+                        onClick={() => setUserSortOrder(userSortOrder === 'asc' ? 'desc' : 'asc')}
+                        className="p-2 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
+                     >
+                        {userSortOrder === 'asc' ? <ArrowUpNarrowWide size={16} /> : <ArrowDownWideNarrow size={16} />}
+                     </button>
+                  </div>
+               </div>
+
+               <div className="bg-white p-2 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/40 min-w-full xl:min-w-[400px] flex items-center relative group">
+                  <div className="absolute left-6 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                    <Search size={22} className="stroke-[3px]" />
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="ተጠቃሚ በስም፣ ስልክ ቁጥር ወይም ክልል ይፈልጉ..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="w-full pl-16 pr-6 py-4 bg-transparent outline-none text-sm font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-black placeholder:uppercase placeholder:tracking-widest"
+                  />
+                  {searchTerm && (
+                    <button onClick={() => setSearchTerm('')} className="absolute right-6 p-2 bg-slate-100 text-slate-400 rounded-full hover:bg-rose-50 hover:text-rose-500 transition-all">
+                      <X size={14} strokeWidth={3} />
+                    </button>
+                  )}
+               </div>
+            </div>
+
+            {/* Member Insights Row - New Premium Addition - Optimized Size */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+               <motion.div 
+                 initial={{ opacity: 0, y: 20 }}
+                 animate={{ opacity: 1, y: 0 }}
+                 className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm overflow-hidden relative group hover:border-indigo-100 transition-colors"
+               >
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                       <div className="w-5 h-5 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-500">
+                          <Globe size={10} />
+                       </div>
+                       Regions
+                    </h4>
+                    {insightFilter.type === 'region' && (
+                      <button onClick={() => setInsightFilter({type: null, value: null})} className="text-[7px] font-black uppercase text-rose-500 hover:underline">Clear</button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                     {Object.entries(allUsers.reduce((acc: any, u) => {
+                        const r = u.addressRegion || 'Not Specified';
+                        acc[r] = (acc[r] || 0) + 1;
+                        return acc;
+                     }, {})).sort((a: any, b: any) => b[1] - a[1]).slice(0, 3).map(([region, count]: any) => (
+                        <div 
+                          key={region} 
+                          className={`group/item cursor-pointer p-1.5 rounded-lg transition-all ${insightFilter.type === 'region' && insightFilter.value === region ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}
+                          onClick={() => setInsightFilter(prev => prev.type === 'region' && prev.value === region ? {type: null, value: null} : {type: 'region', value: region})}
+                        >
+                           <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight truncate">{region}</span>
+                              <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md">{count}</span>
+                           </div>
+                           <div className="h-1 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100/50">
+                              <motion.div 
+                                 initial={{ width: 0 }}
+                                 animate={{ width: `${(count / (allUsers.length || 1)) * 100}%` }}
+                                 className={`h-full bg-gradient-to-r from-indigo-400 to-violet-400 rounded-full`}
+                              ></motion.div>
+                           </div>
+                        </div>
+                     ))}
+                  </div>
+               </motion.div>
+
+               <motion.div 
+                 initial={{ opacity: 0, y: 20 }}
+                 animate={{ opacity: 1, y: 0 }}
+                 transition={{ delay: 0.1 }}
+                 className={`bg-white p-5 rounded-3xl border transition-colors shadow-sm overflow-hidden relative group ${insightFilter.type === 'status' || insightFilter.type === 'verification' ? 'border-emerald-500' : 'border-slate-100 hover:border-emerald-100'}`}
+               >
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                       <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-500">
+                          <Activity size={10} />
+                       </div>
+                       Readiness
+                    </h4>
+                    {(insightFilter.type === 'status' || insightFilter.type === 'verification') && (
+                      <button onClick={() => setInsightFilter({type: null, value: null})} className="text-[7px] font-black uppercase text-rose-500 hover:underline">Clear</button>
+                    )}
+                  </div>
+                  <div className="flex items-end gap-2 h-20">
+                     {[
+                        { label: 'Active', count: allUsers.filter(u => u.status === 'active').length, color: 'emerald', type: 'status', val: 'active' },
+                        { label: 'Pending', count: allUsers.filter(u => u.status === 'pending').length, color: 'amber', type: 'status', val: 'pending' },
+                        { label: 'Verified', count: allUsers.filter(u => u.isVerified).length, color: 'indigo', type: 'verification', val: 'verified' }
+                     ].map((s, i) => (
+                        <div 
+                          key={s.label} 
+                          className={`flex-1 flex flex-col items-center gap-1 cursor-pointer group/col transition-all ${(insightFilter.type === s.type && insightFilter.value === s.val) ? 'scale-105' : 'opacity-60 hover:opacity-100'}`}
+                          onClick={() => setInsightFilter(prev => prev.type === s.type && prev.value === s.val ? {type: null, value: null} : {type: s.type as any, value: s.val})}
+                        >
+                           <div className="w-full relative group/bar h-full flex flex-col-reverse">
+                              <motion.div 
+                                 initial={{ height: 0 }}
+                                 animate={{ height: `${(s.count / (allUsers.length || 1)) * 100}%` }}
+                                 className={`w-full min-h-[4px] rounded-t-md bg-${s.color}-500 shadow-sm transition-all`}
+                              ></motion.div>
+                           </div>
+                           <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{s.label}</span>
+                        </div>
+                     ))}
+                  </div>
+               </motion.div>
+
+               <motion.div 
+                 initial={{ opacity: 0, y: 20 }}
+                 animate={{ opacity: 1, y: 0 }}
+                 transition={{ delay: 0.2 }}
+                 className={`bg-white p-5 rounded-3xl border transition-colors shadow-sm overflow-hidden relative group ${insightFilter.type === 'slots' ? 'border-violet-500' : 'border-slate-100 hover:border-violet-100'}`}
+               >
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                       <div className="w-5 h-5 rounded-md bg-violet-50 flex items-center justify-center text-violet-500">
+                          <Layers size={10} />
+                       </div>
+                       Slots
+                    </h4>
+                    {insightFilter.type === 'slots' && (
+                      <button onClick={() => setInsightFilter({type: null, value: null})} className="text-[7px] font-black uppercase text-rose-500 hover:underline">Clear</button>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between h-20">
+                    <div className="text-center group cursor-pointer" onClick={() => setInsightFilter({type: 'slots', value: 'bonus'})}>
+                       <p className="text-2xl font-black text-violet-600 tabular-nums">{allUsers.filter(u => u.slots > 1).length}</p>
+                       <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Bonus Slots</p>
+                    </div>
+                    <div className="w-px h-10 bg-slate-100"></div>
+                    <div className="text-center group cursor-pointer" onClick={() => setInsightFilter({type: 'slots', value: 'std'})}>
+                       <p className="text-2xl font-black text-slate-800 tabular-nums">{allUsers.filter(u => u.slots === 1).length}</p>
+                       <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Standard</p>
+                    </div>
+                  </div>
+               </motion.div>
+            </div>
+                     <div className="flex-1 space-y-4">
+                        <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 rounded-2xl bg-violet-50 flex items-center justify-center text-violet-600 font-black text-lg">
+                              {allUsers.reduce((acc, u) => acc + (u.slots || 1), 0)}
+                           </div>
+                           <div>
+                              <p className="text-[10px] font-black text-slate-900 uppercase">Total Slots Active</p>
+                              <p className="text-[8px] font-bold text-slate-400 uppercase">በሲስተሙ ሙሉ የእጣ ብዛት</p>
+                           </div>
+                        </div>
+                        <div 
+                          className={`pt-2 cursor-pointer group/multi transition-all ${insightFilter.type === 'slots' ? 'scale-[1.05]' : 'hover:scale-[1.02]'}`}
+                          onClick={() => setInsightFilter(prev => prev.type === 'slots' ? {type: null, value: null} : {type: 'slots', value: 'multi'})}
+                        >
+                           <div className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                              <span>Multi-Slot Holders</span>
+                              <span className="text-violet-600">{Math.round((allUsers.filter(u => u.slots > 1).length / (allUsers.length || 1)) * 100)}%</span>
+                           </div>
+                           <div className="h-3 w-full bg-slate-50 rounded-full p-1 border border-slate-100">
+                              <div className="h-full bg-violet-500 rounded-full transition-all duration-700" style={{ width: `${(allUsers.filter(u => u.slots > 1).length / (allUsers.length || 1)) * 100}%` }}></div>
+                           </div>
+                        </div>
+                     </div>
+            
+
+            {/* Active Filters Summary */}
+            {(searchTerm || selectedRegionFilter !== 'All' || insightFilter.type) && (
+               <motion.div 
+                 initial={{ opacity: 0, y: -10 }}
+                 animate={{ opacity: 1, y: 0 }}
+                 className="flex flex-wrap items-center gap-2 -mt-2 animate-in fade-in slide-in-from-top-2 duration-500"
+               >
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Active Filters | ገባሪ ማጣሪያዎች:</span>
+                  {searchTerm && (
+                    <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-black uppercase tracking-tighter flex items-center gap-2">
+                       Search: {searchTerm} <X size={10} className="cursor-pointer hover:scale-125 transition-transform" onClick={() => setSearchTerm('')} />
+                    </span>
+                  )}
+                  {selectedRegionFilter !== 'All' && (
+                    <span className="px-3 py-1 bg-slate-900 text-white rounded-full text-[9px] font-black uppercase tracking-tighter flex items-center gap-2">
+                       Region: {selectedRegionFilter} <X size={10} className="cursor-pointer hover:scale-125 transition-transform" onClick={() => setSelectedRegionFilter('All')} />
+                    </span>
+                  )}
+                  {insightFilter.type && (
+                    <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-tighter flex items-center gap-2">
+                       {insightFilter.type === 'slots' ? 'Premium Slots' : `Filter: ${insightFilter.value}`} <X size={10} className="cursor-pointer hover:scale-125 transition-transform" onClick={() => setInsightFilter({type: null, value: null})} />
+                    </span>
+                  )}
+                  <button 
+                    onClick={() => { setSearchTerm(''); setSelectedRegionFilter('All'); setInsightFilter({type: null, value: null}); }}
+                    className="text-[10px] font-black text-rose-500 uppercase ml-2 hover:bg-rose-50 px-3 py-1 rounded-full transition-all"
+                  >
+                    Clear All
+                  </button>
+               </motion.div>
+            )}
+
+            {/* Members Grid - Enhanced Premium Look */}
+            <div className={userViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-40" : "flex flex-col gap-4 pb-40"}>
+               {filteredUsers.length === 0 ? (
+                 <div className="col-span-full py-40 text-center bg-white rounded-[4rem] border-2 border-dashed border-slate-100 flex flex-col items-center shadow-inner">
+                    <div className="w-32 h-32 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-slate-200 mb-8 border-4 border-white shadow-xl rotate-12">
+                       <Search size={56} strokeWidth={1} />
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-3">ምንም አባል አልተገኘም/No Results</h3>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] max-w-sm">የፍለጋ ቃሉን ያድሱ ወይም ሌላ ክልል ይምረጡ</p>
+                 </div>
+               ) : (
+                  filteredUsers.map((u, idx) => (
+                   userViewMode === 'grid' ? (
+                   <motion.div 
+                     layout
+                     initial={{ opacity: 0, scale: 0.9 }}
+                     animate={{ opacity: 1, scale: 1 }}
+                     transition={{ delay: Math.min(idx * 0.05, 0.5), type: 'spring', damping: 20 }}
+                     key={u.id}
+                     className={`bg-white rounded-3xl border transition-all duration-500 overflow-hidden flex flex-col group relative ${selectedUserIds.includes(u.id) ? 'border-indigo-500 shadow-2xl shadow-indigo-500/10 -translate-y-1' : 'border-slate-100 shadow-lg hover:shadow-xl hover:border-indigo-100'}`}
+                   >
+                     {/* Selection Overlay */}
+                     <button 
+                        onClick={() => toggleUserSelection(u.id)}
+                        className={`absolute top-4 left-4 z-20 w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center ${selectedUserIds.includes(u.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white/50 backdrop-blur-md border-white/80 opacity-0 group-hover:opacity-100'}`}
+                     >
+                        {selectedUserIds.includes(u.id) && <CheckCircle size={10} className="text-white" />}
+                     </button>
+
+                     <div className="absolute top-4 right-4 z-10 flex flex-col gap-1.5">
+                        {u.wonDraw && (
+                          <div className="w-6 h-6 bg-amber-500 text-white rounded-full flex items-center justify-center shadow-lg transform rotate-12 group-hover:rotate-0 transition-all border-2 border-white" title="Winner">
+                            <Trophy size={10} strokeWidth={3} />
+                          </div>
+                        )}
+                        {u.slots > 1 && (
+                          <div className="px-1.5 py-0.5 bg-indigo-600 text-white rounded-md text-[7px] font-black uppercase tracking-widest shadow-lg flex items-center gap-1 border border-indigo-400" title="Premium Subscriber">
+                            <Sparkles size={6} /> VIP
+                          </div>
+                        )}
+                     </div>
+
+                     <div className="p-5 pb-3 relative">
+                        <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-20 h-1 blur-2xl opacity-50 ${u.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'} ${selectedUserIds.includes(u.id) ? 'h-2 blur-3xl opacity-100' : ''}`}></div>
+                        
+                        <div className="flex flex-col items-center">
+                           <div className="relative mb-3">
+                             <div className={`w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden border-2 border-white shadow-xl transition-all duration-500 ${selectedUserIds.includes(u.id) ? 'border-indigo-500 rotate-0' : 'border-white group-hover:rotate-6'}`}>
+                                {u.faceScan ? (
+                                  <img src={u.faceScan} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-slate-300 bg-gradient-to-br from-slate-50 to-slate-200">
+                                     <User size={24} strokeWidth={1} />
+                                  </div>
+                                )}
+                             </div>
+                             {/* Integrity Score Badge */}
+                             <div className="absolute -top-1 -left-1 z-10">
+                                <div className={`px-1.5 py-0.5 rounded-md text-[7px] font-black text-white shadow-lg flex items-center gap-1 ${
+                                  calculateIntegrityScore(u.id) > 85 ? 'bg-emerald-500' :
+                                  calculateIntegrityScore(u.id) > 60 ? 'bg-amber-500' :
+                                  'bg-rose-500'
+                                }`}>
+                                   {calculateIntegrityScore(u.id)}%
+                                </div>
+                             </div>
+                             <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-xl border-2 border-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 ${u.isVerified ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                               {u.isVerified ? <CheckCircle size={10} className="text-white" /> : <ShieldAlert size={10} className="text-white" />}
+                             </div>
+                           </div>
+
+                             <div className="text-center w-full">
+                              <h3 className="text-sm font-black text-slate-900 tracking-tight leading-tight group-hover:text-indigo-600 transition-colors uppercase mb-1 truncate">{highlightText(u.fullName || '', searchTerm)}</h3>
+                              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.1em] flex items-center gap-1 px-2 py-0.5 bg-slate-50 rounded-full">
+                                   <Phone size={8} className="text-slate-300"/> {highlightText(u.phone || '', searchTerm)}
+                                 </p>
+                                 <div className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest border flex items-center gap-1 ${u.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                    <span className={`w-1 h-1 rounded-full ${u.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                                    {u.status === 'active' ? 'Active' : 'Pending'}
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="px-5 grid grid-cols-2 gap-2 mb-4">
+                        <div className="p-2.5 bg-slate-50/50 rounded-xl border border-slate-100 group-hover:bg-indigo-50 transition-colors">
+                           <div className="flex items-center gap-1.5 mb-1">
+                              <div className="w-5 h-5 rounded-md bg-white flex items-center justify-center text-slate-400 shadow-sm border border-slate-100 group-hover:text-indigo-500 transition-colors">
+                                 <MapPin size={10} />
+                              </div>
+                              <span className="text-[7px] font-black uppercase tracking-widest text-slate-400">Region</span>
+                           </div>
+                           <p className="text-[10px] font-black text-slate-800 truncate">{u.addressRegion || 'Not Set'}</p>
+                        </div>
+                        <div className="p-2.5 bg-slate-50/50 rounded-xl border border-slate-100 group-hover:bg-amber-50 transition-colors">
+                           <div className="flex items-center gap-1.5 mb-1">
+                              <div className="w-5 h-5 rounded-md bg-white flex items-center justify-center text-slate-400 shadow-sm border border-slate-100 group-hover:text-amber-500 transition-colors">
+                                 <Folder size={10} />
+                              </div>
+                              <span className="text-[7px] font-black uppercase tracking-widest text-slate-400">Slots</span>
+                           </div>
+                           <p className="text-[10px] font-black text-slate-800 tabular-nums">{u.slots || 1}</p>
+                        </div>
+                        <div className={`col-span-2 p-2.5 rounded-2xl flex items-center justify-between transition-all ${selectedUserIds.includes(u.id) ? 'bg-indigo-900 shadow-xl' : 'bg-indigo-600 shadow-md group-hover:shadow-lg'}`}>
+                           <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white backdrop-blur-md">
+                                <ShoppingBag size={14} />
+                              </div>
+                              <div className="overflow-hidden">
+                                <p className="text-[7px] font-black text-indigo-200 uppercase tracking-widest leading-none mb-0.5">Preference</p>
+                                <p className="text-[10px] font-black text-white truncate max-w-[120px]">{u.preferredItem || 'Cash'}</p>
+                              </div>
+                           </div>
+                           <ArrowRight size={12} className="text-white opacity-50 transition-transform group-hover:translate-x-0.5" />
+                        </div>
+                     </div>
+
+                     <div className="p-4 pt-0 mt-auto grid grid-cols-2 gap-2">
+                        <button 
+                          onClick={() => { setEditUserForm(u); setShowEditUserModal(true); }}
+                          className="py-2.5 bg-white border border-slate-100 text-slate-600 rounded-xl text-[8px] font-black uppercase tracking-widest hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <Edit3 size={12} /> Edit
+                        </button>
+                        <button 
+                          onClick={() => { setSelectedUser(u); setShowKYCModal(true); }}
+                          className="py-2.5 bg-slate-900 text-white rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <Eye size={12} /> Profile
+                        </button>
+                        
+                        <button 
+                          onClick={() => { setSelectedIDUser(u); setShowIDCardModal(true); }}
+                          className="col-span-1 py-2.5 bg-indigo-50 text-indigo-600 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <CreditCard size={12} /> ID Card
+                        </button>
+                        <button 
+                          onClick={() => deleteUserAdmin(u.id)}
+                          className="col-span-1 py-2.5 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-1.5 group/del"
+                        >
+                          <Trash2 size={12} className="group-hover/del:scale-110 transition-transform" /> Delete
+                        </button>
+                     </div>
+                   </motion.div>
+                   ) : (
+                     <motion.div 
+                        layout
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        key={u.id}
+                        className={`p-4 rounded-[2rem] border transition-all flex items-center gap-6 group ${selectedUserIds.includes(u.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-200'}`}
+                     >
+                        <button 
+                           onClick={() => toggleUserSelection(u.id)}
+                           className={`w-6 h-6 rounded-lg border-2 transition-all flex items-center justify-center ${selectedUserIds.includes(u.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-200'}`}
+                        >
+                           {selectedUserIds.includes(u.id) && <CheckCircle size={14} className="text-white" />}
+                        </button>
+
+                        <div className="w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden border-2 border-white shadow-md group-hover:scale-105 transition-transform">
+                           {u.faceScan ? (
+                             <img src={u.faceScan} alt="" className="w-full h-full object-cover" />
+                           ) : (
+                             <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                <User size={24} />
+                             </div>
+                           )}
+                        </div>
+                        
+                        <div className="flex-1">
+                           <div className="flex items-center gap-3 mb-1">
+                              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{highlightText(u.fullName || '', searchTerm)}</h3>
+                              <div className={`px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest border ${u.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                 {u.status === 'active' ? 'Active' : 'Pending'}
+                              </div>
+                              {u.isVerified && <CheckCircle size={14} className="text-emerald-500" />}
+                           </div>
+                           <div className="flex items-center gap-4">
+                              <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
+                                 <Phone size={10} /> {highlightText(u.phone || '', searchTerm)}
+                              </p>
+                              <div className="h-1 w-1 rounded-full bg-slate-200"></div>
+                              <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
+                                 <MapPin size={10} /> {u.addressRegion || 'Not Set'}
+                              </p>
+                              <div className="h-1 w-1 rounded-full bg-slate-200"></div>
+                              <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
+                                 <Folder size={10} /> {u.slots || 1} Slots
+                              </p>
+                           </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                           <button onClick={() => { setSelectedUser(u); setShowKYCModal(true); }} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm">
+                              <Eye size={16} />
+                           </button>
+                           <button onClick={() => { setEditUserForm(u); setShowEditUserModal(true); }} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+                              <Edit3 size={16} />
+                           </button>
+                           <button 
+                             onClick={() => deleteUserAdmin(u.id)} 
+                             className="p-2.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm border border-rose-100"
+                           >
+                              <Trash2 size={16} />
+                           </button>
+                        </div>
+                     </motion.div>
+                   )
+                 ))
+               )}
+            </div>
+
+            {/* Floating Bulk Actions Bar */}
+            <AnimatePresence>
+               {selectedUserIds.length > 0 && (
+                 <motion.div 
+                    initial={{ y: 100, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 100, opacity: 0 }}
+                    className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white p-4 rounded-[2.5rem] shadow-2xl border border-white/10 flex items-center gap-8 backdrop-blur-2xl px-8"
+                 >
+                    <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-xl">
+                          {selectedUserIds.length}
+                       </div>
+                       <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Selected Members</p>
+                          <p className="text-xs font-bold leading-none">ያልተረጋገጡ አባላት</p>
+                       </div>
+                    </div>
+                    
+                    <div className="h-10 w-[1px] bg-white/10"></div>
+                    
+                    <div className="flex items-center gap-3">
+                       <button 
+                          onClick={handleBulkVerify}
+                          className="px-6 py-3 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all flex items-center gap-2"
+                       >
+                          <CheckCircle size={14} /> Verify All
+                       </button>
+                       <button className="px-6 py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all">
+                          Send Message
+                       </button>
+                       <button onClick={() => setSelectedUserIds([])} className="px-6 py-3 bg-rose-500/20 text-rose-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all">
+                          Cancel
+                       </button>
+                  </div>
+               </motion.div>
+               )}
+            </AnimatePresence>
+          </motion.div>
+        ) : activeTab === 'market' ? (
+           <motion.div
+             key="market"
+             initial={{ opacity: 0, scale: 0.98 }}
+             animate={{ opacity: 1, scale: 1 }}
+             exit={{ opacity: 0, scale: 0.98 }}
+             className="p-8"
+           >
+             <Marketplace />
+           </motion.div>
+         ) : activeTab === 'rejected' ? (
+          <motion.div 
+            key="rejected"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-8"
+          >
+             <div className="bg-slate-900 rounded-3xl p-6 relative overflow-hidden shadow-2xl border border-white/5">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-rose-500/10 blur-[80px] rounded-full -mr-24 -mt-24" />
+                <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2 leading-none">
+                  ውድቅ የተደረጉ አባላት <span className="text-rose-500">.</span>
+                </h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="px-3 py-1 bg-rose-500/10 text-rose-400 rounded-full text-[8px] font-black uppercase tracking-widest border border-rose-500/20">
+                    የተከማቹ ማህደሮች
+                  </div>
+                  <div className="h-1 w-1 rounded-full bg-slate-600"></div>
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{rejectedUsers.length} በአጠቃላይ ጥያቄዎች</span>
+                </div>
+                <p className="text-slate-400 font-medium max-w-xl text-xs leading-relaxed">
+                  ውድቅ የተደረጉ የአባላት ምዝገባዎች እዚህ ይገኛሉ። እነዚህ አባላት ከዋናው ዳሽቦርድ ተወግደዋል እና በተመሳሳይ መረጃ እንደገና መመዝገብ ይችላሉ። አድሚን ውድቅ የተደረገበትን ምክንያት እዚህ ማየት ይችላል።
+                </p>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-32">
+                {rejectedUsers.length === 0 ? (
+                  <div className="col-span-full py-24 text-center bg-white rounded-3xl border-2 border-dashed border-slate-100">
+                     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                        <XCircle size={32} />
+                     </div>
+                     <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-1 font-display">ምንም ውድቅ የተደረገ አባል የለም</h3>
+                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">በሲስተሙ ውስጥ ውድቅ የሆነ ጥያቄ የለም.</p>
+                  </div>
+                ) : (
+                  rejectedUsers.map((u, idx) => (
+                    <motion.div 
+                      key={u.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="group bg-white rounded-[1.5rem] p-4 border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-rose-500/5 hover:border-rose-100 transition-all flex flex-col relative overflow-hidden"
+                    >
+                       <div className="absolute top-0 left-0 w-full h-1 bg-rose-500/20"></div>
+                       
+                       <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2.5">
+                             <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 border border-rose-100 group-hover:rotate-6 transition-transform">
+                                <User size={16} />
+                             </div>
+                             <div>
+                                <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight leading-none mb-1">{u.fullName || u.name}</h4>
+                                <div className="flex items-center gap-1.5 text-slate-400">
+                                   <Phone size={8} />
+                                   <span className="text-[9px] font-bold">{u.phone}</span>
+                                </div>
+                             </div>
+                          </div>
+                       </div>
+
+                       <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-100 mb-3 flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                             <p className="text-[7px] font-black text-rose-500 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                                <AlertTriangle size={8} /> ምክንያት
+                             </p>
+                             <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">{getTimeSince(u.rejectedAt)}</span>
+                          </div>
+                          <p className="text-[10px] font-black text-slate-700 leading-relaxed italic">
+                             "{u.rejectionReason || 'ምንም ምክንያት አልተሰጠም.'}"
+                          </p>
+                       </div>
+
+                       <div className="grid grid-cols-2 gap-2 pb-3 border-b border-slate-100 mb-3">
+                          <div className="p-2 bg-white border border-slate-100 rounded-lg">
+                             <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">መታወቂያ</p>
+                             <p className="text-[8px] font-black text-slate-900">{u.nationalId || 'N/A'}</p>
+                          </div>
+                          <div className="p-2 bg-white border border-slate-100 rounded-lg">
+                             <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">ክልል</p>
+                             <p className="text-[8px] font-black text-slate-900">{u.addressRegion || 'N/A'}</p>
+                          </div>
+                       </div>
+
+                       <div className="flex justify-between items-center">
+                          <div className="flex flex-col">
+                             <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest opacity-60">የምዝገባ ቀን</span>
+                             <span className="text-[8px] font-bold text-slate-500 uppercase">{getTimeSince(u.createdAt)}</span>
+                          </div>
+                          <button 
+                            onClick={async () => {
+                              if(window.confirm(language === 'am' ? 'ይህንን መረጃ በቋሚነት መሰረዝ ይፈልጋሉ?' : 'Permanent delete this record?')) {
+                                try {
+                                  await deleteDoc(doc(db, 'rejected_members', u.id));
+                                  alert(language === 'am' ? 'መረጃው ተሰርዟል' : 'Record deleted');
+                                } catch (error) {
+                                  handleFirestoreError(error, OperationType.DELETE, `rejected_members/${u.id}`);
+                                }
+                              }
+                            }}
+                            className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-400 rounded-xl hover:bg-rose-500 hover:text-white transition-all border border-rose-100"
+                            title="በቋሚነት አጥፋ"
+                          >
+                             <Trash2 size={12} />
+                          </button>
+                       </div>
+                    </motion.div>
+                  ))
+                )}
+             </div>
+          </motion.div>
+        ) : activeTab === 'groups' ? (
+          <motion.div 
+            key="groups"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-8 relative"
+          >
+            {/* Header Content with Visual Flare */}
+            <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-700 rounded-3xl p-6 md:p-8 text-white relative overflow-hidden group shadow-2xl">
+               {/* Aesthetic Decorative Background Elements */}
+               <div className="absolute -right-20 -top-20 w-64 h-64 bg-white/10 blur-[80px] rounded-full group-hover:bg-white/20 transition-colors duration-700"></div>
+               <div className="absolute -left-20 -bottom-20 w-48 h-48 bg-white/5 blur-[80px] rounded-full group-hover:bg-white/10 transition-colors duration-700"></div>
+               
+               {/* Aesthetic Secondary Decoration */}
+               <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-10 pointer-events-none overflow-hidden">
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 transform rotate-12 scale-150">
+                     <Folder size={200} className="text-white" />
+                  </div>
+               </div>
+               
+               <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-8">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-4 mb-6">
+                       <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center text-white shadow-2xl border border-white/20 transform -rotate-3 group-hover:rotate-0 transition-transform duration-500">
+                          <Folder size={28} />
+                       </div>
+                       <div>
+                         <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter leading-none mb-2 text-white">የምድቦች ስብስብ</h2>
+                         <div className="flex items-center gap-3">
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500/20">
+                               <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                            </span>
+                            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] font-mono">Groups Engine</p>
+                            <div className="h-1 w-1 rounded-full bg-slate-600"></div>
+                            <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">{groups.length} ንቁ ቡድኖች</span>
+                         </div>
+                       </div>
+                    </div>
+                    <p className="text-xs font-medium text-slate-300 leading-relaxed mb-6 max-w-xl">
+                       የእቁብ ቡድኖችን ክላስተር ያስተዳድሩ። የቡድን አባላትን ይመዝግቡ፣ ክፍያዎችን ይከታተሉ እና አዳዲስ አባላትን በቀጥታ ወደ ሚፈልጉት ቡድን ያስገቡ።
+                    </p>
+                    <div className="flex flex-wrap items-center gap-4">
+                       <button 
+                         onClick={() => setShowAddGroupModal(true)}
+                         className="px-6 py-3 bg-white text-slate-900 rounded-xl font-black text-[9px] uppercase tracking-[0.2em] shadow-xl shadow-white/10 hover:bg-slate-100 hover:scale-105 transition-all flex items-center gap-2 group/btn"
+                       >
+                         <Folder size={14} className="group-hover/btn:scale-110 transition-transform" /> አዲስ ቡድን ፍጠር
+                       </button>
+                       <button 
+                         onClick={() => setShowAddUserModal(true)}
+                         className="px-6 py-3 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-xl font-black text-[9px] uppercase tracking-[0.2em] hover:bg-white/20 hover:border-white/30 transition-all flex items-center gap-2"
+                       >
+                         <User size={14} /> አዲስ አባል መድብ
+                       </button>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 w-full xl:w-[400px]">
+                    {[
+                      { label: 'ንቁ (Active)', value: groups.filter(g => g.status === 'active').length, icon: Play, color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/20' },
+                      { label: 'ምዝገባ ላይ', value: groups.filter(g => g.status !== 'active').length, icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10 border-amber-400/20' },
+                      { label: 'አሸናፊዎች', value: groups.filter(g => g.lastWinner).length, icon: Trophy, color: 'text-indigo-400', bg: 'bg-indigo-400/10 border-indigo-400/20' },
+                      { label: 'ድምር ገንዘብ', value: (groups.reduce((acc, g) => acc + (g.amount * (g.memberCount || 0)), 0) / 1000).toFixed(1) + 'k', icon: DollarSign, color: 'text-rose-400', bg: 'bg-rose-400/10 border-rose-400/20' }
+                    ].map((m, i) => (
+                      <div key={i} className={`p-4 rounded-2xl border ${m.bg} flex flex-col items-center justify-center text-center hover:bg-white/10 transition-colors backdrop-blur-md relative overflow-hidden group/stat`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 mb-2 group-hover/stat:scale-110 group-hover:stat:rotate-3 transition-transform duration-500 ${m.color}`}>
+                           <m.icon size={16} />
+                        </div>
+                        <p className="text-xl font-black text-white leading-none mb-1">{m.value}</p>
+                        <p className="text-[7px] font-bold uppercase tracking-widest text-slate-300">{m.label}</p>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+            </div>
+
+            {viewingGroupId ? (() => {
+              const vGroup = groupsWithMembers.find(g => g.id === viewingGroupId);
+              if (!vGroup) return null;
+              return (
+                <div className="space-y-6">
+                  {/* Header Row */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-5 rounded-3xl border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] relative overflow-hidden group">
+                    <div className="absolute -right-10 -top-10 w-32 h-32 bg-indigo-500/5 blur-3xl rounded-full" />
+                    <div className="flex items-center gap-3 relative z-10">
+                      <button onClick={() => setViewingGroupId(null)} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-slate-900 hover:text-white transition-all shadow-sm">
+                        <X size={16} />
+                      </button>
+                      <div>
+                        <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">{vGroup.name}</h2>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${vGroup.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                             {vGroup.status === 'active' ? 'ንቁ ቡድን' : 'ምዝገባ ላይ'} • {vGroup.type}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 relative z-10">
+                       <button onClick={() => { setAddUserForm({...addUserForm, groupId: vGroup.id}); setShowAddUserModal(true); }} className="px-4 py-2 border border-indigo-100 bg-indigo-50 text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-1.5">
+                         <User size={12} /> አባል ጨምር
+                       </button>
+                       <button onClick={() => { setSelectedGroup(vGroup); setShowManageGroupModal(true); }} className="px-4 py-2 border border-slate-200 bg-white text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+                         <Edit size={12} /> አርም
+                       </button>
+                       <button onClick={() => { setSelectedGroup(vGroup); setShowEndCycleModal(true); }} className="px-4 py-2 border border-rose-200 bg-rose-50 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-colors flex items-center gap-1.5">
+                         <RefreshCw size={12} /> ዙር መዝጊያ
+                       </button>
+                    </div>
+                  </div>
+
+                  {/* Body Grid: Members (Left) and Chat (Right) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                     {/* Members List */}
+                     <div className="bg-white rounded-[2rem] p-5 border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col h-[600px] relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-3xl rounded-full" />
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50 relative z-10">
+                           <div>
+                              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">የቡድን አባላት እና ማስረጃዎች</h3>
+                              <p className="text-[9px] font-bold text-slate-400 tracking-widest uppercase mt-0.5">{vGroup.members?.length || 0}/{vGroup.memberCount || 10} አባላት</p>
+                           </div>
+                           <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
+                             <Users size={16} />
+                           </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2 relative z-10">
+                           {(!vGroup.members || vGroup.members.length === 0) && (
+                              <div className="text-center py-20 opacity-50">
+                                 <Users size={48} className="mx-auto mb-4 text-slate-300" />
+                                 <p className="text-xs font-black uppercase tracking-widest text-slate-500">No members yet</p>
+                              </div>
+                           )}
+                           {vGroup.members?.map((member: any, i: number) => (
+                              <div key={member.id} className="group/member flex items-start gap-3 p-3 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all">
+                                 <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0 shadow-sm relative group-hover/member:border-indigo-200 transition-colors">
+                                    <div className="absolute top-0 left-0 bg-slate-900 text-white w-4 h-4 rounded-br-lg text-[8px] font-black flex items-center justify-center z-10 shadow-sm">{i + 1}</div>
+                                    {member.faceScan ? (
+                                       <img src={member.faceScan} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                       <User size={16} className="text-slate-300" />
+                                    )}
+                                 </div>
+                                 <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                       <h4 className="text-sm font-black text-slate-900 truncate group-hover/member:text-indigo-600 transition-colors">{member.fullName}</h4>
+                                       {member.status === 'approved' ? (
+                                          <div className="bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-emerald-100 flex items-center gap-1">
+                                             <CheckCircle size={8} /> ተረጋግጧል
+                                          </div>
+                                       ) : member.status === 'pending' ? (
+                                          <div className="bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-amber-100 flex items-center gap-1">
+                                             <Clock size={8} /> በግምገማ ላይ
+                                          </div>
+                                       ) : null}
+                                    </div>
+                                    <div className="flex flex-col gap-1 mt-1.5">
+                                       <div className="flex items-center gap-1.5">
+                                          <Phone size={10} className="text-slate-400" />
+                                          <span className="text-[10px] font-bold text-slate-500">{member.phone}</span>
+                                       </div>
+                                       {member.email && (
+                                          <div className="flex items-center gap-1.5">
+                                             <Mail size={10} className="text-slate-400" />
+                                             <span className="text-[10px] font-bold text-slate-500 truncate">{member.email}</span>
+                                          </div>
+                                       )}
+                                       <div className="flex items-center gap-1.5 mt-1">
+                                          <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-indigo-100">
+                                             Slots: {member.slots || 1}
+                                          </span>
+                                          {member.wonDraw && (
+                                            <span className="text-[9px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-amber-100 flex items-center gap-1">
+                                               <Trophy size={8} /> Winner
+                                            </span>
+                                          )}
+                                       </div>
+                                    </div>
+                                 </div>
+                                 <div className="flex flex-col gap-2 shrink-0">
+                                    <button 
+                                      onClick={() => { 
+                                        setSelectedUser(member); 
+                                        setShowKYCModal(true); 
+                                      }}
+                                      className="px-4 py-2 bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] hover:bg-slate-900 hover:text-white transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
+                                      title="View Evidence/KYC"
+                                    >
+                                       <ShieldCheck size={12} /> ማረጃ (Docs)
+                                    </button>
+                                    <button 
+                                      onClick={() => { setSelectedMember(member); setManualPaymentGroup(vGroup); setShowManualPaymentModal(true); }} 
+                                      className="px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] hover:bg-emerald-500 hover:text-white transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
+                                    >
+                                       <CreditCard size={12} /> ክፍያ (Pay)
+                                    </button>
+                                    <button 
+                                      onClick={() => { 
+                                        setAdminChatTarget({type: 'private', id: member.id, name: member.fullName}); 
+                                        setViewingGroupId(null); setActiveTab('chat'); 
+                                      }} 
+                                      className="px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] hover:bg-indigo-500 hover:text-white transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
+                                      title="Private Message"
+                                    >
+                                       <MessageCircle size={12} /> ላክ (Msg)
+                                    </button>
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                     </div>
+
+                     {/* Chat Messages */}
+                     <div className="bg-white rounded-[2.5rem] flex flex-col h-[700px] border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-32 h-32 bg-indigo-500/5 blur-3xl rounded-full" />
+                        <div className="flex justify-between items-center px-6 pt-6 pb-4 border-b border-slate-50 relative z-10 w-full bg-white z-20">
+                           <div className="flex-1">
+                              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">የቡድን ፋይሎችና መልዕክቶች</h3>
+                              <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mt-1">Group Documents & Communication</p>
+                           </div>
+                           <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-500 shrink-0 shadow-inner">
+                             <FolderOpen size={20} />
+                           </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 custom-scrollbar bg-slate-50/30 relative z-10 flex flex-col w-full h-[calc(700px-150px)]">
+                           {messages.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center flex-1 opacity-50 py-10">
+                                 <div className="w-20 h-20 bg-white rounded-3xl border border-slate-100 flex items-center justify-center mb-4 shadow-sm text-slate-300">
+                                   <MessageCircle size={32} />
+                                 </div>
+                                 <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">No messages yet</p>
+                                 <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 text-center max-w-[200px]">Send the first message to members of {vGroup.name}</p>
+                              </div>
+                           ) : (
+                              messages.map((msg, idx) => {
+                                const isMe = msg.senderId === user?.uid;
+                                return (
+                                  <div key={idx} className={`flex items-end gap-3 ${isMe ? 'flex-row-reverse' : ''} w-full`}>
+                                    <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                                       {msg.senderPhoto ? (
+                                         <img src={msg.senderPhoto} alt="" className="w-full h-full object-cover" />
+                                       ) : (
+                                         <User size={12} className="text-slate-400" />
+                                       )}
+                                    </div>
+                                    <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
+                                       <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1 px-1">{msg.senderName}</span>
+                                       <div className={`px-4 py-3 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white text-slate-800 border border-slate-100 rounded-bl-sm'}`}>
+                                          <p className="leading-snug">{msg.text}</p>
+                                          {msg.imageUrl && (
+                                            <div className="mt-3">
+                                              <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block relative group/img overflow-hidden rounded-xl border border-slate-200">
+                                                 <img src={msg.imageUrl} alt="attachment" className="w-full object-cover group-hover:scale-105 transition-transform duration-500 max-h-[300px]" />
+                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                                    <Eye size={20} className="text-white" />
+                                                 </div>
+                                              </a>
+                                            </div>
+                                          )}
+                                          {msg.audioUrl && (
+                                             <div className="mt-3 bg-white/10 p-2 rounded-xl border border-white/20">
+                                                <audio controls src={msg.audioUrl} className="w-full h-8 scale-90 origin-left" />
+                                             </div>
+                                          )}
+                                          {msg.fileUrl && (
+                                             <div className="mt-3">
+                                                <a 
+                                                  href={msg.fileUrl} 
+                                                  target="_blank" 
+                                                  rel="noopener noreferrer"
+                                                  className="flex items-center gap-3 p-3 bg-white/10 hover:bg-white/20 rounded-xl border border-white/20 transition-all group/file"
+                                                >
+                                                   <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-white shrink-0">
+                                                      <FileText size={20} />
+                                                   </div>
+                                                   <div className="min-w-0 flex-1">
+                                                      <p className="text-[11px] font-black uppercase tracking-widest truncate text-white">{msg.fileName || 'Document'}</p>
+                                                      <p className="text-[9px] font-bold opacity-70 flex items-center gap-1 mt-0.5"><Download size={8} /> Download</p>
+                                                   </div>
+                                                </a>
+                                             </div>
+                                          )}
+                                       </div>
+                                       <div className={`flex items-center gap-2 mt-1 px-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                          <p className="text-[8px] font-black text-slate-300">{new Date(msg.createdAt?.toDate ? msg.createdAt.toDate() : msg.createdAt || Date.now()).toLocaleTimeString()}</p>
+                                          <button 
+                                            onClick={() => handleDeleteMessage(msg.id)}
+                                            className="text-slate-300 hover:text-rose-500 transition-colors"
+                                            title="Delete this message"
+                                          >
+                                            <Trash2 size={10} />
+                                          </button>
+                                       </div>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                           )}
+                           <div ref={chatEndRef} className="h-1" />
+                        </div>
+                        {/* Chat Input */}
+                        <div className="p-4 bg-white border-t border-slate-50 relative z-20">
+                          <form onSubmit={handleSendMessage} className="relative z-10">
+                            {editingMessageId && (
+                              <div className="absolute -top-12 left-0 right-0 bg-amber-50 text-amber-700 px-4 py-2.5 rounded-t-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-amber-100 border-b-0 justify-between shadow-sm">
+                                <span>Editing Message...</span>
+                                <button type="button" onClick={() => { setEditingMessageId(null); setNewMessage(''); }} className="p-1 hover:bg-amber-200/50 rounded-lg transition-colors"><X size={14} /></button>
+                              </div>
+                            )}
+                            <div className={`flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border transition-colors ${editingMessageId ? 'border-amber-200 rounded-t-none' : 'border-slate-200 focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-500/10'} shadow-inner`}>
+                                <div className="flex items-center gap-1">
+                                 <div className="relative">
+                                    <input type="file" id="groupChatUploadImage" className="hidden" accept="image/*" onChange={(e) => handleAdminFileSelect(e, 'image')} />
+                                    <label htmlFor="groupChatUploadImage" className="w-10 h-10 rounded-xl flex items-center justify-center bg-white text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 border border-slate-100 transition-all cursor-pointer shadow-sm">
+                                       <Camera size={16} />
+                                    </label>
+                                 </div>
+                                 <div className="relative">
+                                    <input type="file" id="groupChatUploadFile" className="hidden" accept="*" onChange={(e) => handleAdminFileSelect(e, 'file')} />
+                                    <label htmlFor="groupChatUploadFile" className="w-10 h-10 rounded-xl flex items-center justify-center bg-white text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 border border-slate-100 transition-all cursor-pointer shadow-sm">
+                                       <FileText size={16} />
+                                    </label>
+                                 </div>
+                                 <button 
+                                   type="button"
+                                   onMouseDown={startRecording}
+                                   onMouseUp={stopRecording}
+                                   onMouseLeave={stopRecording}
+                                   title="Hold to Record Voice"
+                                   className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm border ${isRecording ? 'bg-rose-500 text-white animate-pulse border-rose-600 lg:scale-110' : 'bg-white text-slate-400 hover:text-rose-500 hover:bg-rose-50 border-slate-100'}`}
+                                 >
+                                    {isRecording ? <Square size={16} /> : <Mic size={16} />}
+                                 </button>
+                                </div>
+                               <input 
+                                 type="text" 
+                                 value={newMessage}
+                                 onChange={(e) => setNewMessage(e.target.value)}
+                                 placeholder="Type your message to the group..."
+                                 className="flex-1 bg-transparent px-2 py-2 text-sm font-medium outline-none text-slate-800 placeholder-slate-400"
+                               />
+                               <button type="submit" disabled={!newMessage.trim()} className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center hover:bg-indigo-600 disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed shadow-md transition-all active:scale-95 shrink-0">
+                                  <Send size={16} className="translate-x-0.5" />
+                               </button>
+                            </div>
+                          </form>
+                        </div>
+                     </div>
+                  </div>
+                </div>
+              );
+            })() : (
+              <>
+                    {/* Filter & Search Bar */}
+             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-[2rem] border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+              <div className="flex items-center gap-3 px-2">
+                <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
+                  <Filter size={16} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">{t('admin.group_ecosystem')}</h2>
+                  <p className="text-[10px] font-bold text-slate-400">{t('admin.group_monitor_subtitle')}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative w-full md:w-[300px] group">
+                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                    <input 
+                    type="text" 
+                    placeholder="Search groups by name..." 
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 hover:bg-slate-100 focus:bg-white border focus:border-indigo-500 border-transparent rounded-xl outline-none transition-all text-xs font-bold text-slate-900"
+                    />
+                </div>
+                <button 
+                  onClick={() => {
+                    // Logic to download groups list
+                    alert('Groups report download initiated.');
+                  }}
+                  className="px-6 py-3.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                >
+                  <FileText size={16} /> Download
+                </button>
+              </div>
+            </div>
+
+            {/* Groups Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 pb-32">
+              {groupsWithMembers.filter(g => g.name.toLowerCase().includes(searchTerm.toLowerCase())).map((group, idx) => {
+                const membersCount = group.members?.length || 0;
+                const capacity = group.memberCount || 10;
+                const fillPercentage = (membersCount / capacity) * 100;
+
+                return (
+                  <motion.div 
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.05 }}
+                    key={group.id} 
+                    className="group bg-white p-5 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 hover:border-indigo-200 transition-all flex flex-col relative overflow-hidden"
+                  >
+                    {/* Decorative Top Accent */}
+                    <div className={`absolute top-0 left-0 w-full h-1 ${group.status === 'active' ? 'bg-gradient-to-r from-emerald-400 to-teal-400' : 'bg-gradient-to-r from-amber-400 to-orange-400'}`}></div>
+
+                    {/* Background Decorative Element */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-indigo-500/10 transition-colors"></div>
+                    
+                    <div className="flex justify-between items-start mb-4 pt-2 relative z-10">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2 w-full pr-2">
+                          <Folder size={14} className="text-indigo-400 shrink-0" />
+                          <h2 className="text-sm font-black text-slate-900 leading-tight uppercase tracking-tight group-hover:text-indigo-600 transition-colors">{group.name}</h2>
+                          <span className={`px-2 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-widest border shrink-0 ${
+                            group.status === 'active' 
+                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                            : 'bg-amber-50 text-amber-600 border-amber-100'
+                          }`}>
+                            {group.status === 'active' ? 'ንቁ (Active)' : 'ምዝገባ ላይ'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-3">
+                          <div className="flex items-center gap-1.5 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-100">
+                             <RefreshCw size={10} className="text-rose-500" />
+                             <span className="text-[10px] text-rose-700 font-black uppercase tracking-widest">{language === 'am' ? `ዙር ${group.currentRound || 1}` : `Round ${group.currentRound || 1}`}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                            <Zap size={10} className="text-indigo-500" /> 
+                            <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{group.type}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+                            <DollarSign size={10} className="text-indigo-600" />
+                            <span className="text-[10px] text-indigo-700 font-black uppercase tracking-widest">{parseInt(group.amount || 0).toLocaleString()} <span className="text-[8px] opacity-75">ETB</span></span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className="flex gap-2 text-nowrap whitespace-nowrap">
+                          <button 
+                            onClick={() => openGroupDetails(group)} 
+                            className="h-8 px-3 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] hover:bg-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                          >
+                            <Eye size={10} /> እይ
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedGroup(group); setShowEndCycleModal(true); }} 
+                            className="h-8 px-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] hover:bg-rose-100 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                          >
+                            <RefreshCw size={10} /> ዙር መዝጊያ
+                          </button>
+                          <button 
+                            onClick={() => openChat(group)} 
+                            className="w-8 h-8 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-indigo-50 hover:text-indigo-500 transition-all border border-slate-100 group/chat"
+                          >
+                            <MessageCircle size={12} className="group-hover/chat:scale-110 transition-transform" />
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedGroup(group); setShowManageGroupModal(true); }} 
+                            className="h-8 px-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-[8px] font-black uppercase tracking-[0.2em] hover:bg-slate-50 hover:text-slate-900 transition-all active:scale-95 flex items-center justify-center"
+                          >
+                            ቀይር
+                          </button>
+                        </div>
+                        <div className="text-right mt-1">
+                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">ድምር ገንዘብ</p>
+                          <p className="text-xs font-black text-slate-900 leading-none">{(group.amount * group.memberCount).toLocaleString()} <span className="text-[8px] text-slate-500">ብር</span></p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="mb-4 space-y-1.5 relative z-10">
+                      <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest px-1">
+                        <span className="text-slate-400">{t('admin.membership_fill')}</span>
+                        <span className={fillPercentage === 100 ? 'text-emerald-500' : 'text-indigo-500'}>
+                          {membersCount}/{capacity} {t('common.units').toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100/80 shadow-inner">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${fillPercentage}%` }}
+                          className={`h-full rounded-full transition-all ${
+                            fillPercentage === 100 ? 'bg-emerald-500' : fillPercentage > 75 ? 'bg-indigo-400' : 'bg-indigo-500'
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 mt-auto relative z-10 pt-4 border-t border-slate-100/60">
+                      <div className="flex items-center justify-between px-1 mb-3">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">{t('admin.recent_contributors')}</p>
+                        <button 
+                          onClick={() => { 
+                            setAddUserForm({...addUserForm, groupId: group.id}); 
+                            setShowAddUserModal(true); 
+                          }}
+                          className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-[0.1em] text-indigo-500 bg-indigo-50 px-2 py-1 rounded shadow-sm hover:bg-indigo-100 transition-colors"
+                        >
+                          <User size={10} /> አባል ጨምር
+                        </button>
+                      </div>
+                      {membersCount === 0 ? (
+                        <div className="py-8 text-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-100">
+                          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm mx-auto mb-2 text-slate-300">
+                            <Users size={16} />
+                          </div>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest font-sans px-4">
+                            {t('admin.no_members_yet')}
+                          </p>
+                          <button 
+                            onClick={() => { setAddUserForm({...addUserForm, groupId: group.id}); setShowAddUserModal(true); }}
+                            className="mt-3 px-4 py-1.5 bg-white text-indigo-500 rounded-lg text-[8px] font-black uppercase tracking-widest shadow-sm hover:shadow-md transition-all inline-flex items-center gap-1.5"
+                          >
+                            <User size={10} /> Register First Member
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-1 gap-2.5">
+                            {group.members.slice(0, 3).map((member: any) => (
+                              <div key={member.id} className="flex justify-between items-center p-3 bg-slate-50/50 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md hover:border-indigo-100/50 transition-all group/member">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-white rounded-xl overflow-hidden border border-slate-100 p-0.5 shadow-sm group-hover/member:border-indigo-200 transition-colors shrink-0">
+                                    {member.faceScan ? (
+                                      <img src={member.faceScan} alt="" className="w-full h-full object-cover rounded-[10px]" />
+                                    ) : (
+                                      <div className="w-full h-full bg-slate-50 rounded-[10px] flex items-center justify-center text-slate-300">
+                                        <User size={14} />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 pr-2">
+                                    <p className="text-[11px] font-black text-slate-700 leading-none truncate group-hover/member:text-indigo-600 transition-colors mb-1.5">{member.fullName}</p>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Verified Member</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <button 
+                                  onClick={() => { setSelectedMember(member); setManualPaymentGroup(group); setShowManualPaymentModal(true); }} 
+                                  className="shrink-0 h-8 px-4 bg-white text-emerald-600 rounded-xl text-[8px] font-black uppercase tracking-[0.15em] border border-emerald-100 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
+                                >
+                                  <CreditCard size={10} /> {t('admin.pay')}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                          {membersCount > 3 && (
+                            <div className="flex items-center justify-between mt-4 px-2 pt-2 border-t border-slate-100/50">
+                               <div className="flex -space-x-2">
+                                 {group.members.slice(3, 6).map((m: any, i: number) => (
+                                   <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-slate-100 overflow-hidden shadow-sm relative z-10 hover:z-20 transition-all hover:scale-110">
+                                     {m.faceScan ? (
+                                       <img src={m.faceScan} alt="" className="w-full h-full object-cover" />
+                                     ) : (
+                                       <div className="w-full h-full bg-slate-200 flex items-center justify-center">
+                                          <User size={10} className="text-slate-400" />
+                                       </div>
+                                     )}
+                                   </div>
+                                 ))}
+                                 {membersCount > 6 && (
+                                   <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-800 flex items-center justify-center text-white relative z-10 shadow-sm text-[8px] font-black">
+                                     +{membersCount - 6}
+                                   </div>
+                                 )}
+                               </div>
+                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-lg">Total View</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+            </>
+            )}
+          </motion.div>
+        ) : activeTab === 'guarantors' ? (
+          <motion.div 
+            key="guarantors"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-10"
+          >
+            {/* Legal Submission Intelligence Header */}
+            <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-black rounded-3xl p-6 md:p-8 text-white relative overflow-hidden group shadow-2xl">
+               <div className="absolute right-0 top-0 w-64 h-64 bg-amber-500/10 blur-3xl rounded-full"></div>
+               
+               <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                  <div className="max-w-xl">
+                    <div className="flex items-center gap-4 mb-4">
+                       <div className="w-12 h-12 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center text-amber-500 shadow-2xl border border-white/10">
+                          <ShieldCheck size={24} />
+                       </div>
+                       <div>
+                         <h2 className="text-2xl font-black uppercase tracking-tighter leading-none mb-1">የዋስ መረጃዎች</h2>
+                         <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest">ህጋዊ ማረጋገጫዎች</p>
+                       </div>
+                    </div>
+                    <p className="text-xs font-medium text-slate-300 leading-relaxed max-w-lg">
+                       አሸናፊዎች ክፍያ ከመፈጸሙ በፊት ህጋዊ የዋስትና ፎርም ማቅረብ አለባቸው። ፎርሙን እዚህ ማየት እና ማጽደቅ ይችላሉ።
+                    </p>
+                  </div>
+               </div>
+            </div>
+
+            <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm overflow-hidden relative">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                  <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-center">
+                     <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">የቀረቡ</p>
+                     <p className="text-xl font-black text-emerald-700">{allUsers.filter(u => u.guarantorsSubmitted).length}</p>
+                  </div>
+                  <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-center">
+                     <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">የሚጠባበቁ</p>
+                     <p className="text-xl font-black text-amber-700">{allUsers.filter(u => u.guarantorsSubmitted && !u.guarantorsApproved).length}</p>
+                  </div>
+               </div>
+
+               <div className="space-y-3">
+                  {allUsers.filter(u => u.guarantorsSubmitted && !u.guarantorsApproved).length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 font-bold italic bg-white rounded-2xl border-2 border-dashed border-slate-100">
+                       ምንም አዲስ የቀረበ የዋስትና ሰነድ የለም።
+                    </div>
+                  ) : (
+                    allUsers.filter(u => u.guarantorsSubmitted && !u.guarantorsApproved).map(u => (
+                      <div key={u.id} className="bg-slate-50/50 rounded-2xl border border-slate-100 shadow-sm transition-all overflow-hidden">
+                        <div className="p-4 flex items-center justify-between hover:bg-white">
+                         <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-slate-100 rounded-xl overflow-hidden shadow-sm">
+                               {u.faceScan ? <img src={u.faceScan} alt="" className="w-full h-full object-cover" /> : <User size={20} className="text-slate-300" />}
+                            </div>
+                            <div>
+                               <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{u.fullName}</p>
+                               <p className="text-[9px] font-bold text-slate-400">{u.phone}</p>
+                            </div>
+                         </div>
+                         <div className="flex gap-2">
+                            <button 
+                              onClick={() => setSelectedGuarantorDocsUser(selectedGuarantorDocsUser?.id === u.id ? null : u)}
+                              className="px-4 py-2.5 bg-indigo-50 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all font-mono"
+                            >
+                               {selectedGuarantorDocsUser?.id === u.id ? 'ዝጋ (CLOSE)' : 'መረጃ እይ (VIEW)'}
+                            </button>
+                            <button 
+                              onClick={async () => {
+                                if(window.confirm('ይህንን የዋስትና ሰነድ ማጽደቅ ይፈልጋሉ?')) {
+                                  await updateDoc(doc(db, 'users', u.id), { guarantorsApproved: true });
+                                  triggerSuccess('ተከናውኗል', 'የዋስትና ሰነዱ ጸድቋል።');
+                                }
+                              }}
+                              className="px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-md"
+                            >
+                               አጽድቅ
+                            </button>
+                            <button 
+                              onClick={async () => {
+                                if(window.confirm('ይህንን የዋስትና ሰነድ ውድቅ ማድረግ ይፈልጋሉ?')) {
+                                  await updateDoc(doc(db, 'users', u.id), { guarantorsSubmitted: false });
+                                  triggerSuccess('ተከናውኗል', 'የዋስትና ሰነዱ ውድቅ ተደርጓል።');
+                                }
+                              }}
+                              className="px-4 py-2.5 bg-white text-rose-500 border border-rose-100 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all"
+                            >
+                               ውድቅ
+                            </button>
+                         </div>
+                        </div>
+                        {selectedGuarantorDocsUser?.id === u.id && (
+                          <div className="p-4 bg-white border-t border-slate-100">
+                             <div className="flex items-center justify-between mb-4">
+                               <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">የ{u.fullName} ዋሶች</h4>
+                             </div>
+                             <div className="space-y-4">
+                                {allGuarantors.filter(g => g.memberId === u.id).length === 0 ? (
+                                   <p className="text-xs text-slate-400 font-medium py-4 text-center">መረጃ አልገባም (No data submitted)</p>
+                                ) : (
+                                   allGuarantors.filter(g => g.memberId === u.id).map((g, idx) => (
+                                     <div key={g.id} className="border border-slate-100 rounded-xl p-4 space-y-3 bg-slate-50">
+                                       <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                                          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500">ዋስ {idx + 1}</p>
+                                          <button 
+                                            onClick={async () => {
+                                              const newName = window.prompt("ሙሉ ስም:", g.name);
+                                              const newPhone = window.prompt("ስልክ ቁጥር:", g.phone);
+                                              const newJob = window.prompt("ስራ:", g.job);
+                                              const newRelation = window.prompt("ዝምድና:", g.relationship);
+                                              const newAddress = window.prompt("አድራሻ:", g.address);
+                                              const newFayda = window.prompt("የፋይዳ ቁጥር:", g.faydaNumber || "");
+                                              const newLicense = window.prompt("ንግድ ፍቃድ ቁጥር:", g.businessLicenseNumber || "");
+                                              if (newName) {
+                                                await updateDoc(doc(db, 'guarantors', g.id), {
+                                                  name: newName, phone: newPhone || g.phone, job: newJob || g.job, 
+                                                  relationship: newRelation || g.relationship, address: newAddress || g.address,
+                                                  faydaNumber: newFayda || g.faydaNumber,
+                                                  businessLicenseNumber: newLicense || g.businessLicenseNumber
+                                                });
+                                                triggerSuccess('ተከናውኗል', 'የዋስ መረጃ ተስተካክሏል።');
+                                              }
+                                            }}
+                                            className="text-[10px] font-black text-slate-500 hover:text-indigo-600 px-3 py-1 bg-white rounded shadow-sm border border-slate-100"
+                                          >
+                                            አስተካክል (EDIT)
+                                          </button>
+                                       </div>
+                                       <div className="grid grid-cols-2 gap-4 text-xs font-bold text-slate-700">
+                                          <div><span className="text-slate-400 block text-[9px] uppercase">ሙሉ ስም</span> {g.name}</div>
+                                          <div><span className="text-slate-400 block text-[9px] uppercase">ስልክ</span> {g.phone}</div>
+                                          <div><span className="text-slate-400 block text-[9px] uppercase">ስራ</span> {g.job}</div>
+                                          <div><span className="text-slate-400 block text-[9px] uppercase">ዝምድና</span> {g.relationship}</div>
+                                          <div className="col-span-2"><span className="text-slate-400 block text-[9px] uppercase">አድራሻ</span> {g.address}</div>
+                                          <div><span className="text-slate-400 block text-[9px] uppercase">የፋይዳ ቁጥር</span> {g.faydaNumber || '-'}</div>
+                                          <div><span className="text-slate-400 block text-[9px] uppercase">ንግድ ፍቃድ ቁጥር</span> {g.businessLicenseNumber || '-'}</div>
+                                       </div>
+                                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-3 border-t border-slate-100 mt-2">
+                                          <div>
+                                             <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">የዋስ ፎቶ</p>
+                                             {g.profilePhoto ? <img src={g.profilePhoto} className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-all border border-slate-200" onClick={() => window.open(g.profilePhoto)} /> : <span className="text-[10px] text-slate-300">-</span>}
+                                          </div>
+                                          <div>
+                                             <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">ፋይዳ ፊት</p>
+                                             {g.faydaFrontPhoto ? <img src={g.faydaFrontPhoto} className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-all border border-slate-200" onClick={() => window.open(g.faydaFrontPhoto)} /> : <span className="text-[10px] text-slate-300">-</span>}
+                                          </div>
+                                          <div>
+                                             <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">ፋይዳ ዋላ</p>
+                                             {g.faydaBackPhoto ? <img src={g.faydaBackPhoto} className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-all border border-slate-200" onClick={() => window.open(g.faydaBackPhoto)} /> : <span className="text-[10px] text-slate-300">-</span>}
+                                          </div>
+                                          <div>
+                                             <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">ንግድ ፍቃድ ፎቶ</p>
+                                             {g.businessLicensePhoto ? <img src={g.businessLicensePhoto} className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-all border border-slate-200" onClick={() => window.open(g.businessLicensePhoto)} /> : <span className="text-[10px] text-slate-300">-</span>}
+                                          </div>
+                                       </div>
+                                     </div>
+                                   ))
+                                )}
+                             </div>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+               </div>
+            </div>
+
+                <div className="relative">
+            <div className="bg-white rounded-[4rem] border border-slate-100 shadow-2xl shadow-indigo-500/10 overflow-hidden mb-12">
+               <div className="p-10 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                 <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                       <FileText size={28} />
+                    </div>
+                    <div>
+                       <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">
+                         {language === 'am' ? 'የዋስ መሙያ ፎርም' : 'Guarantor Agreement Form'}
+                       </h3>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Legal Document Template</p>
+                    </div>
+                 </div>
+                 <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Live Editor</span>
+                 </div>
+               </div>
+
+               <div className="p-10">
+                 <div className="relative group">
+                    <div className="absolute -inset-4 bg-gradient-to-tr from-indigo-500/5 to-purple-500/5 rounded-[3rem] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                    <textarea
+                      value={guarantorFormContent}
+                      onChange={(e) => setGuarantorFormContent(e.target.value)}
+                      className="w-full h-[500px] p-12 bg-slate-50 font-mono text-sm text-slate-800 rounded-[3rem] border-2 border-slate-100 focus:border-indigo-500 focus:ring-8 focus:ring-indigo-500/10 outline-none resize-none transition-all leading-relaxed relative z-10 shadow-inner"
+                      spellCheck="false"
+                      placeholder={language === 'am' ? 'እዚህ ጋር ይፃፉ...' : 'Type document content here...'}
+                    ></textarea>
+                    
+                    {/* Floating Helper */}
+                    <div className="absolute bottom-8 right-8 z-20 flex gap-2">
+                       <div className="px-4 py-2 bg-white/80 backdrop-blur-md rounded-xl border border-slate-200 shadow-sm text-[10px] font-black text-slate-400 uppercase tracking-widest italic">
+                          Editable Document
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-between items-center bg-slate-900 p-8 rounded-[3rem] shadow-2xl shadow-slate-900/20">
+                    <p className="text-[10px] font-bold text-slate-400 max-w-xs text-center sm:text-left">
+                       {language === 'am' ? 'ይህ ፎርም በአባሉ እና በዋሶቹ የሚፈረም ሲሆን አድሚኑ ማረጋገጥ አለበት።' : 'This form must be signed by the member and guarantors before fund release.'}
+                    </p>
+                    <div className="flex flex-wrap gap-4 justify-center sm:justify-end w-full sm:w-auto">
+                       <button 
+                         onClick={() => {
+                            const win = window.open('', '_blank');
+                            if (win) {
+                              win.document.write(`
+                                <html>
+                                  <head>
+                                    <title>{t('common.appName')} Guarantor Form</title>
+                                    <style>
+                                      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;700;900&display=swap');
+                                      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+                                      body { font-family: 'Noto Sans Ethiopic', 'Inter', sans-serif; padding: 40px; line-height: 1.8; color: #1e293b; background: white; }
+                                      .form-container { max-width: 800px; margin: 0 auto; border: 4px solid #f1f5f9; padding: 60px; border-radius: 40px; position: relative; }
+                                      .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+                                      .header h1 { margin: 0; font-size: 32px; font-weight: 900; letter-spacing: -1px; }
+                                      pre { white-space: pre-wrap; font-size: 16px; margin: 0; font-family: inherit; }
+                                      .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; }
+                                      @media print { .no-print { display: none; } body { padding: 0; } .form-container { border: 2px solid #eee; } }
+                                    </style>
+                                  </head>
+                                  <body>
+                                    <div class="no-print" style="margin-bottom: 30px; text-align: center;">
+                                      <button onclick="window.print()" style="padding: 15px 40px; background: #2563eb; color: #fff; border: none; border-radius: 20px; cursor: pointer; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; font-size: 11px; box-shadow: 0 20px 40px -10px rgba(37,99,235,0.3);">Print Document</button>
+                                    </div>
+                                    <div class="form-container">
+                                      <div class="header">
+                                        <h1>${t('common.appName').toUpperCase()}</h1>
+                                        <p style="font-size: 10px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 3px;">Official Legal Binding Agreement</p>
+                                      </div>
+                                      <pre>${guarantorFormContent}</pre>
+                                      <div class="footer">Verified by ${t('common.appName').toUpperCase()} Systems</div>
+                                    </div>
+                                  </body>
+                                </html>
+                              `);
+                            }
+                         }}
+                         className="flex-1 sm:flex-none px-10 py-5 bg-white/10 hover:bg-white/20 text-white rounded-3xl border border-white/10 flex items-center justify-center gap-4 transition-all active:scale-95"
+                       >
+                          <Eye size={20} />
+                          <span className="font-black text-[11px] uppercase tracking-widest">{language === 'am' ? 'በገጽ ዕይ' : 'Preview'}</span>
+                       </button>
+                       <button 
+                         onClick={() => {
+                           const blob = new Blob([guarantorFormContent], { type: 'text/plain;charset=utf-8' });
+                           const url = URL.createObjectURL(blob);
+                           const link = document.createElement('a');
+                           link.href = url;
+                           link.download = 'የመሊቅ_እቁብ_የዋስ_ፎርም.txt';
+                           document.body.appendChild(link);
+                           link.click();
+                           document.body.removeChild(link);
+                         }}
+                         className="flex-1 sm:flex-none px-10 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-3xl flex items-center justify-center gap-4 transition-all shadow-xl shadow-blue-600/20 active:scale-95"
+                       >
+                          <Download size={20} />
+                          <span className="font-black text-[11px] uppercase tracking-widest">{language === 'am' ? 'አውርድ' : 'Download'}</span>
+                       </button>
+                    </div>
+                 </div>
+               </div>
+            </div>
+          </div>
+    </motion.div>
+  ) : activeTab === 'payments' ? (
+          <motion.div 
+            key="payments"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-8"
+          >
+            {/* Premium Header */}
+            <div className="bg-slate-900 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-white/5">
+               <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 blur-[100px] rounded-full -mr-48 -mt-48" />
+               <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full -ml-48 -mb-48" />
+               
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                      <div className="text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 text-blue-400 rounded-full text-[9px] font-black uppercase tracking-[0.2em] mb-3 border border-blue-500/20">
+                        <DollarSign size={12} />
+                        የፋይናንስ ማእከል
+                     </div>
+                     <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2 leading-none">
+                        የአባላት መዋጮዎች <span className="text-blue-500">.</span>
+                     </h2>
+                     <p className="text-slate-400 font-medium max-w-xl text-xs leading-relaxed">
+                        የአባላትን ወርሃዊ እና ሳምንታዊ መዋጮዎች እዚህ ይከታተሉ። የሚጠባበቁ ክፍያዎችን በማረጋገጥ ወደ ሲስተሙ ያስገቡ። ሁሉንም የክፍያ ታሪኮች በዝርዝር ማየት እና ሪፖርት ማውጣት ይችላሉ።
+                     </p>
+                  </div>
+
+                  <div className="flex flex-wrap justify-center gap-3">
+                     <div className="px-6 py-4 bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 text-center min-w-[140px]">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">ተከፍሏል (Paid)</p>
+                        <p className="text-xl font-black text-white">{allPayments.length}</p>
+                     </div>
+                     <div className="px-6 py-4 bg-blue-500 rounded-3xl text-center min-w-[140px] shadow-xl shadow-blue-500/20">
+                        <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest mb-1">በሂደት ላይ (Pending)</p>
+                        <p className="text-xl font-black text-white">{payments.length}</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* View Switcher & Actions */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-sm w-full md:w-auto">
+                <button 
+                  onClick={() => setPaymentHistoryView('pending')}
+                  className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-500 ${paymentHistoryView === 'pending' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Clock size={14} />
+                    {t('admin.under_review')}
+                    {payments.length > 0 && (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[8px] text-white">
+                        {payments.length}
+                      </span>
+                    )}
+                  </div>
+                </button>
+                <button 
+                  onClick={() => setPaymentHistoryView('history')}
+                  className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-500 ${paymentHistoryView === 'history' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <CheckCircle size={14} />
+                    {t('admin.history')}
+                  </div>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className="relative flex-1 md:flex-none md:w-64">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder={language === 'am' ? 'ክፍያዎችን ፈልግ...' : 'Search transactions...'}
+                    value={paymentSearch}
+                    onChange={(e) => setPaymentSearch(e.target.value)}
+                    className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none ring-offset-2 focus:ring-2 focus:ring-blue-500/10 transition-all shadow-sm"
+                  />
+                </div>
+                
+                <button
+                  onClick={() => setShowSelectUserForPayment(true)}
+                  className="px-6 py-3.5 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-2 shrink-0 border border-blue-500"
+                >
+                  <Plus size={16} />
+                  {language === 'am' ? 'አዲስ ክፍያ መዝግብ' : 'Add Payment'}
+                </button>
+              </div>
+            </div>
+
+            {/* List of payments */}
+            {(paymentHistoryView === 'pending' ? payments : allPayments).filter(p => 
+              p.userName?.toLowerCase().includes(paymentSearch.toLowerCase()) || 
+              p.groupName?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
+              p.reference?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
+              p.receiptId?.toLowerCase().includes(paymentSearch.toLowerCase())
+            ).length === 0 ? (
+                <div className="bg-white rounded-[2rem] border border-slate-100 p-12 text-center flex flex-col items-center justify-center">
+                  <div className="w-20 h-20 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
+                    <Search size={32} />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-2">
+                    {paymentSearch 
+                      ? (language === 'am' ? 'ምንም አልተገኘም' : 'No results found') 
+                      : (language === 'am' ? 'ክፍያ የለም' : 'No payments yet')}
+                  </h3>
+                  <p className="text-slate-400 text-sm max-w-sm">
+                    {paymentSearch 
+                      ? (language === 'am' ? 'እባክዎ የፍለጋ ቃሎትን አስተካክለው እንደገና ይሞክሩ፣ ወይም የፊደል ግድፈት አለመፃፉን ያረጋግጡ።' : 'Try searching for something else.')
+                      : (paymentHistoryView === 'pending' 
+                        ? 'አባላት ክፍያ ሲፈጽሙ እዚህ ላይ ይመዘገባሉ እና እርስዎ ማጽደቅ ይኖርብዎታል።' 
+                        : 'ገና ምንም አይነት የተረጋገጠ ክፍያ አልተመዘገበም።')}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(paymentHistoryView === 'pending' ? payments : allPayments)
+                    .filter(p => 
+                      p.userName?.toLowerCase().includes(paymentSearch.toLowerCase()) || 
+                      p.groupName?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
+                      p.reference?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
+                      p.receiptId?.toLowerCase().includes(paymentSearch.toLowerCase())
+                    )
+                    .map(payment => (
+                      <motion.div 
+                        layout
+                        key={payment.id} 
+                        className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col gap-6 group hover:border-blue-200 hover:shadow-2xl hover:shadow-blue-500/5 transition-all duration-500 relative overflow-hidden"
+                      >
+                      {/* Status Accent Bar */}
+                      <div className={`absolute top-0 left-0 w-1.5 h-full ${payment.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-12 h-12 ${payment.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'} rounded-2xl flex items-center justify-center border border-current/10 shrink-0 transform group-hover:rotate-12 transition-transform duration-500`}>
+                            <CreditCard size={20} />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight mb-0.5">{payment.userName}</h3>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{payment.groupName}</span>
+                              <div className="w-1 h-1 bg-slate-200 rounded-full" />
+                              <span className="text-[9px] font-bold text-slate-500">{payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleDateString() : 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-base font-black text-slate-900 leading-none mb-0.5">
+                            {payment.amount?.toLocaleString()} <span className="text-[9px] text-slate-400">ETB</span>
+                          </p>
+                          <span className={`inline-flex px-1.5 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-widest ${payment.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {payment.status === 'active' ? 'ተከፍሏል' : 'በግምገማ ላይ'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
+                          <p className="text-[9px] font-mono font-bold text-slate-700 truncate">#{payment.receiptId || 'N/A'}</p>
+                        </div>
+                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                           <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Reference</p>
+                           <p className="text-[9px] font-bold text-slate-700 truncate">{payment.reference || 'Mobile Banking'}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-2">
+                        {payment.status === 'active' && (
+                          <button 
+                            onClick={() => handleDownloadReceipt(payment)}
+                            className="flex-1 px-6 py-3 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                          >
+                            <Download size={14} /> Receipt
+                          </button>
+                        )}
+                        
+                        {payment.status === 'pending' && (
+                          <button 
+                            onClick={() => {
+                              setPaymentReviewModal(payment);
+                              setPaymentReviewMessage('');
+                            }}
+                            className="flex-1 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                          >
+                            <Eye size={14} /> {language === 'am' ? 'ገምግም (Review)' : 'Review'}
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+          </motion.div>
+        ) : isSuperAdmin && activeTab === 'admins' ? (
+          <motion.div 
+            key="admins"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-8 p-4 md:p-8 max-w-7xl mx-auto"
+          >
+            {/* Premium, High-Impact Admin Header */}
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 p-8 md:p-12 shadow-[0_20px_50px_rgba(59,130,246,0.15)] border border-indigo-500/10">
+              {/* Dynamic decorative backdrop blobs */}
+              <div className="absolute top-[-20%] right-[-10%] w-[450px] h-[450px] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none" />
+              <div className="absolute bottom-[-20%] left-[-10%] w-[350px] h-[350px] bg-violet-600/10 blur-[100px] rounded-full pointer-events-none" />
+              
+              {/* Subtle tech grid mesh pattern */}
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none opacity-50" />
+
+              <div className="relative z-10 w-full flex flex-col md:flex-row md:items-center justify-between gap-8">
+                <div className="space-y-4">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-widest">
+                    <ShieldCheck size={12} className="animate-pulse" />
+                    <span>የደህንነትና ፍቃድ ቁጥጥር ማዕከል</span>
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-none">
+                      የአድሚን ቡድን <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-300 to-orange-400">ማስተዳደሪያ</span>
+                    </h2>
+                    <p className="text-slate-300 font-medium max-w-2xl text-xs md:text-sm leading-relaxed">
+                      ይህ ገጽ ለዋና አድሚን (Super Admin) ብቻ የሚታይ ሲሆን፣ የሲስተም አድሚኖችን ለመጨመር፣ መብቶቻቸውን ለማስተካከል እና አስፈላጊ ሲሆን ከሲስተሙ ለመሰረዝ ያገለግላል።
+                    </p>
+                  </div>
+                </div>
+
+                <motion.button 
+                  whileHover={{ scale: 1.03, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowAddAdminModal(true)}
+                  className="flex items-center justify-center gap-2.5 px-8 py-4 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all border border-amber-300/30"
+                >
+                  <Plus size={16} strokeWidth={3} />
+                  <span>አዲስ አድሚን መዝግብ</span>
+                </motion.button>
+              </div>
+            </div>
+
+            {/* Revamped Interactive Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Total Card */}
+              <div className="relative overflow-hidden bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300 group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-full blur-2xl -mr-8 -mt-8 group-hover:bg-indigo-100/50 transition-colors" />
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100/50 group-hover:scale-110 transition-transform">
+                      <Shield size={24} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">ጠቅላላ አድሚኖች</p>
+                      <p className="text-3xl font-black text-slate-900">{admins.length}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100/50">100%</span>
+                </div>
+                <div className="mt-4 w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: '100%' }} />
+                </div>
+              </div>
+
+              {/* Super Admins Card */}
+              <div className="relative overflow-hidden bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300 group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50/50 rounded-full blur-2xl -mr-8 -mt-8 group-hover:bg-amber-100/50 transition-colors" />
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100/50 group-hover:scale-110 transition-transform">
+                      <Star size={24} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">ዋና አድሚኖች (Super)</p>
+                      <p className="text-3xl font-black text-slate-900">{admins.filter(a => a.role === 'super_admin').length}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100/50">
+                    {admins.length ? Math.round((admins.filter(a => a.role === 'super_admin').length / admins.length) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="mt-4 w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-amber-400 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${admins.length ? (admins.filter(a => a.role === 'super_admin').length / admins.length) * 100 : 0}%` }} 
+                  />
+                </div>
+              </div>
+
+              {/* Regular Admins Card */}
+              <div className="relative overflow-hidden bg-white p-6 rounded-3xl border border-slate-100 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-md transition-all duration-300 group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50/50 rounded-full blur-2xl -mr-8 -mt-8 group-hover:bg-emerald-100/50 transition-colors" />
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100/50 group-hover:scale-110 transition-transform">
+                      <UserCheck size={24} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase mb-0.5">መደበኛ አድሚኖች</p>
+                      <p className="text-3xl font-black text-slate-900">{admins.filter(a => a.role !== 'super_admin').length}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100/50">
+                    {admins.length ? Math.round((admins.filter(a => a.role !== 'super_admin').length / admins.length) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="mt-4 w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${admins.length ? (admins.filter(a => a.role !== 'super_admin').length / admins.length) * 100 : 0}%` }} 
+                  />
+                </div>
+              </div>
+            </div>            {/* List and Search Filter Area */}
+            <div className="bg-white rounded-[2.5rem] border border-slate-100/90 p-6 md:p-8 shadow-[0_20px_45px_rgba(0,0,0,0.02)] overflow-hidden">
+               {/* Controls Bar */}
+               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-100">
+                 <div className="space-y-1">
+                   <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none">የኢኩብ አድሚኖች ዝርዝርና ቁጥጥር</h3>
+                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed">አድሚኖችን ይፈልጉ፣ መብቶቻቸውን ይቀይሩ፣ የካርድ/ሰንጠረዥ እይታ ይቀያይሩ</p>
+                 </div>
+
+                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                   {/* Layout View Switcher Segmented Control */}
+                   <div className="bg-slate-100/80 p-1 rounded-2xl flex items-center self-start sm:self-auto gap-0.5 border border-slate-200/30">
+                     <button
+                       onClick={() => setAdminLayoutView('grid')}
+                       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                         adminLayoutView === 'grid'
+                           ? 'bg-white text-indigo-600 shadow-md shadow-indigo-100 border border-slate-100'
+                           : 'text-slate-500 hover:text-slate-800'
+                       }`}
+                     >
+                       <LayoutGrid size={13} />
+                       <span>የካርድ እይታ</span>
+                     </button>
+                     <button
+                       onClick={() => setAdminLayoutView('table')}
+                       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                         adminLayoutView === 'table'
+                           ? 'bg-white text-indigo-600 shadow-md shadow-indigo-100 border border-slate-100'
+                           : 'text-slate-500 hover:text-slate-800'
+                       }`}
+                     >
+                       <List size={13} />
+                       <span>ሰንጠረዥ እይታ</span>
+                     </button>
+                   </div>
+
+                   {/* Role Filters Segmented Control */}
+                   <div className="flex items-center bg-slate-100/80 p-1 rounded-2xl border border-slate-200/30 self-start sm:self-auto">
+                     {(['all', 'super', 'admin'] as const).map((r) => (
+                       <button
+                         key={r}
+                         onClick={() => setAdminRoleFilter(r)}
+                         className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                           adminRoleFilter === r
+                             ? 'bg-white text-slate-950 shadow-sm border border-slate-100'
+                             : 'text-slate-500 hover:text-slate-800'
+                         }`}
+                       >
+                         {r === 'all' ? 'ሁሉንም' : r === 'super' ? 'ዋና አድሚን' : 'መደበኛ አድሚን'}
+                       </button>
+                     ))}
+                   </div>
+
+                   {/* Search Filter input */}
+                   <div className="relative w-full sm:w-72">
+                     <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                     <input 
+                       type="text"
+                       placeholder="በስም፣ በስልክ ወይም በኢሜይል ፈልግ..." 
+                       value={adminSearchQuery} 
+                       onChange={(e) => setAdminSearchQuery(e.target.value)} 
+                       className="w-full pl-11 pr-12 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/5 transition-all"
+                     />
+                     {adminSearchQuery && (
+                       <button 
+                         onClick={() => setAdminSearchQuery('')}
+                         className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 hover:text-rose-500 transition-colors bg-slate-200/50 hover:bg-rose-50 px-1.5 py-0.5 rounded-md"
+                       >
+                         አጥፋ
+                       </button>
+                     )}
+                   </div>
+                 </div>
+               </div>
+
+               {/* Admins Rendering Selection */}
+               {(() => {
+                 const filteredAdmins = admins.filter(admin => {
+                   // Search Query Filter
+                   const q = adminSearchQuery.toLowerCase();
+                   const matchesSearch = 
+                     admin.fullName.toLowerCase().includes(q) || 
+                     admin.phone.includes(q) || 
+                     (admin.email && admin.email.toLowerCase().includes(q)) ||
+                     (admin.addressRegion && admin.addressRegion.toLowerCase().includes(q));
+
+                   // Role Filter
+                   let matchesRole = true;
+                   if (adminRoleFilter === 'super') {
+                     matchesRole = admin.role === 'super_admin';
+                   } else if (adminRoleFilter === 'admin') {
+                     matchesRole = admin.role !== 'super_admin';
+                   }
+
+                   return matchesSearch && matchesRole;
+                 });
+
+                 if (filteredAdmins.length === 0) {
+                   return (
+                     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                       <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 mb-4 animate-bounce">
+                         <Users size={28} />
+                       </div>
+                       <h4 className="text-base font-black text-slate-800 uppercase tracking-tight mb-1">ምንም አድሚን አልተገኘም</h4>
+                       <p className="text-xs font-bold text-slate-400 max-w-sm mb-6 uppercase tracking-widest leading-relaxed">የአድሚን መፈለጊያ ቃሉን ይለውጡ ወይም አዲስ አድሚን ይመዝግቡ</p>
+                       {adminSearchQuery && (
+                         <button
+                           onClick={() => { setAdminSearchQuery(''); setAdminRoleFilter('all'); }}
+                           className="px-6 py-2.5 bg-slate-100 hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 hover:border-indigo-200 transition-all shadow-sm"
+                         >
+                           ማጣሪያዎችን አጥፋ
+                         </button>
+                       )}
+                     </div>
+                   );
+                 }
+
+                 if (adminLayoutView === 'grid') {
+                   return (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                       {filteredAdmins.map((admin) => {
+                         const maxPerms = 6;
+                         let activePermsCount = 0;
+                         if (admin.role === 'super_admin') {
+                           activePermsCount = 6;
+                         } else {
+                           if (admin.permissions?.manageUsers) activePermsCount++;
+                           if (admin.permissions?.manageGroups) activePermsCount++;
+                           if (admin.permissions?.approvePayments) activePermsCount++;
+                           if (admin.permissions?.manageDraws) activePermsCount++;
+                           if (admin.permissions?.manageMessages) activePermsCount++;
+                           if (admin.permissions?.registerMembers) activePermsCount++;
+                         }
+
+                         // Unique simulated metrics based on admin id to add exciting details:
+                          const adminSeed = admin.id ? (admin.id.charCodeAt(0) + admin.id.charCodeAt(admin.id.length - 1)) : 42;
+                          const simulatedApprovals = (adminSeed % 90) + 12;
+                          const simulatedSpeed = adminSeed % 2 === 0 ? 'በጣም ፈጣን' : 'ፈጣን';
+                          const simulatedPresence = adminSeed % 4 === 0 
+                            ? { text: 'አሁን ንቁ', color: 'bg-emerald-500', bg: 'bg-emerald-50 text-emerald-600 border-emerald-200' } 
+                            : adminSeed % 4 === 1 
+                            ? { text: 'ከ 5ደቂቃ በፊት', color: 'bg-slate-400', bg: 'bg-slate-50 text-slate-500 border-slate-200' }
+                            : adminSeed % 4 === 2 
+                            ? { text: 'ከ 20ደቂቃ በፊት', color: 'bg-slate-400', bg: 'bg-slate-50 text-slate-500 border-slate-200' }
+                            : { text: 'አሁን ንቁ', color: 'bg-emerald-500', bg: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
+
+                          const copyDetailsToClipboard = (text: string, id: string) => {
+                           navigator.clipboard.writeText(text);
+                           setCopiedAdminId(id);
+                           setTimeout(() => setCopiedAdminId(null), 2000);
+                         };
+
+                         return (
+                           <motion.div
+                             key={admin.id}
+                             initial={{ opacity: 0, y: 15 }}
+                             animate={{ opacity: 1, y: 0 }}
+                             exit={{ opacity: 0, scale: 0.95 }}
+                             whileHover={{ y: -3 }}
+                             className="group relative bg-white rounded-xl border border-slate-200 hover:border-indigo-500/30 p-2 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-[0_12px_28px_rgba(99,102,241,0.06)] transition-all duration-300 flex flex-col justify-between overflow-hidden"
+                           >
+                             {/* Decorative glow ring on hover */}
+                             <div className="absolute inset-0 rounded-xl bg-gradient-to-tr from-indigo-50/20 via-white to-transparent pointer-events-none" />
+
+                             <div>
+                               {/* Active and Premium Header Status Badge */}
+                                <div className="flex items-center justify-between mb-2 relative z-10">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-400/30">
+                                    <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse" />
+                                    <span>ንቁ (Active)</span>
+                                  </span>
+                                  
+                                  <span className="text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md uppercase tracking-wide">
+                                    እድገት: 99.8%
+                                  </span>
+                                </div>
+
+                                {/* Premium Avatar & Profile Row */}
+                                <div className="flex items-start justify-between gap-2 mb-2 relative z-10">
+                                 <div className="flex items-center gap-2">
+                                   <div className="relative">
+                                     {admin.profilePic ? (
+                                       <img 
+                                         src={admin.profilePic} 
+                                         alt={admin.fullName} 
+                                         className={`w-12 h-12 rounded-[1rem] object-cover border-2 shadow-sm ${
+                                           admin.role === 'super_admin' ? 'border-amber-400' : 'border-indigo-400'
+                                         }`}
+                                         referrerPolicy="no-referrer"
+                                       />
+                                     ) : (
+                                       <div className={`w-12 h-12 rounded-[1rem] bg-gradient-to-br flex items-center justify-center text-white font-black text-lg shadow-sm ${
+                                         admin.role === 'super_admin' ? 'from-amber-400 to-amber-600' : 'from-slate-800 to-indigo-950'
+                                       }`}>
+                                         {admin.fullName.charAt(0).toUpperCase()}
+                                       </div>
+                                     )}
+                                     {/* Custom pulse glow representing system permission status */}
+                                     <span className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shadow ${admin.role === 'super_admin' ? 'bg-amber-400 text-white' : 'bg-indigo-500 text-white'}`}>
+                                       {admin.role === 'super_admin' ? <Star size={8} className="fill-white" /> : <Shield size={8} />}
+                                     </span>
+                                   </div>
+
+                                   <div>
+                                     <h4 className="font-black text-slate-900 tracking-tight text-sm uppercase group-hover:text-indigo-600 transition-colors leading-tight mb-0.5 flex items-center gap-1">
+                                       <span>{admin.fullName}</span>
+                                     </h4>
+                                     <div className="flex items-center gap-1.5">
+                                       <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${
+                                         admin.role === 'super_admin' 
+                                           ? 'bg-amber-50 text-amber-600 border-amber-200/60' 
+                                           : 'bg-indigo-50 text-indigo-600 border-indigo-200/60'
+                                       }`}>
+                                         {admin.role === 'super_admin' ? (
+                                           <>
+                                             <Star size={8} className="fill-amber-500" />
+                                             <span>Super Admin</span>
+                                           </>
+                                         ) : (
+                                           <>
+                                             <Shield size={8} />
+                                             <span>Standard Admin</span>
+                                           </>
+                                         )}
+                                       </span>
+                                     </div>
+                                   </div>
+                                 </div>
+
+                                 {/* Custom Copy Actions */}
+                                 <div className="relative z-10">
+                                   <motion.button
+                                     whileTap={{ scale: 0.9 }}
+                                     onClick={() => copyDetailsToClipboard(admin.id, admin.id)}
+                                     className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 hover:border-slate-300/80 rounded-xl text-slate-400 hover:text-indigo-600 transition-all"
+                                     title="ID ቅዳ"
+                                   >
+                                     {copiedAdminId === admin.id ? (
+                                       <CheckCircle size={13} className="text-emerald-500" />
+                                     ) : (
+                                       <Copy size={13} />
+                                     )}
+                                   </motion.button>
+                                   {copiedAdminId === admin.id && (
+                                     <span className="absolute right-0 top-10 whitespace-nowrap bg-emerald-500 text-white text-[8px] font-black tracking-widest px-2 py-1 rounded-md shadow-md animate-fade-in uppercase">
+                                       ቅድቷል!
+                                     </span>
+                                   )}
+                                 </div>
+                               </div>
+
+                               {/* Contact Details Grid */}
+                               <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-200/50 space-y-2.5 mb-5 relative z-10">
+                                 <div className="flex items-center justify-between text-[10px] select-all">
+                                   <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                                     <Phone size={12} className="text-slate-400" />
+                                     <span>ስልክ ቁጥር :</span>
+                                   </div>
+                                   <a href={`tel:${admin.phone}`} className="font-bold text-slate-800 hover:text-indigo-600 hover:underline">{admin.phone}</a>
+                                 </div>
+                                 <div className="flex items-center justify-between text-[10px] select-all">
+                                   <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                                     <Mail size={12} className="text-slate-400" />
+                                     <span>ኢሜይል :</span>
+                                   </div>
+                                   <span className="font-bold text-slate-800 overflow-hidden text-ellipsis max-w-[150px]">{admin.email || '-'}</span>
+                                 </div>
+                                 {admin.addressRegion && (
+                                   <div className="flex items-center justify-between text-[10px]">
+                                     <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                                       <MapPin size={12} className="text-slate-400" />
+                                       <span>አድራሻ/ክልል :</span>
+                                     </div>
+                                     <span className="font-extrabold text-indigo-600">{admin.addressRegion}</span>
+                                   </div>
+                                 )}
+                               </div>
+
+                               {/* Admin Permission Metric Score meter */}
+                                <div className="space-y-1.5 mb-5 relative z-10">
+                                 <div className="flex items-center justify-between">
+                                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">የስራ መብቶች ቁጥጥር</span>
+                                   <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100/50">
+                                     {activePermsCount}/{maxPerms} ፈቃዶች
+                                   </span>
+                                 </div>
+                                 <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                                   <div 
+                                     className={`h-full rounded-full transition-all duration-300 ${
+                                       activePermsCount === maxPerms ? 'bg-amber-400' : 'bg-indigo-500'
+                                     }`}
+                                     style={{ width: `${(activePermsCount / maxPerms) * 100}%` }}
+                                   />
+                                 </div>
+                               </div>
+
+                               {/* Custom Grid of Permission Toggles (Responsive Pill Switches) */}
+                                <div className="space-y-2 mb-6 relative z-10">
+                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                   <span>ለመቀየር ይጫኑ</span>
+                                   <span className="bg-slate-100 px-1 py-0.5 rounded text-[8px] font-semibold">Toggles</span>
+                                 </p>
+
+                                 <div className="grid grid-cols-2 gap-1.5">
+                                   {/* Manage Users */}
+                                   <button 
+                                     onClick={() => toggleAdminPermission(admin.id, 'manageUsers', admin.permissions?.manageUsers)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center justify-between border ${
+                                       admin.role === 'super_admin' || admin.permissions?.manageUsers 
+                                         ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' 
+                                         : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400 hover:text-slate-900 border-dashed'
+                                     }`}
+                                   >
+                                     <span className="flex items-center gap-1">
+                                       <Users size={8} />
+                                       <span>አባላት</span>
+                                     </span>
+                                     {(admin.role === 'super_admin' || admin.permissions?.manageUsers) && <span className="w-1.5 h-1.5 bg-white rounded-full shrink-0" />}
+                                   </button>
+
+                                   {/* Manage Groups */}
+                                   <button 
+                                     onClick={() => toggleAdminPermission(admin.id, 'manageGroups', admin.permissions?.manageGroups)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center justify-between border ${
+                                       admin.role === 'super_admin' || admin.permissions?.manageGroups 
+                                         ? 'bg-blue-600 text-white border-blue-700 shadow-sm' 
+                                         : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400 hover:text-slate-900 border-dashed'
+                                     }`}
+                                   >
+                                     <span className="flex items-center gap-1">
+                                       <Layers size={8} />
+                                       <span>ቡድኖች</span>
+                                     </span>
+                                     {(admin.role === 'super_admin' || admin.permissions?.manageGroups) && <span className="w-1.5 h-1.5 bg-white rounded-full shrink-0" />}
+                                   </button>
+
+                                   {/* Approve Payments */}
+                                   <button 
+                                     onClick={() => toggleAdminPermission(admin.id, 'approvePayments', admin.permissions?.approvePayments)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center justify-between border ${
+                                       admin.role === 'super_admin' || admin.permissions?.approvePayments 
+                                         ? 'bg-violet-600 text-white border-violet-700 shadow-sm' 
+                                         : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400 hover:text-slate-900 border-dashed'
+                                     }`}
+                                   >
+                                     <span className="flex items-center gap-1">
+                                       <CreditCard size={8} />
+                                       <span>ክፍያ</span>
+                                     </span>
+                                     {(admin.role === 'super_admin' || admin.permissions?.approvePayments) && <span className="w-1.5 h-1.5 bg-white rounded-full shrink-0" />}
+                                   </button>
+
+                                   {/* Conduct Draws */}
+                                   <button 
+                                     onClick={() => toggleAdminPermission(admin.id, 'manageDraws', admin.permissions?.manageDraws)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center justify-between border ${
+                                       admin.role === 'super_admin' || admin.permissions?.manageDraws 
+                                         ? 'bg-amber-600 text-white border-amber-700 shadow-sm' 
+                                         : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400 hover:text-slate-900 border-dashed'
+                                     }`}
+                                   >
+                                     <span className="flex items-center gap-1">
+                                       <Trophy size={8} />
+                                       <span>እጣ</span>
+                                     </span>
+                                     {(admin.role === 'super_admin' || admin.permissions?.manageDraws) && <span className="w-1.5 h-1.5 bg-white rounded-full shrink-0" />}
+                                   </button>
+
+                                   {/* Chat & Messages */}
+                                   <button 
+                                     onClick={() => toggleAdminPermission(admin.id, 'manageMessages', admin.permissions?.manageMessages)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center justify-between border ${
+                                       admin.role === 'super_admin' || admin.permissions?.manageMessages 
+                                         ? 'bg-teal-600 text-white border-teal-700 shadow-sm' 
+                                         : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400 hover:text-slate-900 border-dashed'
+                                     }`}
+                                   >
+                                     <span className="flex items-center gap-1">
+                                       <MessageCircle size={8} />
+                                       <span>ቻት</span>
+                                     </span>
+                                     {(admin.role === 'super_admin' || admin.permissions?.manageMessages) && <span className="w-1.5 h-1.5 bg-white rounded-full shrink-0" />}
+                                   </button>
+
+                                   {/* Register Users */}
+                                   <button 
+                                     onClick={() => toggleAdminPermission(admin.id, 'registerMembers', admin.permissions?.registerMembers)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center justify-between border ${
+                                       admin.role === 'super_admin' || admin.permissions?.registerMembers 
+                                         ? 'bg-rose-600 text-white border-rose-700 shadow-sm' 
+                                         : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400 hover:text-slate-900 border-dashed'
+                                     }`}
+                                   >
+                                     <span className="flex items-center gap-1">
+                                       <UserPlus size={8} />
+                                       <span>መዝግብ</span>
+                                     </span>
+                                     {(admin.role === 'super_admin' || admin.permissions?.registerMembers) && <span className="w-1.5 h-1.5 bg-white rounded-full shrink-0" />}
+                                   </button>
+                                 </div>
+                               </div>
+                             </div>
+
+                             {/* Bottom Controller Panel Deck */}
+                             <div className="pt-3 border-t border-slate-100 flex items-center gap-1.5 relative z-10 mt-auto">
+                               <button
+                                 onClick={() => {
+                                   setAdminChatTarget({ type: 'private', id: admin.id, name: admin.fullName });
+                                   setChatSidebarTab('admins');
+                                   setActiveTab('chat');
+                                 }}
+                                 className="flex-[2] py-2 px-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-black text-[9px] uppercase tracking-wider transition-all hover:scale-[1.02] flex items-center justify-center gap-1 shadow-sm border border-teal-700/50"
+                               >
+                                 <MessageCircle size={10} />
+                                 <span>ቻት ጀምር</span>
+                               </button>
+                               <button
+                                 onClick={() => { setEditAdminForm(admin); setShowEditAdminModal(true); }}
+                                 className="flex-[1] py-2 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-black text-[9px] uppercase tracking-wider transition-all hover:scale-[1.02] flex items-center justify-center border border-indigo-700/50 shadow-sm" title="ያስተካክሉ"
+                               >
+                                 <Edit size={10} />
+                                 <span className="sr-only">ያስተካክሉ</span>
+                               </button>
+                               <button
+                                 onClick={() => hardDeleteAdmin(admin.id)}
+                                 className="flex-[1] py-2 px-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-black text-[9px] uppercase tracking-wider transition-all hover:scale-[1.02] flex items-center justify-center border border-rose-700/50 shadow-sm" title="ሰርዝ"
+                               >
+                                 <Trash2 size={10} />
+                                 <span className="sr-only">ሰርዝ</span>
+                               </button>
+                             </div>
+                           </motion.div>
+                         );
+                       })}
+                     </div>
+                   );
+                 }
+
+                 /* Detailed Premium Table View Layout */
+                 return (
+                   <div className="overflow-x-auto">
+                     <table className="w-full text-left">
+                       <thead>
+                         <tr className="border-b border-slate-100/80">
+                           <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">አድሚን</th>
+                           <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">ሃላፊነት</th>
+                           <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">የስራ ፈቃድ (Permissions Control)</th>
+                           <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">ስልክ / ኢሜይል / አድራሻ</th>
+                           <th className="pb-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">እርምጃ</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-slate-50">
+                         {filteredAdmins.map((admin) => (
+                           <tr key={admin.id} className="group hover:bg-slate-50/50 transition-colors">
+                             <td className="py-5">
+                               <div className="flex items-center gap-4">
+                                 <div className="relative">
+                                   {admin.profilePic ? (
+                                     <img 
+                                       src={admin.profilePic} 
+                                       alt={admin.fullName} 
+                                       className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-sm"
+                                       referrerPolicy="no-referrer"
+                                     />
+                                   ) : (
+                                     <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 flex items-center justify-center text-white font-black text-base shadow-lg shadow-slate-900/10">
+                                       {admin.fullName.charAt(0).toUpperCase()}
+                                     </div>
+                                   )}
+                                   <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white animate-pulse" />
+                                 </div>
+                                 <div>
+                                   <p className="font-black text-slate-900 uppercase tracking-tight text-xs flex items-center gap-1 mb-0.5">
+                                     <span>{admin.fullName}</span>
+                                   </p>
+                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">UID: {admin.id.substring(0, 8).toUpperCase()}</p>
+                                 </div>
+                               </div>
+                             </td>
+                             <td className="py-5">
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                                   admin.role === 'super_admin' 
+                                   ? 'bg-amber-50 text-amber-600 border-amber-200/80 shadow-sm shadow-amber-100' 
+                                   : 'bg-indigo-50 text-indigo-600 border-indigo-200/80 shadow-sm shadow-indigo-100'
+                                }`}>
+                                   {admin.role === 'super_admin' ? (
+                                     <>
+                                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                       <span>Super Admin</span>
+                                     </>
+                                   ) : (
+                                     <>
+                                       <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                       <span>Standard Admin</span>
+                                     </>
+                                   )}
+                                </span>
+                             </td>
+                             <td className="py-5">
+                                <div className="flex flex-wrap items-center gap-1.5 max-w-sm">
+                                   <motion.button 
+                                     whileHover={{ y: -1 }}
+                                     whileTap={{ scale: 0.96 }}
+                                     onClick={() => toggleAdminPermission(admin.id, 'manageUsers', admin.permissions?.manageUsers)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 border ${
+                                       admin.role === 'super_admin' || admin.permissions?.manageUsers 
+                                       ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-200/80' 
+                                       : 'bg-slate-50 text-slate-400 hover:text-slate-600 border-slate-200'
+                                     }`}
+                                     title={language === 'am' ? 'አባላትን ማስተዳደር' : 'Manage Users'}
+                                   >
+                                     <Users size={12} />
+                                     <span>{language === 'am' ? 'አባላት' : 'Users'}</span>
+                                   </motion.button>
+                                   <motion.button 
+                                     whileHover={{ y: -1 }}
+                                     whileTap={{ scale: 0.96 }}
+                                     onClick={() => toggleAdminPermission(admin.id, 'manageGroups', admin.permissions?.manageGroups)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 border ${
+                                       admin.role === 'super_admin' || admin.permissions?.manageGroups 
+                                       ? 'bg-blue-500 text-white border-blue-600 shadow-md shadow-blue-200/80' 
+                                       : 'bg-slate-50 text-slate-400 hover:text-slate-600 border-slate-200'
+                                     }`}
+                                     title={language === 'am' ? 'ቡድኖችን ማስተዳደር' : 'Manage Groups'}
+                                   >
+                                     <Layers size={12} />
+                                     <span>{language === 'am' ? 'ቡድኖች' : 'Groups'}</span>
+                                   </motion.button>
+                                   <motion.button 
+                                     whileHover={{ y: -1 }}
+                                     whileTap={{ scale: 0.96 }}
+                                     onClick={() => toggleAdminPermission(admin.id, 'approvePayments', admin.permissions?.approvePayments)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 border ${
+                                       admin.role === 'super_admin' || admin.permissions?.approvePayments 
+                                       ? 'bg-violet-500 text-white border-violet-600 shadow-md shadow-violet-200/80' 
+                                       : 'bg-slate-50 text-slate-400 hover:text-slate-600 border-slate-200'
+                                     }`}
+                                     title={language === 'am' ? 'ክፍያ ማጽደቅ' : 'Approve Payments'}
+                                   >
+                                     <CreditCard size={12} />
+                                     <span>{language === 'am' ? 'ክፍያ' : 'Payments'}</span>
+                                   </motion.button>
+                                   <motion.button 
+                                     whileHover={{ y: -1 }}
+                                     whileTap={{ scale: 0.96 }}
+                                     onClick={() => toggleAdminPermission(admin.id, 'manageDraws', admin.permissions?.manageDraws)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 border ${
+                                       admin.role === 'super_admin' || admin.permissions?.manageDraws 
+                                       ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-200/80' 
+                                       : 'bg-slate-50 text-slate-400 hover:text-slate-600 border-slate-200'
+                                     }`}
+                                     title={language === 'am' ? 'እጣ ማውጣት' : 'Conduct Draws'}
+                                   >
+                                     <Trophy size={12} />
+                                     <span>{language === 'am' ? 'እጣ' : 'Draws'}</span>
+                                   </motion.button>
+                                   <motion.button 
+                                     whileHover={{ y: -1 }}
+                                     whileTap={{ scale: 0.96 }}
+                                     onClick={() => toggleAdminPermission(admin.id, 'manageMessages', admin.permissions?.manageMessages)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 border ${
+                                       admin.role === 'super_admin' || admin.permissions?.manageMessages 
+                                       ? 'bg-teal-500 text-white border-teal-600 shadow-md shadow-teal-200/80' 
+                                       : 'bg-slate-50 text-slate-400 hover:text-slate-600 border-slate-200'
+                                     }`}
+                                     title={language === 'am' ? 'መልእክቶች እና ቻት' : 'Manage Chat & Messages'}
+                                   >
+                                     <MessageCircle size={12} />
+                                     <span>{language === 'am' ? 'መልእክት' : 'Chat'}</span>
+                                   </motion.button>
+                                   <motion.button 
+                                     whileHover={{ y: -1 }}
+                                     whileTap={{ scale: 0.96 }}
+                                     onClick={() => toggleAdminPermission(admin.id, 'registerMembers', admin.permissions?.registerMembers)}
+                                     disabled={admin.role === 'super_admin'}
+                                     className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 border ${
+                                       admin.role === 'super_admin' || admin.permissions?.registerMembers 
+                                       ? 'bg-rose-500 text-white border-rose-600 shadow-md shadow-rose-200/80' 
+                                       : 'bg-slate-50 text-slate-400 hover:text-slate-600 border-slate-200'
+                                     }`}
+                                     title={language === 'am' ? 'አባላት መመዝገብ' : 'Register New Members'}
+                                   >
+                                     <UserPlus size={12} />
+                                     <span>{language === 'am' ? 'መዝግብ' : 'Add User'}</span>
+                                   </motion.button>
+                                </div>
+                             </td>
+                             <td className="py-5">
+                               <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 select-all">
+                                 <Phone size={10} className="text-slate-400" />
+                                 <span>{admin.phone}</span>
+                               </p>
+                               <p className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5 select-all mt-0.5">
+                                 <Mail size={10} className="text-slate-400" />
+                                 <span>{admin.email || '-'}</span>
+                               </p>
+                               {admin.addressRegion && (
+                                 <p className="text-[10px] font-semibold text-indigo-500 flex items-center gap-1 mt-1">
+                                   <span>📍 {admin.addressRegion}, {admin.addressCountry || 'ኢትዮጵያ'}</span>
+                                 </p>
+                               )}
+                             </td>
+                             <td className="py-5 text-right">
+                               <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                 <button 
+                                   onClick={() => { setEditAdminForm(admin); setShowEditAdminModal(true); }}
+                                   className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl shadow-sm border border-slate-100 hover:border-indigo-100 transition-all"
+                                   title={language === 'am' ? 'አርም' : 'Edit'}
+                                 >
+                                   <Edit size={14} />
+                                 </button>
+                                 <button 
+                                   onClick={() => hardDeleteAdmin(admin.id)}
+                                   className="p-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl shadow-sm border border-slate-100 hover:border-rose-100 transition-all"
+                                   title={language === 'am' ? 'ሙሉ በሙሉ ሰርዝ' : 'Permanently Delete'}
+                                 >
+                                   <Trash2 size={14} />
+                                 </button>
+                               </div>
+                             </td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                 );
+               })()}
+            </div>
+          </motion.div>
+        ) : activeTab === 'analytics' ? (
+          <motion.div 
+            key="analytics"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto"
+          >
+            {(() => {
+              const totalCapital = groups.reduce((acc, g) => acc + ((parseInt(g.amount) || 0) * (g.memberCount || 10)), 0);
+              const totalPayoutAmount = allPayouts.reduce((acc, p) => acc + (p.amount || 0), 0);
+              const activeMembers = allUsers.filter(u => u.status === 'active').length;
+              const regionDistribution = allUsers.reduce((acc, user) => {
+                const region = user.addressRegion || 'Addis Ababa';
+                acc[region] = (acc[region] || 0) + 1;
+                return acc;
+              }, {} as Record<string, number>);
+              const pieData = Object.entries(regionDistribution)
+                .map(([name, value]) => ({ name, value: Number(value) }))
+                .sort((a, b) => b.value - a.value);
+              const historicalData = [
+                { name: 'W1', users: Math.max(1, Math.floor(allUsers.length * 0.2)), amount: Math.max(1, Math.floor(totalCapital * 0.15)) },
+                { name: 'W2', users: Math.max(2, Math.floor(allUsers.length * 0.4)), amount: Math.max(2, Math.floor(totalCapital * 0.35)) },
+                { name: 'W3', users: Math.max(3, Math.floor(allUsers.length * 0.7)), amount: Math.max(3, Math.floor(totalCapital * 0.65)) },
+                { name: 'W4', users: allUsers.length, amount: totalCapital },
+              ];
+              return (
+                <div className="space-y-4">
+                  <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 p-6 shadow-xl border border-white/20 flex flex-col justify-center">
+                    <div className="absolute inset-0 bg-white/5 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] opacity-20" />
+                    <div className="absolute top-0 right-0 w-80 h-80 bg-white/20 blur-[100px] -mr-40 -mt-40 animate-pulse" />
+                    
+                    <div className="relative z-10 flex flex-col gap-6 text-white w-full">
+                       <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center border border-white/30 backdrop-blur-md shadow-inner text-white">
+                                <Activity size={20} className="animate-pulse" />
+                             </div>
+                             <div>
+                                <h2 className="text-2xl font-black uppercase tracking-tighter drop-shadow-md">SYSTEM <span className="text-amber-100">CORE</span></h2>
+                                <p className="text-white/80 text-[10px] font-bold uppercase tracking-[0.3em]">Real-time Network Intelligence</p>
+                             </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                             <span className="flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest backdrop-blur-md border border-white/30">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-ping" />
+                                Online
+                             </span>
+                          </div>
+                       </div>
+
+                       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                          {[
+                            { label: 'Market Cap', value: `${(totalCapital / 1000000).toFixed(1)}M`, icon: Wallet, color: 'text-amber-200' },
+                            { label: 'Total Nodes', value: allUsers.length, icon: Users, color: 'text-rose-200' },
+                            { label: 'Active Clusters', value: groups.length, icon: Layers, color: 'text-emerald-200' },
+                            { label: 'Verified', value: `${allUsers.length > 0 ? ((allUsers.length - pendingUsers.length)/allUsers.length*100).toFixed(0) : 0}%`, icon: ShieldCheck, color: 'text-blue-200' },
+                            { label: 'Payouts', value: (totalPayoutAmount / 1000).toFixed(1) + 'K', icon: CreditCard, color: 'text-fuchsia-200' },
+                            { label: 'Health', value: '98.2%', icon: Activity, color: 'text-cyan-200' },
+                          ].map((s, i) => (
+                            <div key={i} className="bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/20 shadow-sm transition-all hover:bg-white/20 hover:scale-105" title={s.label}>
+                               <div className="flex items-center gap-2 mb-1.5">
+                                  <s.icon size={12} className={s.color} />
+                                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/80">{s.label}</p>
+                               </div>
+                               <p className="text-xl font-black text-white drop-shadow-sm">{s.value}</p>
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+                  </div>
+
+                  {/* Main Charts Area */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Financial Velocity */}
+                    <div className="lg:col-span-2 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col">
+                       <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-black text-slate-900 tracking-tight">Growth & Sync Analysis</h3>
+                            <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mt-0.5">Users vs Capital over time</p>
+                          </div>
+                       </div>
+                       <div className="flex-1 h-[220px] -ml-4">
+                           <ResponsiveContainer width="100%" height={220}>
+                              <AreaChart data={historicalData}>
+                                 <defs>
+                                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2}/>
+                                       <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/>
+                                       <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
+                                    </linearGradient>
+                                 </defs>
+                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 900, fill: '#94a3b8'}} dy={10} />
+                                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 900, fill: '#94a3b8'}} />
+                                 <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', padding: '12px'}} itemStyle={{fontSize: '11px', fontWeight: '900', textTransform: 'uppercase'}} />
+                                 <Area type="monotone" dataKey="users" stroke="#f59e0b" strokeWidth={3} fill="url(#colorUsers)" />
+                                 <Area type="monotone" dataKey="amount" stroke="#ec4899" strokeWidth={3} fill="url(#colorAmount)" />
+                              </AreaChart>
+                           </ResponsiveContainer>
+                       </div>
+                    </div>
+
+                    {/* Regional Sync Pie Chart */}
+                    <div className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
+                       <div>
+                         <h3 className="text-lg font-black text-slate-900 tracking-tight">Regional Distribution</h3>
+                         <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mt-0.5 mb-2">Users by Region</p>
+                       </div>
+                       <div className="flex-1 h-[160px]">
+                           <ResponsiveContainer width="100%" height={160}>
+                             <PieChart>
+                               <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', padding: '8px', fontSize: '12px', fontWeight: 'bold'}} />
+                               <Pie data={pieData.slice(0,5)} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
+                                  {pieData.slice(0,5).map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={['#f59e0b', '#ec4899', '#8b5cf6', '#3b82f6', '#10b981'][index % 5]} />
+                                  ))}
+                               </Pie>
+                             </PieChart>
+                           </ResponsiveContainer>
+                       </div>
+                       <div className="grid grid-cols-2 gap-2 mt-2">
+                          {pieData.slice(0, 4).map((region, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                               <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: ['#f59e0b', '#ec4899', '#8b5cf6', '#3b82f6'][idx]}} />
+                               <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 truncate">{region.name}</span>
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                     {/* Brightly Colored Insights Card */}
+                     <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2rem] p-5 text-white relative overflow-hidden shadow-lg flex flex-col justify-between">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 blur-[60px] rounded-full" />
+                        <div>
+                           <h3 className="text-[10px] font-black text-white/90 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                              <Zap size={12} /> AI Advisor Settings
+                           </h3>
+                           <div className="grid gap-2">
+                              {[
+                                { label: 'Automated Payouts', active: true },
+                                { label: 'Risk Assessment', active: true },
+                                { label: 'Fraud Detection', active: false },
+                              ].map((item, i) => (
+                                <div key={i} className="flex items-center justify-between bg-white/10 p-2.5 rounded-xl backdrop-blur-sm">
+                                   <span className="text-[9px] font-bold uppercase tracking-widest text-white/90">{item.label}</span>
+                                   <div className={`w-8 h-4 rounded-full flex items-center px-1 transition-all ${item.active ? 'bg-emerald-400' : 'bg-slate-300'}`}>
+                                      <div className={`w-2.5 h-2.5 bg-white rounded-full transition-all ${item.active ? 'ml-auto' : ''}`} />
+                                   </div>
+                                </div>
+                              ))}
+                           </div>
+                        </div>
+                        <button 
+                          onClick={generateAIInsights}
+                          disabled={isGeneratingInsights}
+                          className="w-full mt-4 py-2.5 bg-white text-indigo-600 hover:bg-slate-50 text-[9px] rounded-xl font-black uppercase tracking-[0.2em] shadow-sm transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                        >
+                           {isGeneratingInsights ? <RefreshCw className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                           Generate Insight
+                        </button>
+                     </div>
+
+                     {/* Extra Stats Card */}
+                     <div className="bg-white rounded-[2rem] border border-slate-100 p-5 shadow-sm flex flex-col justify-between">
+                        <div>
+                           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Operations Metrics</h3>
+                           <div className="space-y-4">
+                              <div>
+                                 <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest mb-1.5">
+                                    <span className="text-slate-600 flex items-center gap-1.5"><ShieldAlert size={10} className="text-amber-500" /> Pending KYC</span>
+                                    <span className="text-amber-600">{pendingUsers.length}</span>
+                                 </div>
+                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-amber-500 rounded-full" style={{width: `${Math.min(100, (pendingUsers.length/(allUsers.length || 1))*100)}%`}} />
+                                 </div>
+                              </div>
+                              <div>
+                                 <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest mb-1.5">
+                                    <span className="text-slate-600 flex items-center gap-1.5"><HelpCircle size={10} className="text-rose-500" /> Open Tickets</span>
+                                    <span className="text-rose-600">{supportTickets.filter(t => t.status === 'open').length}</span>
+                                 </div>
+                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-rose-500 rounded-full" style={{width: `${Math.min(100, supportTickets.filter(t => t.status === 'open').length * 10)}%`}} />
+                                 </div>
+                              </div>
+                              <div>
+                                 <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest mb-1.5">
+                                    <span className="text-slate-600 flex items-center gap-1.5"><CreditCard size={10} className="text-blue-500" /> Active Payouts</span>
+                                    <span className="text-blue-600">{payouts.filter(p => p.status === 'active').length}</span>
+                                 </div>
+                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-blue-500 rounded-full" style={{width: `${Math.min(100, payouts.filter(p => p.status === 'active').length * 5)}%`}} />
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* Network Activity */}
+                     <div className="lg:col-span-2 bg-white rounded-[2rem] border border-slate-100 p-5 shadow-sm flex flex-col">
+                        <div className="flex items-center justify-between mb-4">
+                           <div>
+                              <h3 className="text-lg font-black text-slate-900 tracking-tight">Recent Transactions</h3>
+                           </div>
+                           <button className="text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1.5 bg-slate-50 text-slate-500 rounded-lg hover:bg-slate-100 transition-all">
+                              View All Logs
+                           </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1">
+                           {allPayments.slice(0, 4).map((payment, i) => (
+                              <div key={i} className="flex items-center justify-between p-3 bg-slate-50/70 rounded-2xl border border-slate-100 hover:bg-white hover:border-blue-100 hover:shadow-md transition-all group">
+                                 <div className="flex items-center gap-3 min-w-0 pr-2">
+                                    <div className={`w-9 h-9 shrink-0 bg-white rounded-xl flex items-center justify-center ${i % 2 === 0 ? 'text-amber-500' : 'text-rose-500'} shadow-sm border border-slate-100 group-hover:scale-110 transition-transform`}>
+                                       <CreditCard size={14} />
+                                    </div>
+                                    <div className="min-w-0">
+                                       <p className="text-[10px] font-black text-slate-900 uppercase truncate">{payment.userName}</p>
+                                       <p className="text-[8px] font-bold text-slate-400 uppercase truncate">{payment.groupName}</p>
+                                    </div>
+                                 </div>
+                                 <div className="text-right shrink-0">
+                                    <span className="block text-[11px] font-black text-slate-900">{payment.amount.toLocaleString()}</span>
+                                    <span className="text-[8px] font-black text-emerald-500 uppercase tracking-[0.2em]">Success</span>
+                                 </div>
+                              </div>
+                           ))}
+                           {allPayments.length === 0 && (
+                             <div className="col-span-2 flex items-center justify-center h-full text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest p-4 pb-8">
+                               No recent activity recorded
+                             </div>
+                           )}
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* New Row: System Audit & Financial Bar Chart */}
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                     {/* System Security */}
+                     <div className="bg-slate-900 rounded-[2rem] border border-slate-800 p-5 shadow-xl flex flex-col justify-between overflow-hidden relative group">
+                        <div className="absolute inset-0 bg-blue-500/5 group-hover:bg-blue-500/10 transition-colors" />
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 blur-[50px] rounded-full" />
+                        
+                        <div className="relative z-10 w-full">
+                          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Security Overview</h3>
+                          <div className="space-y-2.5 w-full">
+                             {[ 
+                               { label: 'Failed Logins', val: '24', icon: Lock, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' },
+                               { label: 'Blocked IPs', val: '7', icon: AlertOctagon, color: 'text-rose-400', bg: 'bg-rose-400/10', border: 'border-rose-400/20' },
+                               { label: 'Data Encrypted', val: '100%', icon: ShieldCheck, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' }
+                             ].map((stat, i) => (
+                               <div key={i} className={`flex justify-between items-center ${stat.bg} p-3 rounded-[1.25rem] border ${stat.border}`}>
+                                  <span className={`text-[9px] font-bold ${stat.color} uppercase tracking-widest flex items-center gap-2`}><stat.icon size={11} className={stat.color} /> {stat.label}</span>
+                                  <span className={`text-[10px] font-black ${stat.color}`}>{stat.val}</span>
+                               </div>
+                             ))}
+                          </div>
+                        </div>
+                     </div>
+
+                     {/* Traffic & Volume Bar Chart */}
+                     <div className="lg:col-span-2 bg-white rounded-[2rem] border border-slate-100 p-5 shadow-sm flex flex-col">
+                        <div className="flex items-center justify-between mb-2">
+                           <div>
+                             <h3 className="text-lg font-black text-slate-900 tracking-tight">Revenue Dynamics</h3>
+                             <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest mt-0.5">Capital & User Activity by Cycle</p>
+                           </div>
+                           <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100">Weekly</span>
+                        </div>
+                        <div className="flex-1 h-[170px] -ml-4 mt-2">
+                           <ResponsiveContainer width="100%" height={170}>
+                              <BarChart data={historicalData} barSize={24}>
+                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 900, fill: '#94a3b8'}} dy={5} />
+                                 <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 900, fill: '#94a3b8'}} />
+                                 <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', padding: '10px'}} itemStyle={{fontSize: '11px', fontWeight: '900', textTransform: 'uppercase'}} />
+                                 <Bar dataKey="amount" fill="#3b82f6" radius={[6, 6, 6, 6]} />
+                              </BarChart>
+                           </ResponsiveContainer>
+                        </div>
+                     </div>
+
+                     {/* System Logs */}
+                     <div className="bg-white rounded-[2rem] border border-slate-100 p-5 shadow-sm overflow-hidden flex flex-col relative">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Latest System Logs</h3>
+                        <div className="flex-1 space-y-3 relative z-10 w-full before:absolute before:inset-y-0 before:left-[11px] before:w-[2px] before:bg-slate-100">
+                           {[
+                             { msg: 'System Backup Complete', time: '2m ago', color: 'emerald' },
+                             { msg: 'New Rule Deployed', time: '15m ago', color: 'blue' },
+                             { msg: 'Payment Gateway Sync', time: '1h ago', color: 'amber' },
+                             { msg: 'Server Load Spike', time: '3h ago', color: 'rose' }
+                           ].map((log, lidx) => (
+                             <div key={lidx} className="relative z-10 flex gap-3 items-start pl-8 group">
+                                <div className={`absolute left-0 top-0.5 w-6 h-6 rounded-full bg-${log.color}-50 border-2 border-white flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                                   <div className={`w-2 h-2 rounded-full bg-${log.color}-500`} />
+                                </div>
+                                <div className="min-w-0">
+                                   <p className="text-[10px] font-black text-slate-900 leading-tight truncate">{log.msg}</p>
+                                   <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{log.time}</p>
+                                </div>
+                             </div>
+                           ))}
+                        </div>
+                     </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </motion.div>
+        ) : activeTab === 'share' ? (
+          <motion.div
+            key="share"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <ShareApp />
+          </motion.div>
+        ) : activeTab === 'chat' ? (
+          <motion.div 
+            key="chat"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="flex h-[80vh] bg-white rounded-[3rem] overflow-hidden border border-slate-100 shadow-2xl"
+          >
+            {/* Sidebar: Chat Channels */}
+            <div className="w-80 border-r border-slate-100 bg-slate-50 flex flex-col shrink-0">
+               <div className="p-8 border-b border-slate-100 bg-white">
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-1">መልእክቶች</h3>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Communication Center</p>
+               </div>
+               
+               <div className="p-4 border-b border-slate-100 bg-white">
+                  <div className="relative">
+                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                     <input 
+                        type="text" 
+                        placeholder={language === 'am' ? 'አባል ፈልግ...' : 'Search members...'}
+                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-slate-900/5 transition-all"
+                        value={chatSearch}
+                        onChange={(e) => setChatSearch(e.target.value)}
+                     />
+                  </div>
+               </div>
+
+               <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                  {/* Broadcast */}
+                  {!chatSearch && (
+                    <div>
+                      <h4 className="px-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Broadcast</h4>
+                      <button 
+                        onClick={() => setAdminChatTarget({type: 'all', id: 'all', name: t('admin.broadcast')})} 
+                        className={`w-full group flex items-center gap-4 p-4 rounded-[2rem] transition-all ${adminChatTarget.id === 'all' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'hover:bg-white border border-transparent hover:border-slate-100'}`}
+                      >
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${adminChatTarget.id === 'all' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-400 group-hover:bg-slate-900 group-hover:text-amber-500'}`}>
+                          <Bell size={20} />
+                        </div>
+                        <div className="text-left flex-1">
+                          <p className="text-sm font-black uppercase tracking-tight">{t('admin.broadcast')}</p>
+                          <p className="text-[8px] font-bold opacity-60">All Active Members</p>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Groups */}
+                  {(groups.filter(g => g.name.toLowerCase().includes(chatSearch.toLowerCase())).length > 0) && (
+                    <div>
+                      <h4 className="px-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">ቡድኖች (Groups)</h4>
+                      <div className="space-y-2">
+                         {groups.filter(g => g.name.toLowerCase().includes(chatSearch.toLowerCase())).map(g => (
+                           <button 
+                              key={g.id} 
+                              onClick={() => setAdminChatTarget({type: 'group', id: g.id, name: g.name})} 
+                              className={`w-full group flex items-center gap-4 p-3 rounded-2xl transition-all ${adminChatTarget.id === g.id ? 'bg-amber-100 text-amber-900 border-amber-200' : 'hover:bg-white border border-transparent hover:border-slate-100'}`}
+                           >
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${adminChatTarget.id === g.id ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-900 group-hover:text-white'}`}>
+                                 <Zap size={16} />
+                              </div>
+                              <div className="text-left flex-1 truncate">
+                                 <p className="text-xs font-black uppercase tracking-tight">{g.name}</p>
+                                 <p className="text-[8px] font-bold opacity-60">Group Channel</p>
+                              </div>
+                           </button>
+                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Private */}
+                  <div>
+                    <h4 className="px-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">ግልጽ መልእክቶች (Private)</h4>
+                    <div className="space-y-2">
+                       {allUsers
+                        .filter(u => u.fullName.toLowerCase().includes(chatSearch.toLowerCase()) || u.phone?.includes(chatSearch))
+                        .slice(0, 30)
+                        .map(u => (
+                         <button 
+                            key={u.id} 
+                            onClick={() => setAdminChatTarget({type: 'private', id: u.id, name: u.fullName})} 
+                            className={`w-full group flex items-center gap-4 p-3 rounded-2xl transition-all ${adminChatTarget.id === u.id ? 'bg-indigo-100 text-indigo-900 border-indigo-200' : 'hover:bg-white border border-transparent hover:border-slate-100'}`}
+                         >
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-200 flex items-center justify-center border border-slate-300">
+                               {u.faceScan ? (
+                                 <img src={u.faceScan} alt="" className="w-full h-full object-cover" />
+                               ) : (
+                                 <User size={16} className="text-slate-400" />
+                               )}
+                            </div>
+                            <div className="text-left flex-1 truncate">
+                               <p className="text-xs font-black uppercase tracking-tight">{u.fullName}</p>
+                               <p className="text-[8px] font-bold opacity-60">{u.phone || 'Direct Message'}</p>
+                            </div>
+                         </button>
+                       ))}
+                    </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* Chat Content */}
+            <div className="flex-1 flex flex-col bg-white overflow-hidden">
+               {/* Header */}
+               <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white relative z-10 shadow-sm">
+                  <div className="flex items-center gap-5">
+                     <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center text-amber-500 shadow-xl shadow-slate-900/20">
+                        {adminChatTarget.type === 'all' ? <Bell size={24} /> : adminChatTarget.type === 'group' ? <Zap size={24} /> : <User size={24} />}
+                     </div>
+                     <div>
+                        <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-1">{adminChatTarget.name}</h2>
+                        <div className="flex items-center gap-2">
+                           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                             {adminChatTarget.type === 'all' ? 'ማሰራጫ (Broadcast Channel)' : adminChatTarget.type === 'group' ? 'የቡድን መልእክቶች' : 'ግልጽ ውይይት'}
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Messages Area */}
+               <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar bg-slate-50/30">
+                  {messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center py-20">
+                       <div className="w-24 h-24 bg-white rounded-[2rem] border border-slate-100 flex items-center justify-center mb-6 shadow-inner text-slate-200">
+                          <MessageCircle size={48} />
+                       </div>
+                       <h3 className="text-xl font-black text-slate-900 uppercase tracking-widest mb-2">ምንም መልእክት የለም</h3>
+                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest max-w-[240px]">ውይይቱን ለመጀመር ከታች መጻፍ ይጀምሩ።</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {messages.map((msg, idx) => {
+                        const isMe = msg.senderRole === 'admin';
+                        const showAvatar = idx === 0 || messages[idx-1].senderId !== msg.senderId;
+                        
+                        return (
+                          <motion.div 
+                            layout
+                            initial={{ opacity: 0, x: isMe ? 20 : -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            key={msg.id || idx} 
+                            className={`flex ${isMe ? 'flex-row-reverse' : 'flex-row'} items-start gap-4`}
+                          >
+                            {!isMe && (
+                               <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center shrink-0 opacity-80 mt-1 shadow-sm">
+                                  <span className="text-xs font-black text-slate-400">{msg.senderName?.[0]?.toUpperCase() || <User size={14} />}</span>
+                               </div>
+                            )}
+                            
+                            <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
+                               {showAvatar && (
+                                 <span className="text-[9px] font-black uppercase tracking-widest mb-2 px-1 text-slate-400">
+                                   {msg.senderName}
+                                 </span>
+                               )}
+                               <div className={`p-5 rounded-[2rem] shadow-sm relative group/msg ${isMe ? 'bg-slate-900 text-white rounded-tr-sm' : 'bg-white border border-slate-100 text-slate-700 rounded-tl-sm'}`}>
+                                  {msg.audioUrl ? (
+                                     <div className="flex items-center gap-4 min-w-[200px]">
+                                        <button 
+                                          type="button"
+                                          onClick={(e) => {
+                                            const audio = e.currentTarget.parentElement?.querySelector('audio');
+                                            if (audio) {
+                                              if (audio.paused) {
+                                                document.querySelectorAll('audio').forEach(a => a.pause());
+                                                audio.play();
+                                              } else {
+                                                audio.pause();
+                                              }
+                                            }
+                                          }} 
+                                          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isMe ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-100 hover:bg-slate-200'}`}
+                                        >
+                                          <Play size={16} fill={isMe ? "white" : "#64748b"} />
+                                        </button>
+                                        <div className="flex-1 space-y-1">
+                                           <div className={`h-1 w-full rounded-full ${isMe ? 'bg-white/20' : 'bg-slate-200'}`} />
+                                           <div className={`h-1 w-[60%] rounded-full ${isMe ? 'bg-amber-400' : 'bg-slate-400'}`} />
+                                        </div>
+                                        <audio src={msg.audioUrl} className="hidden" />
+                                     </div>
+                                  ) : msg.imageUrl ? (
+                                     <div className="space-y-2">
+                                        <img src={msg.imageUrl} alt="attachment" className="max-w-[240px] rounded-2xl cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.imageUrl, '_blank')} />
+                                        {msg.text !== '📸 ፎቶ (Image)' && <p className="text-sm font-medium leading-relaxed">{msg.text}</p>}
+                                     </div>
+                                  ) : msg.fileUrl ? (
+                                     <a href={msg.fileUrl} download={msg.fileName || 'file'} target="_blank" rel="noopener noreferrer" className={`flex flex-col gap-2 p-3 rounded-2xl transition-colors ${isMe ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-50 hover:bg-slate-100 border border-slate-200'}`}>
+                                        <div className="flex items-center gap-3">
+                                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isMe ? 'bg-white/20 text-white' : 'bg-white text-indigo-500 shadow-sm'}`}>
+                                              <FileText size={18} />
+                                           </div>
+                                           <div className="min-w-0 pr-4">
+                                              <p className={`text-xs font-bold truncate ${isMe ? 'text-white' : 'text-slate-800'}`}>{msg.fileName || 'Document'}</p>
+                                              <p className={`text-[9px] font-black uppercase tracking-widest mt-0.5 ${isMe ? 'text-slate-300' : 'text-slate-400'}`}>Download File</p>
+                                           </div>
+                                           <Download size={14} className={`ml-auto ${isMe ? 'text-white/50' : 'text-slate-400'}`} />
+                                        </div>
+                                     </a>
+                                  ) : (
+                                     <p className="text-sm font-medium leading-relaxed">{msg.text}</p>
+                                  )}
+                               </div>
+                               <div className={`flex items-center gap-2 mt-2 px-2 w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                 <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                                    {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleTimeString('am-ET', {hour: '2-digit', minute:'2-digit'}) : ''}
+                                    {msg.isEdited && <span className="text-amber-500">Edited</span>}
+                                    {isMe && <CheckCircle size={10} className="text-emerald-500" />}
+                                 </span>
+                                 <div className="flex items-center gap-1.5 ml-2">
+                                   {isMe && !msg.audioUrl && (
+                                     <button 
+                                       onClick={() => { setEditingMessageId(msg.id); setNewMessage(msg.text || ''); }} 
+                                       className="flex items-center gap-1 p-1 bg-white text-slate-400 hover:text-indigo-500 rounded border border-slate-200 shadow-sm transition-colors"
+                                       title="Edit"
+                                     >
+                                       <Edit size={10} /> <span className="text-[8px] font-bold uppercase">Edit</span>
+                                     </button>
+                                   )}
+                                   <button 
+                                     onClick={() => handleDeleteMessage(msg.id)} 
+                                     className="flex items-center gap-1 p-1 bg-white text-slate-400 hover:text-rose-500 rounded border border-slate-200 shadow-sm transition-colors"
+                                     title="Delete"
+                                   >
+                                     <Trash2 size={10} /> <span className="text-[8px] font-bold uppercase">Delete</span>
+                                   </button>
+                                 </div>
+                               </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+               </div>
+
+               {/* Input Area */}
+               <div className="p-8 bg-white border-t border-slate-100">
+                  <form onSubmit={handleSendMessage} className="relative">
+                     <div className={`flex items-center gap-2 bg-slate-50 p-2 rounded-[2.5rem] border transition-all duration-500 ${editingMessageId ? 'border-amber-300 ring-4 ring-amber-50' : 'border-slate-100 focus-within:border-slate-300 focus-within:ring-4 focus-within:ring-slate-100 focus-within:bg-white'}`}>
+                        
+                        <div className="flex gap-1 shrink-0">
+                          <button 
+                            type="button"
+                            onMouseDown={() => { setIsRecording(true); startRecording(); }}
+                            onMouseUp={() => { setIsRecording(false); stopRecording(); }}
+                            className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse shadow-xl shadow-rose-500/30' : 'bg-white text-slate-400 border border-slate-200 hover:text-slate-900 shadow-sm'}`}
+                            title="Hold to Record Voice Message"
+                          >
+                            <Mic size={18} />
+                          </button>
+                          
+                          <label className="w-12 h-12 rounded-[1.25rem] bg-white text-slate-400 border border-slate-200 hover:text-indigo-500 hover:border-indigo-200 shadow-sm flex items-center justify-center cursor-pointer transition-all" title="Send a Photo">
+                            <Camera size={18} />
+                            <input type="file" accept="image/*" className="hidden" onChange={(e) => handleAdminFileSelect(e, 'image')} />
+                          </label>
+                          
+                          <label className="w-12 h-12 rounded-[1.25rem] bg-white text-slate-400 border border-slate-200 hover:text-indigo-500 hover:border-indigo-200 shadow-sm flex items-center justify-center cursor-pointer transition-all" title="Attach a File">
+                            <FileText size={18} />
+                            <input type="file" className="hidden" onChange={(e) => handleAdminFileSelect(e, 'file')} />
+                          </label>
+
+                          <button 
+                            type="button"
+                            onClick={() => startCall('voice', adminChatTarget.name, null)}
+                            className="w-12 h-12 rounded-[1.25rem] bg-white text-slate-400 border border-slate-200 hover:text-emerald-500 hover:border-emerald-200 shadow-sm flex items-center justify-center cursor-pointer transition-all" title="የድምጽ ጥሪ (Voice Call)"
+                          >
+                            <Phone size={18} />
+                          </button>
+                          
+                          <button 
+                            type="button"
+                            onClick={() => startCall('video', adminChatTarget.name, null)}
+                            className="w-12 h-12 rounded-[1.25rem] bg-white text-slate-400 border border-slate-200 hover:text-indigo-500 hover:border-indigo-200 shadow-sm flex items-center justify-center cursor-pointer transition-all" 
+                            title="የቪዲዮ ጥሪ (Video Call)"
+                          >
+                            <Video size={18} />
+                          </button>
+                        </div>
+
+                        <div className="flex-1 relative">
+                          {editingMessageId && (
+                            <div className="absolute -top-12 left-0 right-0 flex items-center justify-between px-4 py-2 bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase rounded-t-xl border-x border-t border-amber-200 backdrop-blur-md">
+                               <span>Editing Message...</span>
+                               <button type="button" onClick={() => { setEditingMessageId(null); setNewMessage(''); }}><X size={14} /></button>
+                            </div>
+                          )}
+                          <input 
+                            type="text" 
+                            className="w-full bg-transparent border-none outline-none px-4 py-2 text-sm font-bold text-slate-700 placeholder:text-slate-300"
+                            placeholder={editingMessageId ? 'መልእክቱን ያስተካክሉ...' : (adminChatTarget.type === 'private' ? `${adminChatTarget.name} መልእክት ይላኩ...` : 'መልእክት ለመላክ እዚህ ይጻፉ...')}
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                          />
+                        </div>
+
+                        <button 
+                          type="submit"
+                          disabled={!newMessage.trim()}
+                          className={`w-14 h-14 rounded-[1.5rem] flex items-center justify-center transition-all group ${newMessage.trim() ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/30 active:scale-90' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}
+                        >
+                          <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                        </button>
+                     </div>
+                  </form>
+               </div>
+            </div>
+          </motion.div>
+        ) : activeTab === 'notifications' ? (
+          <motion.div 
+            key="notifications"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-8"
+          >
+            {/* Header / Command Center */}
+            <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-white/5">
+               <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 blur-[100px] rounded-full -mr-40 -mt-40" />
+               <div className="absolute bottom-0 left-0 w-80 h-80 bg-white/5 blur-[100px] rounded-full -ml-40 -mb-40" />
+               
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-500/10 text-blue-400 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-blue-500/20">
+                        <Bell size={14} />
+                        Strategic Alerts & Announcements
+                     </div>
+                     <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                        ማሳወቂያዎች <span className="text-blue-500">.</span>
+                     </h2>
+                     <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">
+                        ለአባላት ጠቃሚ መረጃዎችን፣ ማሳሰቢያዎችን እና አዳዲስ ዜናዎችን እዚህ ይላኩ። የተላኩ መልእክቶችን እንዲሁም የአባላትን ምላሽ መከታተል ይችላሉ።
+                     </p>
+                  </div>
+
+                  <div className="flex flex-col gap-4">
+                     <div className="flex gap-4 justify-center md:justify-end">
+                        <div className="px-8 py-6 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 text-center min-w-[140px]">
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">ያልተነበቡ</p>
+                           <p className="text-2xl font-black text-white">{notifications.length}</p>
+                        </div>
+                        <div className="px-8 py-6 bg-blue-600 rounded-[2.5rem] text-center min-w-[140px] shadow-xl shadow-blue-500/20">
+                           <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-2">ጠቅላላ የተላኩ</p>
+                           <p className="text-2xl font-black text-white">{allNotifications.length}</p>
+                        </div>
+                     </div>
+                     <button 
+                        onClick={() => {
+                          setNotification({ title: '', message: '', recipientId: 'all' });
+                          setShowNotifModal(true);
+                        }}
+                        className="w-full px-10 py-6 bg-white text-slate-900 rounded-[2.5rem] text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-50 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+                     >
+                       <Send size={18} /> አዲስ ማሳወቂያ ላክ (Broadcast)
+                     </button>
+                  </div>
+               </div>
+            </div>
+
+            {/* View Selection & Search */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+               <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-sm w-full md:w-auto">
+                 <button 
+                   onClick={() => setNotifView('unread')}
+                   className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-500 ${notifView === 'unread' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                 >
+                   ያልታዩ (New)
+                 </button>
+                 <button 
+                   onClick={() => setNotifView('history')}
+                   className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-500 ${notifView === 'history' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                 >
+                   ታሪክ (History)
+                 </button>
+               </div>
+
+               <div className="relative w-full md:w-80">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder="ርዕስ ወይም መልእክት ፈልግ..."
+                    className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/10 transition-all shadow-sm"
+                    value={notifSearch}
+                    onChange={(e) => setNotifSearch(e.target.value)}
+                  />
+               </div>
+            </div>
+
+            {/* Notifications Feed */}
+            <div className="space-y-4">
+               {(notifView === 'unread' ? notifications : allNotifications)
+                .filter(n => n.title?.toLowerCase().includes(notifSearch.toLowerCase()) || n.message?.toLowerCase().includes(notifSearch.toLowerCase()))
+                .length === 0 ? (
+                  <div className="text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
+                     <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-200 shadow-inner">
+                        <Bell size={40} />
+                     </div>
+                     <h3 className="text-xl font-black text-slate-900 uppercase tracking-widest mb-2">ምንም ማሳወቂያ የለም</h3>
+                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">አዲስ ማሳወቂያ ሲኖር እዚህ ላይ ይዘረዘራል።</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                     {(notifView === 'unread' ? notifications : allNotifications)
+                      .filter(n => n.title?.toLowerCase().includes(notifSearch.toLowerCase()) || n.message?.toLowerCase().includes(notifSearch.toLowerCase()))
+                      .map(notif => (
+                        <motion.div 
+                          layout
+                          key={notif.id}
+                          className={`group bg-white p-6 rounded-[2.5rem] border transition-all duration-300 flex flex-col md:flex-row items-center gap-6 ${notif.read ? 'border-slate-100 opacity-60' : 'border-blue-100 shadow-lg shadow-blue-500/5'}`}
+                        >
+                           <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border ${notif.read ? 'bg-slate-50 text-slate-400 border-slate-100' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                              {notif.type === 'broadcast' ? <Zap size={24} /> : <User size={24} />}
+                           </div>
+                           
+                           <div className="flex-1 text-center md:text-left">
+                              <div className="flex flex-col md:flex-row items-center gap-3 mb-2">
+                                 <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight">{notif.title}</h4>
+                                 <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg text-[8px] font-black uppercase tracking-widest">
+                                      {notif.recipientId === 'all' ? 'ሁሉንም (Broadcast)' : 'ለአንድ አባል'}
+                                    </span>
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase">
+                                       {getTimeSince(notif.createdAt)}
+                                    </span>
+                                 </div>
+                              </div>
+                              <p className="text-sm font-medium text-slate-500 leading-relaxed max-w-2xl">{notif.message}</p>
+                           </div>
+
+                           <div className="flex items-center gap-3 shrink-0">
+                              {!notif.read && (
+                                <button 
+                                   onClick={() => markNotifAsRead(notif.id)}
+                                   className="px-6 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all border border-blue-100"
+                                >
+                                   አንብቤዋለሁ
+                                </button>
+                              )}
+                              <button 
+                                 onClick={() => deleteNotification(notif.id)}
+                                 className="w-12 h-12 flex items-center justify-center bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100"
+                              >
+                                 <Trash2 size={18} />
+                              </button>
+                           </div>
+                        </motion.div>
+                      ))}
+                  </div>
+                )}
+            </div>
+
+            {/* Broadcast Modal Overlay */}
+            <AnimatePresence>
+               {showNotifModal && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[110]">
+                     <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-hidden border border-slate-100"
+                     >
+                        <div className="flex justify-between items-center p-8 border-b border-slate-50 bg-slate-50/30">
+                           <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                                 <Send size={24} />
+                              </div>
+                              <div>
+                                 <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-none">አዲስ ማሳወቂያ (Broadcast)</h3>
+                                 <p className="text-slate-400 text-[10px] mt-1 font-bold uppercase tracking-widest">System-wide transmission</p>
+                              </div>
+                           </div>
+                           <button 
+                              onClick={() => setShowNotifModal(false)}
+                              className="p-3 bg-white text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all shadow-sm"
+                           >
+                              <X size={20} />
+                           </button>
+                        </div>
+
+                        <form onSubmit={handleBroadcastNotification} className="p-8 space-y-6">
+                           <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">ተቀባይ (Recipient)</label>
+                              <select 
+                                 className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold appearance-none outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                 value={notification.recipientId}
+                                 onChange={(e) => setNotification({...notification, recipientId: e.target.value})}
+                              >
+                                 <option value="all">ሁሉም አባላት (All Members)</option>
+                                 {groups.map(g => (
+                                    <option key={g.id} value={`group:${g.id}`}>{g.name} Group</option>
+                                 ))}
+                                 {allUsers.slice(0, 20).map(u => (
+                                    <option key={u.id} value={u.id}>{u.fullName}</option>
+                                 ))}
+                              </select>
+                           </div>
+
+                           <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">ርዕስ (Title)</label>
+                              <input 
+                                 type="text"
+                                 placeholder="ለምሳሌ፡ ወቅታዊ ማሳሰቢያ"
+                                 className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                 value={notification.title}
+                                 onChange={(e) => setNotification({...notification, title: e.target.value})}
+                              />
+                           </div>
+
+                           <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">መልእክት (Message)</label>
+                              <textarea 
+                                 placeholder="የማሳወቂያውን ዝርዝር እዚህ ይጻፉ..."
+                                 className="w-full p-6 bg-slate-50 border border-slate-100 rounded-[2rem] text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500/20 transition-all min-h-[160px] resize-none"
+                                 value={notification.message}
+                                 onChange={(e) => setNotification({...notification, message: e.target.value})}
+                              />
+                           </div>
+
+                           <button 
+                              type="submit"
+                              disabled={isBroadcasting}
+                              className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-[0.3em] shadow-xl shadow-slate-900/30 hover:bg-black active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
+                           >
+                              {isBroadcasting ? (
+                                 <RefreshCw className="animate-spin" size={20} />
+                              ) : (
+                                 <Send size={20} />
+                              )}
+                              አሁን አስተላልፍ (Transmit Now)
+                           </button>
+                        </form>
+                     </motion.div>
+                  </div>
+               )}
+            </AnimatePresence>
+          </motion.div>
+        ) : activeTab === 'sms' ? (
+          <motion.div 
+            key="sms"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-8"
+          >
+            {/* Header */}
+            <div className="bg-slate-900 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-white/5">
+               <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 blur-[100px] rounded-full -mr-40 -mt-40" />
+               <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+                  <div className="text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-emerald-500/20">
+                        <MessageCircle size={14} />
+                        SMS Integration
+                     </div>
+                     <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                        የአጭር መልዕክት <span className="text-emerald-500">.</span>
+                     </h2>
+                     <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">
+                        በስልክ ቁጥራቸው በቀጥታ አጭር መልዕክት (SMS) ለአባላት ይላኩ። ከስልክዎ ወይም ኮምፒውተርዎ ላይ አፕሊኬሽኑን በመጠቀም በቀላሉ ይላካል።
+                     </p>
+                  </div>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+               <div className="lg:col-span-2 space-y-6">
+                 <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100">
+                   <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-6 flex items-center gap-2">
+                     <Edit size={20} className="text-emerald-500" />
+                     {language === 'am' ? 'መልዕክት ይፃፉ' : 'Compose Message'}
+                   </h3>
+                   <div className="space-y-6">
+                     <div>
+                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.15em] mb-2 block">
+                         {language === 'am' ? 'የመልዕክቱ ይዘት' : 'Message Body'}
+                       </label>
+                       <textarea
+                         value={smsMessage}
+                         onChange={(e) => setSmsMessage(e.target.value)}
+                         placeholder={language === 'am' ? 'ለአባላት የሚላከውን መልዕክት እዚህ ይፃፉ...' : 'Type message here...'}
+                         className="w-full h-40 p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold text-slate-900 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 resize-none transition-all placeholder:text-slate-300"
+                       />
+                     </div>
+                     <button
+                       onClick={() => {
+                         if (!smsMessage.trim() || smsRecipients.length === 0) return;
+                         let normalizeSmsPhone = (phone: string) => {
+                           let clean = phone.trim().replace(/\D/g, '');
+                           if (clean.startsWith('251')) {
+                             clean = '0' + clean.substring(3);
+                           } else if (clean.length === 9 && (clean.startsWith('9') || clean.startsWith('7'))) {
+                             clean = '0' + clean;
+                           }
+                           return clean;
+                         };
+                         const phones = allUsers.filter(u => smsRecipients.includes(u.id)).map(u => normalizeSmsPhone(u.phone)).join(',');
+                         const msg = encodeURIComponent(smsMessage.trim());
+                         window.open(`sms:${phones}?body=${msg}`);
+                         setSmsMessage('');
+                         setSmsRecipients([]);
+                       }}
+                       disabled={!smsMessage.trim() || smsRecipients.length === 0}
+                       className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-[12px] uppercase tracking-[0.15em] transition-all shadow-xl shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+                     >
+                       <Send size={16} />
+                       {language === 'am' ? 'በስልክ (SMS App) ላክ' : 'Send via SMS App'}
+                     </button>
+                     <p className="text-xs font-bold text-slate-500 text-center uppercase tracking-wider mt-4">
+                       {language === 'am' ? `ማሳሰቢያ: ይህ በተንቀሳቃሽ ስልክዎ ወይም ኮምፒውተር ላይ ያለውን የ SMS መተግበሪያ ይከፍታል` : 'Opens your native SMS application'}
+                     </p>
+                   </div>
+                 </div>
+               </div>
+
+               <div className="space-y-6">
+                 <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 h-[600px] flex flex-col">
+                   <div className="flex justify-between items-center mb-6">
+                     <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                       <Users size={20} className="text-emerald-500" />
+                       {language === 'am' ? 'ተቀባዮች' : 'Recipients'}
+                     </h3>
+                     <button
+                       onClick={() => {
+                         if (smsRecipients.length === allUsers.length) setSmsRecipients([]);
+                         else setSmsRecipients(allUsers.map(u => u.id));
+                       }}
+                       className="text-[10px] font-black uppercase tracking-wider text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full"
+                     >
+                       {smsRecipients.length === allUsers.length ? (language === 'am' ? 'ሁሉንም አትምረጥ' : 'Deselect All') : (language === 'am' ? 'ሁሉንም ምረጥ' : 'Select All')}
+                     </button>
+                   </div>
+                   
+                   <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                     {allUsers.map(user => (
+                       <label key={user.id} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${smsRecipients.includes(user.id) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100 hover:border-slate-200'}`}>
+                         <div className={`w-6 h-6 rounded flex items-center justify-center transition-colors border-2 shrink-0 ${smsRecipients.includes(user.id) ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 bg-white'}`}>
+                           {smsRecipients.includes(user.id) && <CheckCircle size={14} />}
+                         </div>
+                         <div className="overflow-hidden">
+                           <p className="text-sm font-black text-slate-900 truncate">{user.fullName}</p>
+                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{user.phone}</p>
+                         </div>
+                         <input
+                           type="checkbox"
+                           className="hidden"
+                           checked={smsRecipients.includes(user.id)}
+                           onChange={(e) => {
+                             if (e.target.checked) setSmsRecipients([...smsRecipients, user.id]);
+                             else setSmsRecipients(smsRecipients.filter(id => id !== user.id));
+                           }}
+                         />
+                       </label>
+                     ))}
+                   </div>
+                 </div>
+               </div>
+            </div>
+          </motion.div>
+        ) : activeTab === 'support' ? (
+          <motion.div 
+            key="support"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-8"
+          >
+            {/* Header */}
+            <div className="bg-slate-50 rounded-[3rem] p-10 shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32 shadow-inner" />
+               <div className="relative z-10">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-white text-slate-500 border border-slate-200 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
+                    <HelpCircle size={14} /> Member Support Center
+                  </div>
+                  <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter mb-4">እርዳታና ድጋፍ <span className="text-amber-500">.</span></h2>
+                  <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">የአባላትን ጥያቄዎች እዚህ ይመልሱ። ቴክኒካዊ ችግሮችን፣ የክፍያ ቅሬታዎችን እና ሌሎች አስተያየቶችን በብቃት ለማስተናገድ ይረዳዎታል::</p>
+               </div>
+
+               <div className="flex gap-4 relative z-10">
+                  <div className="px-8 py-6 bg-slate-900 rounded-[2.5rem] border border-slate-800 text-center min-w-[140px] shadow-xl shadow-slate-900/20">
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">ክፍት ጥያቄዎች</p>
+                     <p className="text-2xl font-black text-white">{supportTickets.length}</p>
+                  </div>
+                  <div className="px-8 py-6 bg-white rounded-[2.5rem] border border-slate-100 text-center min-w-[140px] shadow-sm">
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">ጠቅላላ (History)</p>
+                     <p className="text-2xl font-black text-slate-900">{allSupportTickets.length}</p>
+                  </div>
+               </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+               <div className="flex flex-wrap items-center gap-2 p-1 bg-slate-100 rounded-2xl w-full md:w-auto">
+                 <button 
+                   onClick={() => setSupportSubTab('tickets')}
+                   className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${supportSubTab === 'tickets' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/20' : 'text-slate-400 hover:bg-white/50'}`}
+                 >
+                   Support Tickets
+                 </button>
+                 <button 
+                   onClick={() => setSupportSubTab('forms')}
+                   className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${supportSubTab === 'forms' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-500/20' : 'text-slate-400 hover:bg-white/50'}`}
+                 >
+                   Profile Requests
+                 </button>
+               </div>
+               
+               {supportSubTab === 'tickets' && (
+                 <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl w-full md:w-auto">
+                   <button 
+                     onClick={() => setSupportView('open')}
+                     className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${supportView === 'open' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-white/50'}`}
+                   >
+                     ክፍት (Open)
+                   </button>
+                   <button 
+                     onClick={() => setSupportView('closed')}
+                     className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${supportView === 'closed' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-white/50'}`}
+                   >
+                     የተዘጉ (Resolved)
+                   </button>
+                 </div>
+               )}
+
+               {supportSubTab === 'forms' && (
+                 <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl w-full md:w-auto">
+                   <button 
+                     onClick={() => setFormsView('pending')}
+                     className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formsView === 'pending' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-white/50'}`}
+                   >
+                     Pending
+                   </button>
+                   <button 
+                     onClick={() => setFormsView('resolved')}
+                     className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formsView === 'resolved' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-white/50'}`}
+                   >
+                     Resolved
+                   </button>
+                 </div>
+               )}
+
+               <div className="relative w-full md:w-80">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder="በስም ወይም በመልእክት ፈልግ..."
+                    className="w-full pl-12 pr-4 py-4 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-4 focus:ring-slate-100 transition-all shadow-sm"
+                    value={supportSearch}
+                    onChange={(e) => setSupportSearch(e.target.value)}
+                  />
+               </div>
+            </div>
+
+            {/* Ticket List */}
+            <div className="grid grid-cols-1 gap-6">
+              {supportSubTab === 'tickets' ? (
+                 (supportView === 'open' ? supportTickets : allSupportTickets.filter(t => t.status === 'closed'))
+                  .filter(t => t.userName?.toLowerCase().includes(supportSearch.toLowerCase()) || t.message?.toLowerCase().includes(supportSearch.toLowerCase()) || t.subject?.toLowerCase().includes(supportSearch.toLowerCase()))
+                  .length === 0 ? (
+                    <div className="text-center py-24 bg-white rounded-[4rem] border-2 border-dashed border-slate-100">
+                       <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-200">
+                          <HelpCircle size={48} />
+                       </div>
+                       <h3 className="text-xl font-black text-slate-900 uppercase tracking-widest mb-2">ምንም ጥያቄ የለም</h3>
+                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest max-w-xs mx-auto">አዳዲስ የእርዳታ ጥያቄዎች ሲቀርቡ እዚህ ላይ ይዘረዘራሉ።</p>
+                    </div>
+                  ) : (
+                    (supportView === 'open' ? supportTickets : allSupportTickets.filter(t => t.status === 'closed'))
+                      .filter(t => t.userName?.toLowerCase().includes(supportSearch.toLowerCase()) || t.message?.toLowerCase().includes(supportSearch.toLowerCase()) || t.subject?.toLowerCase().includes(supportSearch.toLowerCase()))
+                      .map(ticket => (
+                        <motion.div 
+                          layout
+                          key={ticket.id}
+                          className={`group bg-white rounded-[3rem] p-8 border transition-all hover:shadow-xl hover:shadow-slate-200/50 ${ticket.status === 'open' ? 'border-amber-100' : 'border-slate-100 opacity-70'}`}
+                        >
+                           <div className="flex flex-col md:flex-row items-start justify-between gap-6">
+                              <div className="flex items-center gap-6">
+                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border-2 ${ticket.status === 'open' ? 'bg-amber-50 text-amber-600 border-amber-100 shadow-lg shadow-amber-500/10' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                                    {ticket.type === 'billing' ? <DollarSign size={20} /> : ticket.type === 'technical' ? <Activity size={20} /> : <AlertOctagon size={20} />}
+                                 </div>
+                                 <div>
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                       <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight">{ticket.subject || 'የእርዳታ ጥያቄ'}</h4>
+                                       <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${ticket.priority === 'high' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
+                                         {ticket.priority === 'high' ? 'ከፍተኛ' : 'መደበኛ'} ቅድሚያ
+                                       </span>
+                                       <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest border-l border-slate-100 pl-2">
+                                          መለያ: #{ticket.id.slice(0, 8).toUpperCase()}
+                                       </span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                       <div className="flex items-center gap-1.5">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                          <span className="text-xs font-black text-slate-700 uppercase tracking-tight">{ticket.userName || 'ያልታወቀ አባል'}</span>
+                                       </div>
+                                       <div className="flex items-center gap-1.5 text-slate-400">
+                                          <Clock size={10} />
+                                          <span className="text-[9px] font-bold uppercase tracking-widest">{getTimeSince(ticket.createdAt)}</span>
+                                       </div>
+                                    </div>
+                                 </div>
+                              </div>
+
+                              <div className="flex gap-3">
+                                 {ticket.status === 'open' ? (
+                                    <button 
+                                      onClick={() => updateTicketStatus(ticket.id, 'closed')}
+                                      disabled={isUpdatingTicket}
+                                      className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-600 transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                                    >
+                                      ተፈትቷል (Resolve)
+                                    </button>
+                                 ) : (
+                                    <button 
+                                      onClick={() => updateTicketStatus(ticket.id, 'open')}
+                                      disabled={isUpdatingTicket}
+                                      className="px-8 py-4 bg-white text-slate-400 border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-amber-50 hover:text-amber-600 transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                      እንደገና ክፈት (Re-open)
+                                    </button>
+                                 )}
+                                 <button 
+                                   onClick={() => deleteTicket(ticket.id)}
+                                   className="w-14 h-14 bg-slate-50 text-slate-300 rounded-2xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100 active:scale-95"
+                                 >
+                                   <Trash2 size={20} />
+                                 </button>
+                              </div>
+                           </div>
+
+                           <div className="mt-8 bg-slate-50/50 rounded-[2rem] p-8 border border-slate-100">
+                              <p className="text-slate-600 font-medium leading-relaxed italic">
+                                 "{ticket.message}"
+                              </p>
+                              
+                              {ticket.adminNote && (
+                                <div className="mt-6 pt-6 border-t border-slate-100">
+                                   <div className="flex items-center gap-2 mb-3">
+                                      <ShieldCheck size={14} className="text-emerald-500" />
+                                      <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Admin Resolution Note</span>
+                                   </div>
+                                   <p className="text-xs font-bold text-slate-500">{ticket.adminNote}</p>
+                                </div>
+                              )}
+
+                              <div className="mt-8 flex items-center justify-between">
+                                 <div className="flex items-center gap-4">
+                                    <button 
+                                      onClick={() => {
+                                        setAdminChatTarget({type: 'private', id: ticket.userId, name: ticket.userName});
+                                        setActiveTab('chat');
+                                      }}
+                                      className="px-6 py-3 bg-white text-slate-900 border border-slate-200 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all shadow-sm flex items-center gap-2"
+                                    >
+                                      <MessageCircle size={14} /> አባልን አናግር (Reply)
+                                    </button>
+                                    {ticket.imageUrl && (
+                                       <button className="px-6 py-3 bg-white text-blue-600 border border-blue-100 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-50 transition-all shadow-sm flex items-center gap-2">
+                                          <Eye size={14} /> ደጋፊ ፎቶ (View Attachment)
+                                       </button>
+                                    )}
+                                 </div>
+                                 <div className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">
+                                    Last Activity: {ticket.updatedAt?.toDate ? ticket.updatedAt.toDate().toLocaleString() : 'Just now'}
+                                  </div>
+                              </div>
+                           </div>
+                        </motion.div>
+                      ))
+                  )
+              ) : (
+                (formsView === 'pending' ? adminForms : allAdminForms.filter(f => f.status === 'approved' || f.status === 'rejected'))
+                  .filter(f => 
+                     (f.userId?.toLowerCase().includes(supportSearch.toLowerCase())) || 
+                     (f.message?.toLowerCase().includes(supportSearch.toLowerCase())) || 
+                     (f.title?.toLowerCase().includes(supportSearch.toLowerCase()))
+                  )
+                  .length === 0 ? (
+                    <div className="text-center py-24 bg-white rounded-[4rem] border-2 border-dashed border-slate-100">
+                       <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-200">
+                          <CheckCircle size={48} />
+                       </div>
+                       <h3 className="text-xl font-black text-slate-900 uppercase tracking-widest mb-2">ምንም ጥያቄ የለም</h3>
+                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest max-w-xs mx-auto">አዳዲስ የመረጃ ማስተካከያ ጥያቄዎች ሲቀርቡ እዚህ ላይ ይዘረዘራሉ።</p>
+                    </div>
+                  ) : (
+                    (formsView === 'pending' ? adminForms : allAdminForms.filter(f => f.status === 'approved' || f.status === 'rejected'))
+                      .filter(f => 
+                        (f.userId?.toLowerCase().includes(supportSearch.toLowerCase())) || 
+                        (f.message?.toLowerCase().includes(supportSearch.toLowerCase())) || 
+                        (f.title?.toLowerCase().includes(supportSearch.toLowerCase()))
+                      )
+                      .map(form => (
+                        <motion.div 
+                          layout
+                          key={form.id}
+                          className={`group bg-white rounded-[3rem] p-8 border transition-all hover:shadow-xl hover:shadow-slate-200/50 ${form.status === 'pending' ? 'border-blue-100' : 'border-slate-100 opacity-70'}`}
+                        >
+                           <div className="flex flex-col md:flex-row items-start justify-between gap-6">
+                              <div className="flex items-center gap-6">
+                                 <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center shrink-0 border-2 ${form.status === 'pending' ? 'bg-blue-50 text-blue-600 border-blue-100 shadow-lg shadow-blue-500/10' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                                    <FileText size={24} />
+                                 </div>
+                                 <div>
+                                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                       <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">{form.title || 'Profile Update'}</h4>
+                                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${form.status === 'pending' ? 'bg-amber-100 text-amber-600' : form.status === 'approved' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                         {form.status || 'pending'}
+                                       </span>
+                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-l border-slate-100 pl-3">
+                                          Ref: #{form.id.slice(0, 8).toUpperCase()}
+                                       </span>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                       <div className="flex items-center gap-2">
+                                          <div className="w-2 h-2 rounded-full bg-blue-500" />
+                                          <span className="text-xs font-black text-slate-700 uppercase tracking-tight">{allUsers.find(u => u.id === form.userId)?.fullName || form.userId}</span>
+                                       </div>
+                                       <div className="flex items-center gap-2 text-slate-400">
+                                          <Clock size={12} />
+                                          <span className="text-[10px] font-bold uppercase tracking-widest">{getTimeSince(form.createdAt)}</span>
+                                       </div>
+                                    </div>
+                                 </div>
+                              </div>
+
+                              <div className="flex gap-3">
+                                 {form.status === 'pending' ? (
+                                    <>
+                                      <button 
+                                        onClick={() => updateFormStatus(form, 'approved')}
+                                        disabled={isUpdatingForm}
+                                        className="px-6 py-3 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                                      >
+                                        ያጽድቁ (Approve)
+                                      </button>
+                                      <button 
+                                        onClick={() => updateFormStatus(form, 'rejected')}
+                                        disabled={isUpdatingForm}
+                                        className="px-6 py-3 bg-rose-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                                      >
+                                        ውድቅ ያድርጉ (Reject)
+                                      </button>
+                                    </>
+                                 ) : (
+                                    <button 
+                                      onClick={() => updateFormStatus(form, 'pending')}
+                                      disabled={isUpdatingForm}
+                                      className="px-8 py-4 bg-white text-slate-400 border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-blue-50 hover:text-blue-600 transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                      እንደገና ክፈት (Re-open)
+                                    </button>
+                                 )}
+                              </div>
+                           </div>
+
+                           <div className="mt-8 bg-slate-50/50 rounded-[2rem] p-8 border border-slate-100">
+                              <p className="text-slate-600 font-medium leading-relaxed italic mb-6">
+                                 "{form.message}"
+                              </p>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 rounded-[1.5rem] border border-slate-100">
+                                <div>
+                                  <h5 className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-3 border-b border-rose-100 pb-2">Previous Data</h5>
+                                  <ul className="space-y-2 text-xs font-medium text-slate-500">
+                                    {(form.previousData) && Object.entries(form.previousData).map(([key, val]) => (
+                                      !key.toLowerCase().includes('password') && !key.toLowerCase().includes('idfront') && !key.toLowerCase().includes('idback') && (
+                                        <li key={key}><span className="font-bold text-slate-400">{key}:</span> {String(val) || '---'}</li>
+                                      )
+                                    ))}
+                                    {form.previousData?.idFront && <li><span className="font-bold text-slate-400">ID Front:</span> Attached Document</li>}
+                                    {form.previousData?.idBack && <li><span className="font-bold text-slate-400">ID Back:</span> Attached Document</li>}
+                                  </ul>
+                                </div>
+                                <div>
+                                  <h5 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-3 border-b border-emerald-100 pb-2">New Data</h5>
+                                  <ul className="space-y-2 text-xs font-bold text-slate-700">
+                                    {(form.newData) && Object.entries(form.newData).map(([key, val]) => (
+                                      !key.toLowerCase().includes('password') && !key.toLowerCase().includes('idfront') && !key.toLowerCase().includes('idback') && (
+                                        <li key={key}><span className="font-bold text-slate-400">{key}:</span> {String(val) || '---'}</li>
+                                      )
+                                    ))}
+                                    {form.newData?.password && <li className="text-emerald-500"><span className="font-bold text-slate-400">Password:</span> [Hidden, user set a new password]</li>}
+                                    {form.newData?.idFront && <li className="text-blue-500"><a href={form.newData.idFront} target="_blank" rel="noreferrer" className="underline"><Eye size={12} className="inline mr-1"/>New ID Front</a></li>}
+                                    {form.newData?.idBack && <li className="text-blue-500"><a href={form.newData.idBack} target="_blank" rel="noreferrer" className="underline"><Eye size={12} className="inline mr-1"/>New ID Back</a></li>}
+                                  </ul>
+                                </div>
+                              </div>
+
+                              {form.adminNote && (
+                                <div className="mt-6 pt-6 border-t border-slate-100">
+                                   <div className="flex items-center gap-2 mb-3">
+                                      <ShieldCheck size={14} className="text-emerald-500" />
+                                      <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Admin Resolution Note</span>
+                                   </div>
+                                   <p className="text-xs font-bold text-slate-500">{form.adminNote}</p>
+                                </div>
+                              )}
+                           </div>
+                        </motion.div>
+                      ))
+                  )
+              )}
+            </div>
+          </motion.div>
+        ) : activeTab === 'draws' ? (
+          <motion.div 
+            key="draws"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-8 relative"
+          >
+            {/* Header Content with Visual Flare */}
+            <div className="bg-gradient-to-r from-slate-900 via-rose-900 to-slate-900 rounded-[3rem] p-8 md:p-10 text-white relative overflow-hidden shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-rose-500/20 blur-3xl rounded-full mix-blend-screen transform translate-x-1/2 -translate-y-1/2"></div>
+               <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-500/20 blur-3xl rounded-full mix-blend-screen transform -translate-x-1/2 translate-y-1/2"></div>
+               
+               <div className="relative z-10 space-y-4 max-w-xl text-center md:text-left">
+                 <div className="flex items-center justify-center md:justify-start gap-4">
+                   <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/10 shadow-lg">
+                     <Trophy size={32} className="text-white" />
+                   </div>
+                   <div>
+                     <h2 className="text-3xl lg:text-4xl font-black uppercase tracking-tighter text-white drop-shadow-md">የእጣ ማዕከል</h2>
+                     <p className="text-[11px] font-mono tracking-[0.3em] text-rose-300 mt-1 uppercase">Draw Management</p>
+                   </div>
+                 </div>
+                 <p className="text-rose-200 text-sm md:text-base font-medium leading-relaxed">
+                   የእጣ አወጣጥ ሂደትን ያስተዳድሩ፣ አሸናፊዎችን ይምረጡ፣ እና ለእያንዳንዱ የእቁብ ቡድን የሚለቀቅበትን የእጣ ውጤት ይመዝግቡ።
+                 </p>
+               </div>
+
+               <button 
+                  onClick={() => setShowAddUpcomingModal(true)}
+                  className="px-10 py-5 bg-amber-500 text-white rounded-3xl font-black text-[11px] uppercase tracking-widest hover:bg-amber-600 hover:scale-105 transition-all shadow-xl shadow-amber-500/20 relative z-10 active:scale-95 flex items-center gap-3"
+                >
+                  <Plus size={20} /> አዲስ የእጣ ቀን ጨምር
+               </button>
+            </div>
+
+            {/* Upcoming Draws Management */}
+            <div className="bg-white rounded-[3rem] p-4 border border-slate-100 shadow-sm overflow-hidden">
+               <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                       <Calendar size={20} />
+                    </div>
+                    <span className="text-sm font-black text-slate-900 uppercase tracking-tight">ቀጣይ የእጣ ፕሮግራሞች (Upcoming Draws)</span>
+                  </div>
+               </div>
+               <div className="divide-y divide-slate-50">
+                  {upcomingDraws.length === 0 ? (
+                    <div className="p-12 text-center text-slate-400 font-bold italic">ምንም የተመዘገበ ቀጣይ እጣ የለም።</div>
+                  ) : (
+                    upcomingDraws.map((draw) => (
+                      <div key={draw.id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-colors group">
+                        <div className="flex items-center gap-10">
+                          <div className="flex flex-col items-center justify-center w-20 h-20 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
+                             <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">{new Date(draw.date).toLocaleString('am-ET', { month: 'short'})}</span>
+                             <span className="text-2xl font-black text-white">{new Date(draw.date).getDate()}</span>
+                          </div>
+                          <div>
+                            <p className="text-lg font-black text-slate-900 uppercase tracking-tight mb-1">{draw.title}</p>
+                            <div className="flex items-center gap-4">
+                               <div className="flex items-center gap-2">
+                                  <Clock size={12} className="text-slate-400" />
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(draw.date).toLocaleDateString()}</span>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                  <DollarSign size={12} className="text-emerald-500" />
+                                  <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{draw.amount?.toLocaleString()} ETB</span>
+                               </div>
+                            </div>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={async () => {
+                            if (window.confirm(language === 'am' ? 'የእጣ ፕሮግራሙን ለአባላት ለማሳወቅ ይፈልጋሉ?' : 'Notify members about this draw?')) {
+                              try {
+                                const payload: any = {
+                                   senderId: user?.uid,
+                                   senderName: t('admin.admin_label') + ' (' + (user?.displayName || 'Admin') + ')',
+                                   senderRole: 'admin',
+                                   text: `📢 አዲስ የእጣ ፕሮግራም/New Draw Scheduled: ${draw.title} - ${new Date(draw.date).toLocaleString()}. ${language === 'am' ? 'መጠን' : 'Amount'}: ${draw.amount} ETB. ${language === 'am' ? 'እባክዎ ይዘጋጁ!' : 'Please be ready!'}`,
+                                   createdAt: serverTimestamp(),
+                                   targetType: 'all'
+                                };
+                                await addDoc(collection(db, 'messages'), payload);
+                                alert(language === 'am' ? 'ማሳወቂያው ለሁሉም አባላት ተልኳል!' : 'Notification sent to all members!');
+                              } catch (error) {
+                                 handleFirestoreError(error, OperationType.CREATE, 'messages');
+                              }
+                            }
+                          }}
+                          className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-300 hover:bg-emerald-50 hover:text-emerald-500 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 mr-2"
+                        >
+                          <BellRing size={20} />
+                        </button>
+                        <button 
+                          onClick={() => deleteUpcomingDraw(draw.id)}
+                          className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 pb-20">
+              {groupsWithMembers.filter(g => g.name.toLowerCase().includes(searchTerm.toLowerCase())).map((group, idx) => {
+                const membersCount = group.members?.length || 0;
+                const capacity = group.memberCount || 10;
+                const fillPercentage = membersCount > 0 ? Math.min(100, Math.round((membersCount / capacity) * 100)) : 0;
+                const isReadyForDraw = fillPercentage === 100;
+                const lastDrawDateDisplay = group.lastDrawDate ? new Date(group.lastDrawDate).toLocaleDateString('am-ET', { year: 'numeric', month: 'long', day: 'numeric'}) : 'እጣ አልወጣም';
+                const nextDrawDateDisplay = group.nextDrawDate ? new Date(group.nextDrawDate).toLocaleDateString('am-ET', { year: 'numeric', month: 'long', day: 'numeric'}) : 'በመጠባበቅ ላይ';
+
+                return (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(idx * 0.05, 0.5) }}
+                    key={group.id} 
+                    className="bg-white p-6 rounded-[2.5rem] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 hover:shadow-2xl hover:shadow-rose-500/10 hover:-translate-y-1 hover:border-rose-200 transition-all flex flex-col relative overflow-hidden group"
+                  >
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-rose-400 to-orange-400"></div>
+                    <div className="absolute top-0 right-0 w-40 h-40 bg-rose-500/5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-rose-500/10 transition-colors"></div>
+                    
+                    <div className="flex justify-between items-start mb-5 relative z-10 pt-2">
+                       <div>
+                         <h2 className="text-xl font-black text-slate-900 leading-none uppercase tracking-tight group-hover:text-rose-600 transition-colors mb-2">{group.name}</h2>
+                         <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-rose-50 text-rose-600 border-rose-100 flex items-center gap-1">
+                               <Gift size={10} /> {group.type}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-slate-50 text-slate-500 border-slate-200">
+                               {parseInt(group.amount || "0").toLocaleString()} ETB / እጣ
+                            </span>
+                         </div>
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-6 relative z-10 px-1">
+                       <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                          <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                             <Calendar size={12} />
+                             <span className="text-[8px] font-black uppercase tracking-widest">የመጨረሻ እጣ ቀን</span>
+                          </div>
+                          <p className="text-[11px] font-black text-slate-900 truncate">{lastDrawDateDisplay}</p>
+                       </div>
+                        <div className="bg-amber-50 p-3 rounded-2xl border border-amber-100 flex justify-between items-center group/schedule">
+                           <div>
+                              <div className="flex items-center gap-1.5 text-amber-500 mb-1">
+                                 <Clock size={12} />
+                                 <span className="text-[8px] font-black uppercase tracking-widest">ቀጣይ እጣ</span>
+                              </div>
+                              <p className="text-[11px] font-black text-slate-900 truncate">{nextDrawDateDisplay}</p>
+                           </div>
+                           <button 
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               openScheduleModal(group);
+                             }}
+                             className="w-7 h-7 bg-white text-amber-500 rounded-lg flex items-center justify-center border border-amber-200 hover:bg-amber-50 transition-colors"
+                           >
+                              <Calendar size={12} />
+                           </button>
+                        </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        ) : activeTab === 'payouts' ? (
+          <motion.div 
+            key="payouts"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-8"
+          >
+            {/* Payout Command Center Header */}
+            <div className="bg-gradient-to-br from-emerald-600 via-teal-600 to-blue-700 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-white/5">
+               <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 blur-[100px] rounded-full -mr-40 -mt-40" />
+               <div className="absolute bottom-0 left-0 w-80 h-80 bg-white/5 blur-[100px] rounded-full -ml-40 -mb-40" />
+               
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 text-amber-500 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-amber-500/20">
+                        <Trophy size={14} />
+                        Payout Management
+                     </div>
+                     <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                        የአሸናፊዎች ክፍያ <span className="text-amber-500">.</span>
+                     </h2>
+                     <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">
+                        የእጣ አሸናፊዎችን ክፍያ እዚህ ያስተዳድሩ። ክፍያዎችን ያጽድቁ፣ ውድቅ ያድርጉ፣ ወይም የክፍያ ታሪክን ይከታተሉ።
+                     </p>
+                  </div>
+
+                  <div className="flex flex-wrap justify-center gap-4">
+                     <div className="px-8 py-6 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 text-center min-w-[160px]">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">አጠቃላይ ታሪክ (Total)</p>
+                        <p className="text-2xl font-black text-white">{allPayouts.length}</p>
+                     </div>
+                     <div className="px-8 py-6 bg-amber-500 rounded-[2.5rem] text-center min-w-[160px] shadow-xl shadow-amber-500/20 group hover:scale-105 transition-all">
+                        <p className="text-[10px] font-black text-amber-100 uppercase tracking-widest mb-2">በሂደት ላይ (Pending)</p>
+                        <p className="text-2xl font-black text-white">{payouts.length}</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* View Switcher & Actions */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-sm w-full md:w-auto">
+                <button 
+                  onClick={() => setPayoutsView('pending')}
+                  className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-500 ${payoutsView === 'pending' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Clock size={14} />
+                    {language === 'am' ? 'የሚጠባበቁ' : 'Pending'}
+                    {payouts.length > 0 && (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] text-white">
+                        {payouts.length}
+                      </span>
+                    )}
+                  </div>
+                </button>
+                <button 
+                  onClick={() => setPayoutsView('history')}
+                  className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-500 ${payoutsView === 'history' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <CheckCircle size={14} />
+                    {language === 'am' ? 'የክፍያ ታሪክ' : 'History'}
+                  </div>
+                </button>
+              </div>
+
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="text" 
+                  placeholder={language === 'am' ? 'አሸናፊዎችን ፈልግ...' : 'Search winners...'}
+                  value={payoutSearch}
+                  className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none ring-offset-2 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-sm"
+                  onChange={(e) => setPayoutSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* List Content */}
+            <div className="grid grid-cols-1 gap-4">
+              {((payoutsView === 'pending' ? payouts : allPayouts).filter(p => 
+                p.userName?.toLowerCase().includes(payoutSearch.toLowerCase()) || 
+                p.groupName?.toLowerCase().includes(payoutSearch.toLowerCase())
+              )).length === 0 ? (
+                <div className="text-center py-24 bg-white rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                    <Trophy className="text-slate-200" size={40} />
+                  </div>
+                  <h4 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">
+                    {payoutSearch ? (language === 'am' ? 'ምንም የተገኘ ውጤት የለም' : 'No matches found') : (payoutsView === 'pending' ? 'ምንም የሚጠባበቅ ክፍያ የለም' : 'ምንም የክፍያ ታሪክ የለም')}
+                  </h4>
+                  <p className="text-sm text-slate-400 font-medium max-w-xs mx-auto">
+                    {payoutSearch 
+                      ? (language === 'am' ? 'ያስተዋሉት ስም ወይም ቡድን በትክክል መፃፉን ያረጋግጡ።' : 'Try searching for something else.')
+                      : (payoutsView === 'pending' 
+                        ? 'እጣ የደረሳቸው አባላት ሲኖሩ ለክፍያ ዝግጁ ሆነው እዚህ ላይ ይመዘገባሉ።' 
+                        : 'ገና ምንም አይነት የተረጋገጠ ክፍያ አልተመዘገበም።')}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {(payoutsView === 'pending' ? payouts : allPayouts)
+                    .filter(p => 
+                      p.userName?.toLowerCase().includes(payoutSearch.toLowerCase()) || 
+                      p.groupName?.toLowerCase().includes(payoutSearch.toLowerCase())
+                    )
+                    .map(payout => (
+                      <motion.div 
+                        layout
+                        key={payout.id} 
+                        className={`bg-white p-8 rounded-[3rem] shadow-sm border flex flex-col gap-6 group transition-all duration-500 relative overflow-hidden ${
+                          payout.status === 'cancelled' 
+                            ? 'border-rose-100 hover:border-rose-200 opacity-70 hover:opacity-100' 
+                            : 'border-slate-100 hover:border-amber-200 hover:shadow-2xl hover:shadow-amber-500/5'
+                        }`}
+                      >
+                       {/* Abstract Background pattern */}
+                       <div className={`absolute top-0 right-0 w-48 h-48 rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none transition-all duration-700 ${
+                         payout.status === 'active' ? 'bg-emerald-400/20 group-hover:bg-emerald-400/30' :
+                         payout.status === 'cancelled' ? 'bg-rose-400/10 group-hover:bg-rose-400/20' :
+                         'bg-amber-400/20 group-hover:bg-amber-400/40 group-hover:scale-150'
+                       }`} />
+
+                       <div className="flex items-center justify-between relative z-10">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-16 h-16 rounded-[2rem] flex items-center justify-center border border-current/10 shrink-0 transform group-hover:scale-110 group-hover:-rotate-3 transition-all duration-500 shadow-inner ${
+                                payout.status === 'active' ? 'bg-emerald-50 text-emerald-600' :
+                                payout.status === 'cancelled' ? 'bg-rose-50 text-rose-500' : 
+                                'bg-amber-50 text-amber-500'
+                            }`}>
+                               {payout.status === 'active' ? <CheckCircle size={28} /> : 
+                                payout.status === 'cancelled' ? <XCircle size={28} /> : 
+                                <Trophy size={28} />}
+                            </div>
+                            <div>
+                               <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-none mb-2">{payout.userName}</h3>
+                               <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[8px] font-black uppercase tracking-widest">{payout.groupName}</span>
+                                  <span className="text-[9px] font-bold text-slate-400">{getTimeSince(payout.createdAt)}</span>
+                               </div>
+                            </div>
+                          </div>
+                       </div>
+
+                       <div className="space-y-4 relative z-10">
+                          <div className={`p-6 rounded-[2rem] border ${
+                            payout.status === 'cancelled' ? 'bg-rose-50/50 border-rose-100' : 'bg-slate-50 border-slate-100'
+                          }`}>
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">የክፍያ መጠን (Payout Amount)</p>
+                             <p className={`text-3xl font-black tracking-tighter ${payout.status === 'cancelled' ? 'text-rose-900 line-through decoration-rose-300' : 'text-slate-900'}`}>
+                               {payout.amount?.toLocaleString()} <span className={`text-xs font-bold uppercase tracking-widest ml-1 ${payout.status === 'cancelled' ? 'text-rose-400' : 'text-amber-500'}`}>ETB</span>
+                             </p>
+                          </div>
+
+                          <div className="flex items-center justify-between px-2">
+                             <div>
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">እጣ የወጣበት ቀን</p>
+                                <p className="text-[10px] font-black text-slate-700">{payout.drawDate ? new Date(payout.drawDate).toLocaleDateString() : 'N/A'}</p>
+                             </div>
+                             <div className="text-right">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">ሁኔታ</p>
+                                <span className={`inline-flex px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                  payout.status === 'active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 
+                                  payout.status === 'cancelled' ? 'bg-rose-50 text-rose-500 border border-rose-100' :
+                                  'bg-amber-50 text-amber-600 border border-amber-100 animate-pulse'
+                                }`}>
+                                   {payout.status === 'active' ? (language === 'am' ? 'ተከፍሏል' : 'Paid') : 
+                                    payout.status === 'cancelled' ? (language === 'am' ? 'ውድቅ ተደርጓል' : 'Rejected') :
+                                    (language === 'am' ? 'በሂደት ላይ' : 'Pending')}
+                                </span>
+                             </div>
+                          </div>
+                       </div>
+
+                       <div className="flex items-center gap-3 pt-2 relative z-10 w-full">
+                         {payout.status === 'active' ? (
+                           <>
+                           <button 
+                             onClick={() => {
+                                alert('Generating Payout Voucher...');
+                             }}
+                             className="flex-1 px-6 py-4 bg-emerald-50/50 text-emerald-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 hover:bg-emerald-100 border border-emerald-100"
+                           >
+                             <FileText size={16} /> ደረሰኝ (Voucher)
+                           </button>
+                           <button onClick={() => deletePayout(payout.id)} className="w-12 h-12 flex items-center justify-center bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shrink-0">
+                             <Trash2 size={16} />
+                           </button>
+                           </>
+                         ) : payout.status === 'cancelled' ? (
+                           <>
+                           <div className="flex-1 px-6 py-4 bg-slate-50 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-slate-100 italic">
+                             <XCircle size={16} /> ክፍያው ተሰርዟል (Cancelled)
+                           </div>
+                           <button onClick={() => deletePayout(payout.id)} className="w-12 h-12 flex items-center justify-center bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shrink-0">
+                             <Trash2 size={16} />
+                           </button>
+                           </>
+                         ) : (
+                           <>
+                             <button 
+                               onClick={() => approvePayout(payout.id, payout.userId)}
+                               className="flex-[2] px-6 py-5 bg-amber-500 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-amber-600 transition-all shadow-xl shadow-amber-500/20 active:scale-95 group/btn"
+                             >
+                                <CheckCircle size={18} className="group-hover/btn:scale-110 transition-transform" /> {language === 'am' ? 'ክፍያ ፈጽም' : 'Approve'}
+                             </button>
+                             <button 
+                               onClick={() => rejectPayout(payout.id, payout.userId)}
+                               className="flex-1 px-6 py-5 bg-rose-50 text-rose-500 rounded-[1.8rem] hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center group/rej"
+                             >
+                                <XCircle size={20} className="group-hover/rej:rotate-90 transition-transform" />
+                             </button>
+                             <button onClick={() => deletePayout(payout.id)} className="w-14 h-14 flex items-center justify-center bg-rose-50 text-rose-500 rounded-[1.8rem] hover:bg-rose-500 hover:text-white transition-all shrink-0">
+                               <Trash2 size={18} />
+                             </button>
+                           </>
+                         )}
+                       </div>
+                      </motion.div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        ) : activeTab === 'penalties' ? (
+          <motion.div 
+            key="penalties"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="space-y-8"
+          >
+            {/* Penalty Command Center Header */}
+            <div className="bg-slate-900 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-white/5">
+               <div className="absolute top-0 right-0 w-80 h-80 bg-rose-500/10 blur-[100px] rounded-full -mr-40 -mt-40" />
+               <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-500/10 blur-[100px] rounded-full -ml-40 -mb-40" />
+               
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-rose-500/10 text-rose-400 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-rose-500/20">
+                        <AlertOctagon size={14} />
+                        Financial Compliance & Penalties
+                     </div>
+                     <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                        ቅጣቶች አስተዳደር <span className="text-rose-500">.</span>
+                     </h2>
+                     <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">
+                        ዘግይተው ክፍያ የፈጸሙ ወይም ክፍያ ያቋረጡ አባላትን እዚህ ይከታተሉ። ቅጣቶችን በመጣል፣ በማስከፈል ወይም በይቅርታ በመሰረዝ የሲስተሙን ስነስርዓት ያስጠብቁ።
+                     </p>
+                  </div>
+
+                  <div className="flex flex-wrap justify-center gap-4">
+                     <div className="px-8 py-6 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 text-center min-w-[160px]">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">ተከፍሏል (Settled)</p>
+                        <p className="text-2xl font-black text-white">{allPenalties.length}</p>
+                     </div>
+                     <div className="px-8 py-6 bg-rose-500 rounded-[2.5rem] text-center min-w-[160px] shadow-xl shadow-rose-500/20 group hover:scale-105 transition-all">
+                        <p className="text-[10px] font-black text-rose-100 uppercase tracking-widest mb-2">ያልተከፈሉ (Unpaid)</p>
+                        <p className="text-2xl font-black text-white">{penalties.length}</p>
+                     </div>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowIssuePenaltyModal(true)}
+                    className="w-full md:w-auto px-10 py-6 bg-amber-500 text-white rounded-[2.5rem] text-[10px] font-black uppercase tracking-[0.2em] hover:bg-amber-600 transition-all shadow-xl shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-3"
+                  >
+                    <Plus size={20} />
+                    {language === 'am' ? 'አዲስ ቅጣት ጣል' : 'Issue New Penalty'}
+                  </button>
+               </div>
+            </div>
+
+            {/* List Header & Search */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-sm w-full md:w-auto">
+                <button 
+                  onClick={() => setPenaltiesView('pending')}
+                  className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-500 ${penaltiesView === 'pending' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Clock size={14} />
+                    {language === 'am' ? 'ያልተከፈሉ' : 'Unpaid'}
+                    {penalties.length > 0 && (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[8px] text-white">
+                        {penalties.length}
+                      </span>
+                    )}
+                  </div>
+                </button>
+                <button 
+                  onClick={() => setPenaltiesView('history')}
+                  className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-500 ${penaltiesView === 'history' ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <History size={14} />
+                    {language === 'am' ? 'ታሪክ' : 'History'}
+                  </div>
+                </button>
+              </div>
+
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="text" 
+                  placeholder={language === 'am' ? 'አባል ፈልግ...' : 'Search member...'}
+                  value={penaltySearch}
+                  className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none ring-offset-2 focus:ring-2 focus:ring-rose-500/20 transition-all shadow-sm"
+                  onChange={(e) => setPenaltySearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Penalties Grid */}
+            <div className="grid grid-cols-1 gap-4">
+              {((penaltiesView === 'pending' ? penalties : allPenalties).filter(p => 
+                p.userName?.toLowerCase().includes(penaltySearch.toLowerCase()) || 
+                p.reason?.toLowerCase().includes(penaltySearch.toLowerCase())
+              )).length === 0 ? (
+                <div className="text-center py-24 bg-white rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                    <ShieldAlert className="text-slate-200" size={40} />
+                  </div>
+                  <h4 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">
+                    {penaltySearch ? (language === 'am' ? 'ምንም የተገኘ ውጤት የለም' : 'No matches found') : (penaltiesView === 'pending' ? 'ምንም ያልተከፈለ ቅጣት የለም' : 'ምንም የታሪክ መዝገብ የለም')}
+                  </h4>
+                  <p className="text-sm text-slate-400 font-medium max-w-xs mx-auto">
+                    {penaltySearch 
+                      ? (language === 'am' ? 'ያስተዋሉት ስም በትክክል መፃፉን ያረጋግጡ።' : 'Try searching for something else.')
+                      : (penaltiesView === 'pending' 
+                        ? 'ሁሉም አባላት በስነስርዓት እየከፈሉ ነው።' 
+                        : 'ገና ምንም አይነት የተረጋገጠ ቅጣት አልተመዘገበም።')}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {(penaltiesView === 'pending' ? penalties : allPenalties)
+                      .filter(p => 
+                        p.userName?.toLowerCase().includes(penaltySearch.toLowerCase()) || 
+                        p.reason?.toLowerCase().includes(penaltySearch.toLowerCase())
+                      )
+                      .map(penalty => (
+                        <motion.div 
+                          layout
+                          key={penalty.id} 
+                          className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100 flex flex-col gap-6 group hover:border-rose-200 hover:shadow-2xl hover:shadow-rose-500/5 transition-all duration-500 relative overflow-hidden"
+                        >
+                         {/* Status Icon */}
+                         <div className={`absolute -top-1 -right-1 w-24 h-24 pointer-events-none opacity-0 group-hover:opacity-10 transition-opacity ${penalty.status === 'settled' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                           <AlertOctagon size={96} className="rotate-12" />
+                         </div>
+
+                         <div className="flex items-center gap-4 relative z-10">
+                            <div className={`w-16 h-16 ${penalty.status === 'settled' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} rounded-[2rem] flex items-center justify-center border border-current/10 shrink-0 transform group-hover:scale-110 transition-transform duration-500`}>
+                               {penalty.status === 'settled' ? <CheckCircle size={28} /> : <AlertOctagon size={28} />}
+                            </div>
+                            <div>
+                               <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-none mb-2">{penalty.userName}</h3>
+                               <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[8px] font-black uppercase tracking-widest">{penalty.type || 'Late Payment'}</span>
+                                  <span className="text-[9px] font-bold text-slate-400">{getTimeSince(penalty.createdAt)}</span>
+                               </div>
+                            </div>
+                         </div>
+
+                         <div className="space-y-4 relative z-10">
+                            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">የቅጣት መጠን (Penalty Fee)</p>
+                               <p className="text-3xl font-black text-rose-600 tracking-tighter">
+                                 {penalty.amount?.toLocaleString()} <span className="text-xs font-bold uppercase tracking-widest ml-1 text-slate-400">ETB</span>
+                               </p>
+                            </div>
+
+                            <div className="px-2">
+                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">ምክንያት (Reason)</p>
+                               <p className="text-[10px] font-bold text-slate-600 leading-relaxed italic">"{penalty.reason || 'Late payment for the current cycle.'}"</p>
+                            </div>
+                         </div>
+
+                         <div className="flex items-center gap-3 pt-2 relative z-10">
+                           {penalty.status === 'settled' ? (
+                             <div className="w-full flex flex-col gap-2">
+                                <div className="flex justify-between items-center px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100">
+                                   <span className="text-[10px] font-black uppercase tracking-widest">ተከፍሏል</span>
+                                   <CheckCircle size={14} />
+                                </div>
+                                <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest">
+                                   Settled on {penalty.settledAt ? new Date(penalty.settledAt.toDate()).toLocaleDateString() : 'N/A'}
+                                </p>
+                             </div>
+                           ) : (
+                             <>
+                               <button 
+                                 onClick={() => settlePenalty(penalty.id)}
+                                 className="flex-[2] px-6 py-5 bg-rose-500 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-rose-600 transition-all shadow-xl shadow-rose-500/20 active:scale-95"
+                               >
+                                 <DollarSign size={18} /> {language === 'am' ? 'አስከፍል' : 'Settle'}
+                               </button>
+                               <button 
+                                 onClick={() => waivePenalty(penalty.id)}
+                                 className="flex-1 px-6 py-5 bg-slate-100 text-slate-600 rounded-[1.8rem] hover:bg-slate-200 transition-all flex items-center justify-center text-[10px] font-black uppercase tracking-widest"
+                                 title="Waive Penalty"
+                               >
+                                 በይቅርታ
+                               </button>
+                               <button 
+                                 onClick={() => sendPenaltyReminder(penalty)}
+                                 className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-[1.5rem] hover:bg-indigo-100 transition-all flex items-center justify-center shrink-0 shadow-sm"
+                                 title="Send Reminder"
+                               >
+                                 <Bell size={20} />
+                               </button>
+                             </>
+                           )}
+                         </div>
+                        </motion.div>
+                      ))}
+                </div>
+              )}
+            </div>
+
+            {/* Issue Penalty Modal */}
+            <AnimatePresence>
+               {showIssuePenaltyModal && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[110]">
+                     <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-hidden border border-slate-100"
+                     >
+                        <div className="flex justify-between items-center p-8 border-b border-slate-50 bg-slate-50/30">
+                           <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-rose-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-rose-500/20">
+                                 <AlertOctagon size={24} />
+                              </div>
+                              <div>
+                                 <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-none">አዲስ ቅጣት መጣል (Issue Penalty)</h3>
+                                 <p className="text-slate-400 text-[10px] mt-1 font-bold uppercase tracking-widest">Financial Penalty Assignment</p>
+                              </div>
+                           </div>
+                           <button 
+                              onClick={() => setShowIssuePenaltyModal(false)}
+                              className="p-3 bg-white text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all shadow-sm"
+                           >
+                              <X size={20} />
+                           </button>
+                        </div>
+
+                        <form onSubmit={handleIssuePenalty} className="p-8 space-y-6">
+                           <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">አባል ይምረጡ (Select Member)</label>
+                              <div className="relative">
+                                 <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                 <select 
+                                    className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold appearance-none outline-none focus:ring-2 focus:ring-rose-500/20 transition-all"
+                                    value={issuePenaltyForm.userId}
+                                    onChange={(e) => setIssuePenaltyForm({...issuePenaltyForm, userId: e.target.value})}
+                                 >
+                                    <option value="">-- አባል ይምረጡ --</option>
+                                    {allUsers.map(u => (
+                                       <option key={u.id} value={u.id}>{u.fullName} ({u.phone})</option>
+                                    ))}
+                                 </select>
+                              </div>
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-6">
+                              <div>
+                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">የቅጣት መጠን (Amount)</label>
+                                 <div className="relative">
+                                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                    <input 
+                                       type="number"
+                                       placeholder="1000"
+                                       className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-rose-500/20 transition-all"
+                                       value={issuePenaltyForm.amount || ''}
+                                       onChange={(e) => setIssuePenaltyForm({...issuePenaltyForm, amount: Number(e.target.value)})}
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400 uppercase">ETB</span>
+                                 </div>
+                              </div>
+                              <div>
+                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">የቅጣት አይነት (Type)</label>
+                                 <select 
+                                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold appearance-none outline-none focus:ring-2 focus:ring-rose-500/20 transition-all"
+                                    value={issuePenaltyForm.type}
+                                    onChange={(e) => setIssuePenaltyForm({...issuePenaltyForm, type: e.target.value})}
+                                 >
+                                    <option value="Late Payment">Late Payment</option>
+                                    <option value="Missed Session">Missed Session</option>
+                                    <option value="Policy Violation">Policy Violation</option>
+                                    <option value="Other">Other</option>
+                                 </select>
+                              </div>
+                           </div>
+
+                           <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">ምክንያት (Reason / Description)</label>
+                              <textarea 
+                                 placeholder="ለምሳሌ፡ የየካቲት ወር መዋጮ ስላዘገዩ የተጣለ ቅጣት..."
+                                 className="w-full p-6 bg-slate-50 border border-slate-100 rounded-[2rem] text-sm font-bold outline-none focus:ring-2 focus:ring-rose-500/20 transition-all min-h-[120px] resize-none"
+                                 value={issuePenaltyForm.reason}
+                                 onChange={(e) => setIssuePenaltyForm({...issuePenaltyForm, reason: e.target.value})}
+                              />
+                           </div>
+
+                           <button 
+                              type="submit"
+                              disabled={isIssuingPenalty}
+                              className="w-full py-6 bg-rose-500 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-[0.3em] shadow-xl shadow-rose-500/30 hover:bg-rose-600 active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
+                           >
+                              {isIssuingPenalty ? (
+                                 <RefreshCw className="animate-spin" size={20} />
+                              ) : (
+                                 <AlertOctagon size={20} />
+                              )}
+                              {language === 'am' ? 'ቅጣቱን አጽና' : 'Confirm Penalty Enforcement'}
+                           </button>
+                        </form>
+                     </motion.div>
+                  </div>
+               )}
+            </AnimatePresence>
+
+            {/* Add Upcoming Draw Modal */}
+            <AnimatePresence>
+               {showAddUpcomingModal && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[110]">
+                     <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-hidden border border-slate-100"
+                     >
+                        <div className="flex justify-between items-center p-8 border-b border-slate-50 bg-slate-50/30">
+                           <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                                 <Plus size={24} />
+                              </div>
+                              <div>
+                                 <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-none">አዲስ የእጣ ፕሮግራም (Add New Draw)</h3>
+                                 <p className="text-slate-400 text-[10px] mt-1 font-bold uppercase tracking-widest">Upcoming Draw Schedule</p>
+                              </div>
+                           </div>
+                           <button 
+                              onClick={() => setShowAddUpcomingModal(false)}
+                              className="p-3 bg-white text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all shadow-sm"
+                           >
+                              <X size={20} />
+                           </button>
+                        </div>
+
+                        <form onSubmit={handleAddUpcomingDraw} className="p-8 space-y-6">
+                           <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">የርዕስ (Title)</label>
+                              <input 
+                                 type="text"
+                                 placeholder="ሳምንታዊ እጣ - ሳምንት 24"
+                                 className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                 value={newUpcomingDraw.title}
+                                 onChange={(e) => setNewUpcomingDraw({...newUpcomingDraw, title: e.target.value})}
+                              />
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-6">
+                              <div>
+                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">ቀን (Date)</label>
+                                 <input 
+                                    type="date"
+                                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                    value={newUpcomingDraw.date}
+                                    onChange={(e) => setNewUpcomingDraw({...newUpcomingDraw, date: e.target.value})}
+                                 />
+                              </div>
+                              <div>
+                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">መጠን (Amount)</label>
+                                 <input 
+                                    type="text"
+                                    placeholder="50,000"
+                                    className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                    value={newUpcomingDraw.amount}
+                                    onChange={(e) => setNewUpcomingDraw({...newUpcomingDraw, amount: e.target.value})}
+                                 />
+                              </div>
+                           </div>
+
+                           <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">ዝርዝር መግለጫ (Details)</label>
+                              <textarea 
+                                 placeholder="ስለ እጣው ዝርዝር መግለጫ..."
+                                 className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all h-24 resize-none"
+                                 value={newUpcomingDraw.description}
+                                 onChange={(e) => setNewUpcomingDraw({...newUpcomingDraw, description: e.target.value})}
+                              />
+                           </div>
+
+                           <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl shadow-slate-900/20 hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-95">
+                              <Trophy size={18} className="text-gold-500" /> ፕሮግራሙን መዝግብ
+                           </button>
+                        </form>
+                     </motion.div>
+                  </div>
+               )}
+            </AnimatePresence>
+          </motion.div>
+        ) : activeTab === 'reports' ? (
+          <motion.div 
+            id="admin-reports-view"
+            key="reports"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-12 pb-20"
+          >
+            {/* Reports Hero Section */}
+            <div className="bg-slate-900 rounded-[4rem] p-12 md:p-20 relative overflow-hidden shadow-2xl border border-white/5">
+               <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/10 blur-[120px] rounded-full -mr-64 -mt-64" />
+               <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-emerald-500/10 blur-[120px] rounded-full -ml-64 -mb-64" />
+               
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-12">
+                  <div className="max-w-2xl text-center md:text-left">
+                     <div className="inline-flex items-center gap-3 px-5 py-2 bg-emerald-500/10 text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-[0.3em] mb-8 border border-emerald-500/20">
+                        <Activity size={14} />
+                        Live System Intelligence
+                     </div>
+                     <h1 className="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter mb-6 leading-[0.9]">
+                        የስርዓት <span className="text-emerald-500">ሪፖርቶች</span>
+                     </h1>
+                     <p className="text-slate-400 font-medium text-lg leading-relaxed">
+                        የመሊክ እቁብን አጠቃላይ የፋይናንስ እንቅስቃሴ እና የአባላት እድገት እዚህ በዝርዝር ይከታተሉ። ውሳኔዎችን በዳታ ላይ ተመስርተው ያስተዳድሩ።
+                     </p>
+                  </div>
+                  
+                  <div className="bg-white/5 backdrop-blur-xl rounded-[3.5rem] p-10 border border-white/10 w-full md:w-80 text-center">
+                     <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-emerald-500/40">
+                        <ShieldCheck size={40} className="text-white" />
+                     </div>
+                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2 leading-none">System Health</h4>
+                     <p className="text-4xl font-black text-white leading-none">98.5%</p>
+                     <div className="mt-6 flex justify-center gap-2">
+                        {[1, 2, 3, 4, 5].map(i => (
+                          <div key={i} className={`w-2 h-2 rounded-full ${i < 5 ? 'bg-emerald-500' : 'bg-white/20'}`} />
+                        ))}
+                     </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* Main Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+               <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-5 rounded-[2rem] shadow-xl shadow-blue-500/20 group hover:scale-[1.05] transition-all border border-blue-400/20">
+                  <div className="w-14 h-14 bg-white/20 text-white rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md">
+                     <Users size={28} />
+                  </div>
+                  <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">ጠቅላላ አባላት (Total Members)</p>
+                  <p className="text-4xl font-black text-white tracking-tighter">{allUsers.length}</p>
+                  <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-[10px] font-bold text-blue-100">
+                     <TrendingUp size={14} /> +12% Growth
+                  </div>
+               </div>
+
+               <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 rounded-[2rem] shadow-xl shadow-emerald-500/20 group hover:scale-[1.05] transition-all border border-emerald-400/20">
+                  <div className="w-14 h-14 bg-white/20 text-white rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md">
+                     <DollarSign size={28} />
+                  </div>
+                  <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">የተሰበሰበ መዋጮ (Collected)</p>
+                  <p className="text-4xl font-black text-white tracking-tighter">
+                    {allPayments.filter(p => p.status === 'verified').reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-xs">ETB</span>
+                  </p>
+                  <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-[10px] font-bold text-emerald-100">
+                     <CheckCircle size={14} /> Safe & Verified
+                  </div>
+               </div>
+
+               <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-5 rounded-[2rem] shadow-xl shadow-amber-500/20 group hover:scale-[1.05] transition-all border border-amber-400/20">
+                  <div className="w-14 h-14 bg-white/20 text-white rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md">
+                     <Trophy size={28} />
+                  </div>
+                  <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">የተከፈለ ክፍያ (Payouts)</p>
+                  <p className="text-4xl font-black text-white tracking-tighter">
+                    {allPayouts.filter(p => p.status === 'active').reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-xs">ETB</span>
+                  </p>
+                  <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-[10px] font-bold text-amber-100">
+                     <Award size={14} /> Total disbursed
+                  </div>
+               </div>
+
+               <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-5 rounded-[2rem] shadow-xl shadow-indigo-500/20 group hover:scale-[1.05] transition-all border border-indigo-400/20">
+                  <div className="w-14 h-14 bg-white/20 text-white rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md">
+                     <ShoppingBag size={28} />
+                  </div>
+                  <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">የገበያ ልውውጥ (Marketplace)</p>
+                  <p className="text-4xl font-black text-white tracking-tighter">{itemsCount}</p>
+                  <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-[10px] font-bold text-indigo-100">
+                     <Activity size={14} /> Active Listings
+                  </div>
+               </div>
+            </div>
+
+            {/* Analytics Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+               {/* Financial Performance Line Chart */}
+               <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl shadow-slate-200/50">
+                  <div className="flex justify-between items-center mb-12">
+                     <div>
+                        <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">የገቢ እድገት (Monthly Revenue)</h3>
+                        <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Yearly Performance Index</p>
+                     </div>
+                     <div className="flex gap-2">
+                        <button className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-slate-900 hover:text-white transition-all">
+                           <Calendar size={18} />
+                        </button>
+                     </div>
+                  </div>
+                  
+                  <div className="h-[200px] w-full relative overflow-hidden">
+                     <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart
+                           data={[
+                              { name: 'Jan', income: 45000, payout: 30000 },
+                              { name: 'Feb', income: 72000, payout: 40000 },
+                              { name: 'Mar', income: 68000, payout: 50000 },
+                              { name: 'Apr', income: 91000, payout: 60000 },
+                              { name: 'May', income: 105000, payout: 70000 },
+                           ]}
+                        >
+                           <defs>
+                              <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                                 <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                              </linearGradient>
+                           </defs>
+                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }} />
+                           <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }} />
+                           <Tooltip 
+                              contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', fontWeight: 'bold' }}
+                           />
+                           <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#chartGradient)" />
+                           <Area type="monotone" dataKey="payout" stroke="#3b82f6" strokeWidth={4} fillOpacity={0} />
+                        </AreaChart>
+                     </ResponsiveContainer>
+                  </div>
+                  
+                  <div className="mt-8 flex justify-center gap-10">
+                     <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Income</span>
+                     </div>
+                     <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full bg-blue-500" />
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Payouts</span>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Member Status Distribution */}
+               <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl shadow-slate-200/50">
+                  <div className="flex justify-between items-center mb-12">
+                     <div>
+                        <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">የአባላት ስርጭት (User Statistics)</h3>
+                        <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Membership Tiers</p>
+                     </div>
+                     <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center">
+                        <PieChartIcon size={20} />
+                     </div>
+                  </div>
+                  
+                  <div className="flex flex-col md:flex-row items-center gap-10">
+                      <div className="h-48 flex-1 relative w-full overflow-hidden">
+                        <ResponsiveContainer width="100%" height={192}>
+                           <PieChart>
+                              <Pie
+                                 data={[
+                                    { name: 'Active', value: allUsers.filter(u => u.status === 'active').length },
+                                    { name: 'Pending', value: allUsers.filter(u => u.status === 'pending').length },
+                                    { name: 'Rejected', value: allUsers.filter(u => u.status === 'rejected').length },
+                                 ]}
+                                 cx="50%"
+                                 cy="50%"
+                                 innerRadius={60}
+                                 outerRadius={80}
+                                 paddingAngle={8}
+                                 dataKey="value"
+                              >
+                                 <Cell fill="#10b981" />
+                                 <Cell fill="#f59e0b" />
+                                 <Cell fill="#ef4444" />
+                              </Pie>
+                              <Tooltip 
+                                 contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', fontWeight: 'bold' }}
+                              />
+                           </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                     
+                     <div className="flex-1 space-y-6">
+                        {[
+                          { label: 'ንቁ አባላት (Active)', count: allUsers.filter(u => u.status === 'active').length, color: 'bg-emerald-500' },
+                          { label: 'በመጠባበቅ ላይ (Pending)', count: allUsers.filter(u => u.status === 'pending').length, color: 'bg-amber-500' },
+                          { label: 'ውድቅ የተደረገ (Rejected)', count: allUsers.filter(u => u.status === 'rejected').length, color: 'bg-rose-500' }
+                        ].map((stat, i) => (
+                          <div key={i} className="p-5 bg-slate-50 rounded-3xl border border-slate-100 group hover:border-slate-200 transition-all">
+                             <div className="flex justify-between items-center mb-2">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                   <div className={`w-2 h-2 rounded-full ${stat.color}`} /> {stat.label}
+                                </span>
+                                <span className="text-xs font-black text-slate-900">{stat.count}</span>
+                             </div>
+                             <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                                <div className={`h-full ${stat.color}`} style={{ width: `${(stat.count / allUsers.length) * 100}%` }} />
+                             </div>
+                          </div>
+                        ))}
+                     </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* Performance Ledger (Table) */}
+            <div className="bg-white rounded-[4rem] border border-slate-100 shadow-xl overflow-hidden">
+               <div className="p-10 border-b border-slate-50 flex flex-col md:flex-row justify-between items-center gap-6">
+                  <div>
+                     <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">የቡድኖች አፈጻጸም ዝርዝር</h3>
+                     <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Comprehensive Group Ledger</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                     <div className="relative group">
+                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500" size={16} />
+                        <input 
+                           type="text" 
+                           placeholder="ቡድን ይፈልጉ (Search Group)..."
+                           value={reportSearch}
+                           onChange={(e) => setReportSearch(e.target.value)}
+                           className="bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-6 py-3 text-xs font-bold text-slate-700 outline-none focus:ring-8 focus:ring-indigo-500/5 transition-all"
+                        />
+                     </div>
+                     <button 
+                        onClick={() => generateReportPDF('admin-reports-view', `${t('common.appName').replace(/\s+/g, '-')}-System-Report`)}
+                        className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-95 transition-all"
+                     >
+                        ሪፖርቱን አውርድ (Export)
+                     </button>
+                  </div>
+               </div>
+               
+               <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                     <thead>
+                        <tr className="bg-slate-50/50">
+                           <th className="px-10 py-6 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">የቡድን ስም (Group Name)</th>
+                           <th className="px-10 py-6 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">አባላት (Users)</th>
+                           <th className="px-10 py-6 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">ጠቅላላ ገቢ (Revenue)</th>
+                           <th className="px-10 py-6 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">ሁኔታ (Status)</th>
+                           <th className="px-10 py-6 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">ጥራት (Quality)</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-100">
+                        {groups.filter(g => g.name.toLowerCase().includes(reportSearch.toLowerCase())).map((group, idx) => {
+                           const groupMembers = allUsers.filter(u => u.groupId === group.id);
+                           const groupIncome = allPayments
+                              .filter(p => p.groupId === group.id && (p.status === 'verified'))
+                              .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                           
+                           return (
+                              <motion.tr 
+                                 initial={{ opacity: 0, x: -10 }}
+                                 animate={{ opacity: 1, x: 0 }}
+                                 transition={{ delay: idx * 0.05 }}
+                                 key={group.id} 
+                                 className="hover:bg-slate-50 group/row cursor-pointer"
+                              >
+                                 <td className="px-10 py-8">
+                                    <div className="flex items-center gap-4">
+                                       <div className="w-12 h-12 bg-slate-900 text-emerald-400 rounded-2xl flex items-center justify-center font-black text-xs shadow-lg group-hover/row:scale-110 transition-transform">
+                                          {group.name.slice(0, 1).toUpperCase()}
+                                       </div>
+                                       <div>
+                                          <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{group.name}</p>
+                                          <p className="text-[9px] font-bold text-slate-400 uppercase mt-1 tracking-widest">{group.type || 'Monthly'}</p>
+                                       </div>
+                                    </div>
+                                 </td>
+                                 <td className="px-10 py-8">
+                                    <div className="flex items-center gap-3">
+                                       <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(groupMembers.length / group.memberCount) * 100}%` }} />
+                                       </div>
+                                       <span className="text-[11px] font-black text-slate-900">{groupMembers.length} / {group.memberCount}</span>
+                                    </div>
+                                 </td>
+                                 <td className="px-10 py-8">
+                                    <p className="text-sm font-black text-slate-900">{groupIncome.toLocaleString()} <span className="text-[9px] text-emerald-500 font-black">ETB</span></p>
+                                    <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Verified Collection</p>
+                                 </td>
+                                 <td className="px-10 py-8">
+                                    <span className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border shadow-sm ${
+                                       group.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
+                                    }`}>
+                                       {group.status}
+                                    </span>
+                                 </td>
+                                 <td className="px-10 py-8">
+                                    <div className="flex gap-1">
+                                       {[1, 2, 3, 4, 5].map(star => (
+                                          <div key={star} className={`w-1.5 h-6 rounded-full ${star < 4 ? 'bg-emerald-500' : 'bg-slate-100'}`} />
+                                       ))}
+                                    </div>
+                                 </td>
+                              </motion.tr>
+                           );
+                        })}
+                     </tbody>
+                  </table>
+               </div>
+            </div>
+          </motion.div>
+
+        ) : activeTab === 'legal' ? (
+          <motion.div 
+            key="legal"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-8 pb-20"
+          >
+             <div className="bg-slate-900 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl">
+                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/10 rounded-full blur-[100px] -mr-40 -mt-40" />
+                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                   <div>
+                      <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                         ህግና <span>ደንቦች</span> <span className="text-indigo-500">.</span>
+                      </h2>
+                      <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">
+                         የእቁብ ህጎችን እና ደንቦችን ከዚህ ያስተዳድሩ። አዳዲስ ደንቦችን በመጨመር ለሁሉም አባላት ተደራሽ ያድርጉ። (Manage legal framework and member rules)
+                      </p>
+                   </div>
+                   <button 
+                     onClick={() => {
+                       setEditingRuleId(null);
+                       setNewRuleForm({ title: '', description: '', amTitle: '', amDescription: '', category: 'general' });
+                       setIsAddingRule(true);
+                     }}
+                     className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:bg-slate-100 transition-all flex items-center gap-3 group"
+                   >
+                     <Plus size={18} className="group-hover:rotate-90 transition-transform" />
+                     {language === 'am' ? 'አዲስ ህግ ጨምር' : 'Add New Rule'}
+                   </button>
+                </div>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {legalRules.map((rule, idx) => (
+                   <motion.div 
+                     key={rule.id}
+                     initial={{ opacity: 0, y: 10 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     transition={{ delay: idx * 0.05 }}
+                     className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative"
+                   >
+                      <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                           onClick={() => {
+                             setEditingRuleId(rule.id);
+                             setNewRuleForm({
+                               title: rule.title || '',
+                               description: rule.description || '',
+                               amTitle: rule.amTitle || '',
+                               amDescription: rule.amDescription || '',
+                               category: rule.category || 'general'
+                             });
+                             setIsAddingRule(true);
+                           }}
+                           className="w-8 h-8 bg-blue-50 text-blue-500 rounded-lg flex items-center justify-center hover:bg-blue-100 transition-colors"
+                        >
+                           <Edit size={14} />
+                        </button>
+                        <button 
+                           onClick={async () => {
+                             if(confirm('Are you sure you want to delete this rule?')) {
+                               try {
+                                 await deleteDoc(doc(db, 'legal_rules', rule.id));
+                               } catch (error) {
+                                 handleFirestoreError(error, OperationType.DELETE, `legal_rules/${rule.id}`);
+                               }
+                             }
+                           }}
+                           className="w-8 h-8 bg-rose-50 text-rose-500 rounded-lg flex items-center justify-center hover:bg-rose-100 transition-colors"
+                        >
+                           <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-4 mb-6">
+                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${rule.category === 'guarantor' ? 'bg-emerald-50 text-emerald-500' : 'bg-indigo-50 text-indigo-500'}`}>
+                            <Scale size={24} />
+                         </div>
+                         <div>
+                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
+                               {rule.category === 'guarantor' ? (language === 'am' ? 'የዋስ ህግ' : 'Guarantor') : (language === 'am' ? 'የእቁብ ህግ' : 'General')}
+                            </p>
+                            <h4 className="text-lg font-black text-slate-900 tracking-tight">{language === 'am' ? rule.amTitle : rule.title}</h4>
+                         </div>
+                      </div>
+                      <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                         {language === 'am' ? rule.amDescription : rule.description}
+                      </p>
+                   </motion.div>
+                ))}
+             </div>
+
+             {/* Add Rule Modal */}
+             <AnimatePresence>
+               {isAddingRule && (
+                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+                   <motion.div 
+                     initial={{ opacity: 0, scale: 0.95 }}
+                     animate={{ opacity: 1, scale: 1 }}
+                     exit={{ opacity: 0, scale: 0.95 }}
+                     className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-100"
+                   >
+                     <div className="p-8 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">አዲስ ህግ መሙያ (New Rule)</h3>
+                        <button onClick={() => setIsAddingRule(false)} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 rounded-xl border border-slate-200">
+                           <X size={20} />
+                        </button>
+                     </div>
+                     <div className="p-8 space-y-6">
+                        <div className="grid grid-cols-2 gap-6">
+                           <div className="space-y-1">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Title (English)</label>
+                              <input 
+                                type="text"
+                                value={newRuleForm.title}
+                                onChange={e => setNewRuleForm({...newRuleForm, title: e.target.value})}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-medium focus:border-indigo-500 outline-none transition-all"
+                              />
+                           </div>
+                           <div className="space-y-1">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ስም (አማርኛ)</label>
+                              <input 
+                                type="text"
+                                value={newRuleForm.amTitle}
+                                onChange={e => setNewRuleForm({...newRuleForm, amTitle: e.target.value})}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-medium focus:border-indigo-500 outline-none transition-all"
+                              />
+                           </div>
+                        </div>
+                        <div className="space-y-1">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Description (English)</label>
+                           <textarea 
+                             rows={3}
+                             value={newRuleForm.description}
+                             onChange={e => setNewRuleForm({...newRuleForm, description: e.target.value})}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-medium focus:border-indigo-500 outline-none transition-all resize-none"
+                           />
+                        </div>
+                        <div className="space-y-1">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ዝርዝር መግለጫ (አማርኛ)</label>
+                           <textarea 
+                             rows={3}
+                             value={newRuleForm.amDescription}
+                             onChange={e => setNewRuleForm({...newRuleForm, amDescription: e.target.value})}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-medium focus:border-indigo-500 outline-none transition-all resize-none"
+                           />
+                        </div>
+                        <div className="space-y-1">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category (ደረጃ)</label>
+                           <select 
+                             value={newRuleForm.category}
+                             onChange={e => setNewRuleForm({...newRuleForm, category: e.target.value})}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm font-medium focus:border-indigo-500 outline-none transition-all appearance-none"
+                           >
+                              <option value="general">የእቁብ ህግ (General)</option>
+                              <option value="guarantor">የዋስ ህግ (Guarantor)</option>
+                           </select>
+                        </div>
+                        <button 
+                          onClick={async () => {
+                            if(!newRuleForm.title || !newRuleForm.amTitle) return alert('Titles are required');
+                            try {
+                              if (editingRuleId) {
+                                await updateDoc(doc(db, 'legal_rules', editingRuleId), {
+                                  ...newRuleForm,
+                                  updatedAt: serverTimestamp()
+                                });
+                                setEditingRuleId(null);
+                              } else {
+                                await addDoc(collection(db, 'legal_rules'), {
+                                   ...newRuleForm,
+                                   createdAt: serverTimestamp()
+                                });
+                              }
+                              setIsAddingRule(false);
+                              setNewRuleForm({ title: '', description: '', amTitle: '', amDescription: '', category: 'general' });
+                            } catch (error) {
+                              handleFirestoreError(error, editingRuleId ? OperationType.UPDATE : OperationType.CREATE, 'legal_rules');
+                            }
+                          }}
+                          className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-600/20"
+                        >
+                          {editingRuleId ? 'ህጉን አሻሽል (Update Rule)' : 'ህጉን መዝግብ (Save Rule)'}
+                        </button>
+                     </div>
+                   </motion.div>
+                 </div>
+               )}
+             </AnimatePresence>
+          </motion.div>
+
+        ) : activeTab === 'audit' ? (
+          <motion.div 
+            key="audit"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-8 pb-20"
+          >
+            {/* Audit Commander Header */}
+            <div className="bg-slate-900 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-white/5">
+               <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 blur-[100px] rounded-full -mr-40 -mt-40" />
+               <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/10 blur-[100px] rounded-full -ml-40 -mb-40" />
+               
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-indigo-500/20">
+                        <ShieldCheck size={14} />
+                        Security & Activity Monitoring
+                     </div>
+                     <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                        የስርዓት ኦዲት መዝገብ <span className="text-indigo-500">.</span>
+                     </h2>
+                     <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">
+                        በሲስተሙ ላይ የሚደረጉ ማናቸውንም እንቅስቃሴዎች እዚህ ይከታተሉ። ክፍያዎች፣ የተጠቃሚ ለውጦች እና የአስተዳዳሪ እርምጃዎች በሙሉ በዝርዝር ተመዝግበው ይገኛሉ።
+                     </p>
+                  </div>
+
+                  <div className="flex gap-4">
+                     <div className="px-8 py-6 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 text-center min-w-[160px]">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">ባለፉት 24 ሰዓት</p>
+                        <p className="text-2xl font-black text-white">+{auditLogs.filter(l => {
+                          const date = l.createdAt?.toDate ? l.createdAt.toDate() : new Date(l.createdAt || 0);
+                          return Date.now() - date.getTime() < 24 * 60 * 60 * 1000;
+                        }).length}</p>
+                     </div>
+                     <button 
+                       onClick={() => generateReportPDF('audit-view-container', 'System-Audit-Log')}
+                       className="px-10 py-6 bg-white text-slate-900 rounded-[2.5rem] text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-50 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3"
+                     >
+                       <Download size={20} />
+                       Export
+                     </button>
+                  </div>
+               </div>
+            </div>
+
+            {/* Audit Status Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm group hover:border-indigo-200 transition-all">
+                  <div className="flex items-center gap-4 mb-6">
+                     <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Activity size={24} />
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ጠቅላላ መዝገቦች</p>
+                        <p className="text-xl font-black text-slate-900">{(auditLogs.length + allPayments.length + allUsers.length).toLocaleString()}</p>
+                     </div>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
+                     <div className="h-full bg-indigo-500 rounded-full w-3/4" />
+                  </div>
+               </div>
+               
+               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm group hover:border-emerald-200 transition-all">
+                  <div className="flex items-center gap-4 mb-6">
+                     <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <DollarSign size={24} />
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">የፋይናንስ እንቅስቃሴ</p>
+                        <p className="text-xl font-black text-slate-900">{allPayments.length.toLocaleString()}</p>
+                     </div>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
+                     <div className="h-full bg-emerald-500 rounded-full w-2/3" />
+                  </div>
+               </div>
+
+               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm group hover:border-rose-200 transition-all">
+                  <div className="flex items-center gap-4 mb-6">
+                     <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Lock size={24} />
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ከፍተኛ ጥንቃቄ የሚሹ</p>
+                        <p className="text-xl font-black text-slate-900">0</p>
+                     </div>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
+                     <div className="h-full bg-rose-500 rounded-full w-0" />
+                  </div>
+               </div>
+            </div>
+
+            {/* Audit Logs Control Bar */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+               <div className="flex items-center gap-3 w-full md:w-auto">
+                  <div className="relative flex-1 md:w-80">
+                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                     <input 
+                        type="text" 
+                        placeholder="በስም ወይም በድርጊት ይፈልጉ..."
+                        value={auditSearch}
+                        className="w-full pl-12 pr-6 py-4 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all shadow-sm"
+                        onChange={(e) => setAuditSearch(e.target.value)}
+                     />
+                  </div>
+                  <button className="p-4 bg-white text-slate-400 rounded-2xl border border-slate-100 hover:text-indigo-500 hover:bg-slate-50 transition-all shadow-sm">
+                     <Filter size={20} />
+                  </button>
+               </div>
+               
+               <div className="flex items-center gap-2 p-1.5 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                  <button onClick={() => setAuditFilter('all')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${auditFilter === 'all' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}>All Logs</button>
+                  <button onClick={() => setAuditFilter('payment')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${auditFilter === 'payment' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}>Payments</button>
+                  <button onClick={() => setAuditFilter('security')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${auditFilter === 'security' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'text-slate-400 hover:bg-slate-50'}`}>Security</button>
+               </div>
+            </div>
+
+            {/* Logs Table / List */}
+            <div id="audit-view-container" className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden min-h-[500px]">
+               <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Transaction History & System Events</span>
+                  <div className="flex items-center gap-2">
+                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                     <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Live Updates</span>
+                  </div>
+               </div>
+               
+               <div className="overflow-x-auto">
+                  <table className="w-full">
+                     <thead>
+                        <tr className="border-b border-slate-50">
+                           <th className="px-8 py-6 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">ድርጊት (Event)</th>
+                           <th className="px-8 py-6 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">ተሳታፊ (Entity)</th>
+                           <th className="px-8 py-6 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">ጊዜ (Timestamp)</th>
+                           <th className="px-8 py-6 text-left text-[9px] font-black text-slate-400 uppercase tracking-widest">ሁኔታ (Status)</th>
+                           <th className="px-8 py-6 text-right text-[9px] font-black text-slate-400 uppercase tracking-widest">ዝርዝር</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-50">
+                        {/* Combine different data sources for "accurate" audit feel */}
+                        {[
+                          ...auditLogs.map(l => ({ ...l, origin: 'audit' })),
+                          ...allPayments.slice(0, 10).map(p => ({
+                            id: p.id,
+                            type: 'payment',
+                            action: 'Payment Verified',
+                            userName: p.userName,
+                            amount: p.amount,
+                            createdAt: p.verifiedAt || p.createdAt,
+                            status: 'success',
+                            origin: 'payment'
+                          })),
+                          ...allUsers.slice(0, 5).map(u => ({
+                            id: u.id,
+                            type: 'user',
+                            action: 'User Profile Updated',
+                            userName: u.fullName,
+                            createdAt: u.createdAt,
+                            status: 'info',
+                            origin: 'user'
+                          }))
+                        ].sort((a, b) => {
+                          const aT = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+                          const bT = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+                          return bT - aT;
+                        }).filter(log => {
+                          const matchesSearch = log.action?.toLowerCase().includes(auditSearch.toLowerCase()) || 
+                                                log.userName?.toLowerCase().includes(auditSearch.toLowerCase());
+                          let matchesFilter = true;
+                          if (auditFilter === 'payment') matchesFilter = log.type === 'payment';
+                          if (auditFilter === 'security') matchesFilter = log.type === 'user' || log.type === 'audit' || log.origin === 'audit';
+                          return matchesSearch && matchesFilter;
+                        }).map((log, idx) => (
+                           <motion.tr 
+                              key={log.id + idx}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: idx * 0.05 }}
+                              className="group hover:bg-slate-50/50 transition-colors"
+                           >
+                              <td className="px-8 py-6">
+                                 <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                      log.type === 'payment' ? 'bg-emerald-50 text-emerald-500' :
+                                      log.type === 'user' ? 'bg-blue-50 text-blue-500' :
+                                      'bg-amber-50 text-amber-500'
+                                    }`}>
+                                       {log.type === 'payment' ? <DollarSign size={18} /> : 
+                                        log.type === 'user' ? <Users size={18} /> : <Shield size={18} />}
+                                    </div>
+                                    <div>
+                                       <p className="text-sm font-black text-slate-900 tracking-tight">{log.action || 'System Change'}</p>
+                                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{log.type || 'General'}</p>
+                                    </div>
+                                 </div>
+                              </td>
+                              <td className="px-8 py-6">
+                                 <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-black text-slate-500">
+                                       {log.userName?.slice(0,1) || 'S'}
+                                    </div>
+                                    <p className="text-xs font-bold text-slate-700">{log.userName || 'System'}</p>
+                                 </div>
+                              </td>
+                              <td className="px-8 py-6">
+                                 <p className="text-xs font-medium text-slate-600">{getTimeSince(log.createdAt)}</p>
+                                 <p className="text-[9px] font-bold text-slate-400 mt-0.5">
+                                    {log.createdAt?.toDate ? log.createdAt.toDate().toLocaleTimeString() : new Date(log.createdAt).toLocaleTimeString()}
+                                 </p>
+                              </td>
+                              <td className="px-8 py-6">
+                                 <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+                                   log.status === 'success' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                   log.status === 'error' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                                   'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                 }`}>
+                                    {log.status === 'success' ? 'Verified' : log.status || 'Resolved'}
+                                 </span>
+                              </td>
+                              <td className="px-8 py-6 text-right">
+                                 <button 
+                                    onClick={() => setSelectedAuditLog(log)}
+                                    className="w-8 h-8 bg-white border border-slate-100 text-slate-400 rounded-lg flex items-center justify-center hover:bg-slate-900 hover:text-white transition-all shadow-sm ml-auto">
+                                    <Eye size={14} />
+                                 </button>
+                              </td>
+                           </motion.tr>
+                        ))}
+                     </tbody>
+                  </table>
+               </div>
+               
+               {auditLogs.length === 0 && allPayments.length === 0 && (
+                 <div className="py-32 flex flex-col items-center justify-center text-center">
+                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                       <ShieldAlert size={40} className="text-slate-200" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">ምንም መዝገብ የለም</h3>
+                    <p className="text-sm text-slate-400 font-medium max-w-xs">ልክ እንቅስቃሴ ሲኖር እዚህ ጋር በዝርዝር ማየት ይችላሉ።</p>
+                 </div>
+               )}
+            </div>
+          </motion.div>
+
+        ) : activeTab === 'archive' ? (
+          <motion.div 
+            key="archive"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-8 pb-20"
+          >
+             <div className="bg-amber-50 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-amber-100">
+               <div className="relative z-10">
+                  <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-amber-500/20">
+                     <Archive size={12} /> {language === 'am' ? 'ባለፉት ዙሮች ማህደር' : 'Finished Cycles Archive'}
+                  </div>
+                  <h2 className="text-4xl font-display font-black text-slate-900 tracking-tighter mb-4">
+                     {language === 'am' ? 'ዙር ማህደር' : 'Cycles Archive'}
+                  </h2>
+                  <p className="text-sm font-bold text-slate-500 leading-relaxed max-w-xl">
+                     {language === 'am' ? 'በዚህ ገድ የተዘጉ እና ያለፉ የእቁብ ዙሮች አባላት መረጃ ያገኛሉ።' : 'Here you can view the history of archived members from past cycles.'}
+                  </p>
+               </div>
+             </div>
+
+             <div className="flex gap-4 items-center">
+                 <input
+                     type="text"
+                     placeholder={language === 'am' ? 'ስም ይፈልጉ...' : 'Search Name...'}
+                     value={searchTerm}
+                     onChange={(e) => setSearchTerm(e.target.value)}
+                     className="bg-white border text-sm font-bold border-slate-200 rounded-2xl px-6 py-4 outline-none focus:border-amber-500 flex-1 h-14"
+                 />
+                 <select
+                     value={showArchivedFilter}
+                     onChange={(e) => setShowArchivedFilter(e.target.value)}
+                     className="bg-white border text-sm font-bold border-slate-200 rounded-2xl px-6 outline-none focus:border-amber-500 h-14"
+                 >
+                     <option value="All">{language === 'am' ? 'ሁሉም ዙሮች' : 'All Rounds'}</option>
+                     {[...new Set(archivedMembers.map(m => m.round))].map(r => (
+                        <option key={r} value={r}>{language === 'am' ? `ዙር ${r}` : `Round ${r}`}</option>
+                     ))}
+                 </select>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <AnimatePresence>
+                    {archivedMembers
+                       .filter(m => showArchivedFilter === 'All' || m.round?.toString() === showArchivedFilter?.toString())
+                       .filter(m => m.fullName.toLowerCase().includes(searchTerm.toLowerCase()))
+                       .map(member => (
+                       <motion.div
+                           key={member.id}
+                           initial={{ opacity: 0, y: 20 }}
+                           animate={{ opacity: 1, y: 0 }}
+                           exit={{ opacity: 0, scale: 0.9 }}
+                           className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative group"
+                       >
+                           <div className="flex items-center gap-4 mb-4">
+                              <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400">
+                                 {member.fullName.charAt(0)}
+                              </div>
+                              <div>
+                                 <h3 className="font-bold text-slate-900 group-hover:text-amber-600 transition-colors">{member.fullName}</h3>
+                                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{member.phone}</p>
+                              </div>
+                           </div>
+                           
+                           <div className="space-y-2 mt-4 pt-4 border-t border-slate-50">
+                              <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                                <span>{language === 'am' ? 'ዙር' : 'Round'}</span>
+                                <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md">{member.round || 1}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                                <span>{language === 'am' ? 'ምድብ' : 'Group'}</span>
+                                <span className="text-slate-900">{member.groupName || 'N/A'}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                                <span>{language === 'am' ? 'የተዘጋበት ቀን' : 'Archived On'}</span>
+                                <span className="text-slate-900">{member.archivedAt?.toDate?.().toLocaleDateString() || '-'}</span>
+                              </div>
+                           </div>
+                       </motion.div>
+                    ))}
+                </AnimatePresence>
+             </div>
+          </motion.div>
+
+        ) : activeTab === 'landing' ? (
+          <motion.div 
+            key="landing"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-8 pb-20"
+          >
+            {/* Landing Header */}
+            <div className={`bg-slate-900 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-white/5`}>
+               <div className={`absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 blur-[100px] rounded-full -mr-40 -mt-40`} />
+               <div className={`absolute bottom-0 left-0 w-80 h-80 bg-amber-500/10 blur-[100px] rounded-full -ml-40 -mb-40`} />
+               
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-emerald-500/20">
+                        <Globe size={14} />
+                        Landing Page Customization
+                     </div>
+                     <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                        የፊት ገጽ <span>ማስተካከያ</span> <span className="text-emerald-500">.</span>
+                     </h2>
+                     <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">
+                        የመጀመሪያውን ገጽ ይዘቶች፣ ቀለሞች፣ እና መረጃዎችን ከዚህ ማስተዳደር ይችላሉ። (Customize landing page hero, branding, and contact info)
+                     </p>
+                  </div>
+                  
+                  <button 
+                     onClick={saveLandingSettings}
+                     className="px-10 py-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[2rem] text-xs font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all shadow-[0_0_40px_rgba(16,185,129,0.4)] active:scale-95"
+                  >
+                     <Save size={18} />
+                     ለውጦቹን አስቀምጥ (Save)
+                  </button>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+               {/* Hero Customization (English) */}
+               <div className="bg-white rounded-[3rem] p-10 border border-slate-100 shadow-xl">
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-8 flex items-center gap-3">
+                    <span className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 uppercase text-[10px]">EN</span>
+                    Hero Content (English)
+                  </h3>
+                  <div className="space-y-6">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">Badge Text</label>
+                      <input 
+                        type="text" 
+                        value={landingSettings.welcomeText} 
+                        onChange={(e) => setLandingSettings({...landingSettings, welcomeText: e.target.value})}
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">Title Main</label>
+                        <input 
+                          type="text" 
+                          value={landingSettings.heroTitle} 
+                          onChange={(e) => setLandingSettings({...landingSettings, heroTitle: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">Title Accent</label>
+                        <input 
+                          type="text" 
+                          value={landingSettings.heroTitleModern} 
+                          onChange={(e) => setLandingSettings({...landingSettings, heroTitleModern: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">Subtitle</label>
+                      <textarea 
+                        value={landingSettings.heroSubtitle} 
+                        onChange={(e) => setLandingSettings({...landingSettings, heroSubtitle: e.target.value})}
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none h-32 resize-none leading-relaxed"
+                      />
+                    </div>
+                  </div>
+               </div>
+
+               {/* Hero Customization (Amharic) */}
+               <div className="bg-white rounded-[3rem] p-10 border border-slate-100 shadow-xl">
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-8 flex items-center gap-3">
+                    <span className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 uppercase text-[10px]">አማ</span>
+                    Hero Content (Amharic)
+                  </h3>
+                  <div className="space-y-6">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">ርዕስ (ክፍል 1)</label>
+                      <input 
+                        type="text" 
+                        value={landingSettings.heroTitleAm} 
+                        onChange={(e) => setLandingSettings({...landingSettings, heroTitleAm: e.target.value})}
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">ርዕስ (ክፍል 2 - መለያ)</label>
+                      <input 
+                        type="text" 
+                        value={landingSettings.heroTitleModernAm} 
+                        onChange={(e) => setLandingSettings({...landingSettings, heroTitleModernAm: e.target.value})}
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">ንዑስ ርዕስ (Subtitle)</label>
+                      <textarea 
+                        value={landingSettings.heroSubtitleAm} 
+                        onChange={(e) => setLandingSettings({...landingSettings, heroSubtitleAm: e.target.value})}
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none h-32 resize-none leading-relaxed"
+                      />
+                    </div>
+                  </div>
+               </div>
+
+               {/* Branding & Visuals */}
+               <div className="bg-white rounded-[3rem] p-10 border border-slate-100 shadow-xl col-span-1 lg:col-span-2 space-y-12">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-8 flex items-center gap-3">
+                        <Globe className="text-blue-500" /> Social Media Links
+                      </h3>
+                      <div className="space-y-4">
+                        {(landingSettings.socialLinks || []).map((link: any, idx: number) => (
+                           <div key={idx} className="flex gap-4">
+                              <select 
+                                value={link.platform}
+                                onChange={(e) => {
+                                  const newLinks = [...landingSettings.socialLinks];
+                                  newLinks[idx].platform = e.target.value;
+                                  setLandingSettings({...landingSettings, socialLinks: newLinks});
+                                }}
+                                className="w-1/3 bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold transition-colors outline-none"
+                              >
+                                 <option value="Facebook">Facebook</option>
+                                 <option value="Twitter">Twitter</option>
+                                 <option value="Instagram">Instagram</option>
+                                 <option value="LinkedIn">LinkedIn</option>
+                                 <option value="GitHub">GitHub</option>
+                                 <option value="Youtube">Youtube</option>
+                                 <option value="TikTok">TikTok</option>
+                              </select>
+                              <input 
+                                type="text"
+                                placeholder="URL"
+                                value={link.url}
+                                onChange={(e) => {
+                                  const newLinks = [...landingSettings.socialLinks];
+                                  newLinks[idx].url = e.target.value;
+                                  setLandingSettings({...landingSettings, socialLinks: newLinks});
+                                }}
+                                className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-4 py-3 text-xs font-bold transition-colors outline-none"
+                              />
+                              <button 
+                                onClick={() => {
+                                  const newLinks = [...landingSettings.socialLinks];
+                                  newLinks.splice(idx, 1);
+                                  setLandingSettings({...landingSettings, socialLinks: newLinks});
+                                }}
+                                className="p-3 text-rose-500 hover:bg-rose-50 rounded-xl"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                           </div>
+                        ))}
+                        <button 
+                          onClick={() => setLandingSettings({...landingSettings, socialLinks: [...(landingSettings.socialLinks || []), { platform: 'Facebook', url: '' }]})}
+                          className="w-full py-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl text-xs font-black text-slate-500 uppercase tracking-widest hover:border-emerald-500 hover:text-emerald-600 transition-all"
+                        >
+                          <Plus size={16} className="inline mr-2" /> Add Social Link
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-8 flex items-center gap-3">
+                        <Palette className="text-amber-500" /> Branding & Theme
+                      </h3>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4 pl-1">Primary Brand Color</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {[
+                          { name: 'Emerald', class: 'emerald-600', color: '#059669' },
+                          { name: 'Rose', class: 'rose-600', color: '#e11d48' },
+                          { name: 'Sky', class: 'sky-600', color: '#0284c7' },
+                          { name: 'Amber', class: 'amber-600', color: '#d97706' },
+                          { name: 'Violet', class: 'violet-600', color: '#7c3aed' },
+                          { name: 'Slate', class: 'slate-900', color: '#0f172a' },
+                        ].map((c) => (
+                          <button
+                            key={c.class}
+                            onClick={() => setLandingSettings({...landingSettings, primaryColor: c.class})}
+                            className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 ${landingSettings.primaryColor === c.class ? 'border-emerald-500 bg-emerald-50/50 shadow-lg' : 'border-slate-50 opacity-60 hover:opacity-100 shadow-sm'}`}
+                          >
+                            <div className="w-8 h-8 rounded-lg" style={{ backgroundColor: c.color }} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">{c.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-6">
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-8 flex items-center gap-3">
+                        <MapPin className="text-blue-500" /> Contact Info
+                      </h3>
+                      <div className="space-y-4">
+                        <input 
+                          type="text" 
+                          placeholder="Office Address"
+                          value={landingSettings.footerAddress || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, footerAddress: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                        />
+                        <input 
+                          type="text" 
+                          placeholder="Contact Phone"
+                          value={landingSettings.footerPhone || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, footerPhone: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                        />
+                        <input 
+                          type="text" 
+                          placeholder="Contact Email"
+                          value={landingSettings.footerEmail || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, footerEmail: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-8 flex items-center gap-3">
+                        <Settings className="text-emerald-500" /> Footer Branding
+                      </h3>
+                      <div className="space-y-4">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 pl-1">Brand Name</label>
+                        <input 
+                          type="text" 
+                          placeholder="Footer Brand Name"
+                          value={landingSettings.footerBrandName || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, footerBrandName: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                        />
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 pl-1">Description (English)</label>
+                        <textarea 
+                          placeholder="Footer Description"
+                          value={landingSettings.footerDescription || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, footerDescription: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none h-24 resize-none"
+                        />
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 pl-1">Description (Amharic)</label>
+                        <textarea 
+                          placeholder="Footer Description Amharic"
+                          value={landingSettings.footerDescriptionAm || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, footerDescriptionAm: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none h-24 resize-none font-am"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-50" />
+
+                  {/* Footer Sections Management */}
+                  <div className="space-y-10">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+                        <Layers className="text-indigo-500" /> Footer Link Sections
+                      </h3>
+                      <button 
+                        onClick={() => {
+                          const newSections = [...(landingSettings.footerSections || [])];
+                          newSections.push({ id: Date.now().toString(), title: 'New Section', titleAm: 'አዲስ ክፍል', links: [] });
+                          setLandingSettings({...landingSettings, footerSections: newSections});
+                        }}
+                        className="px-6 py-3 bg-emerald-100 text-emerald-800 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-200"
+                      >
+                        <Plus size={14} className="inline mr-2" /> Add Section
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {(landingSettings.footerSections || []).map((section: any, sIdx: number) => (
+                        <div key={section.id || sIdx} className="bg-slate-50 rounded-[2rem] p-8 border border-slate-100 relative">
+                          <button 
+                            onClick={() => {
+                              if (!confirm('Are you sure you want to delete this section?')) return;
+                              const newSections = [...landingSettings.footerSections];
+                              newSections.splice(sIdx, 1);
+                              setLandingSettings({...landingSettings, footerSections: newSections});
+                            }}
+                            className="absolute top-6 right-6 text-rose-400 hover:text-rose-600 p-2"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          
+                          <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 pl-1">Section Title (EN)</label>
+                              <input 
+                                type="text"
+                                value={section.title}
+                                onChange={(e) => {
+                                  const newSections = [...landingSettings.footerSections];
+                                  newSections[sIdx].title = e.target.value;
+                                  setLandingSettings({...landingSettings, footerSections: newSections});
+                                }}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:border-emerald-500 outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 pl-1">Section Title (AM)</label>
+                              <input 
+                                type="text"
+                                value={section.titleAm}
+                                onChange={(e) => {
+                                  const newSections = [...landingSettings.footerSections];
+                                  newSections[sIdx].titleAm = e.target.value;
+                                  setLandingSettings({...landingSettings, footerSections: newSections});
+                                }}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:border-emerald-500 outline-none font-am"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pl-1">Links in this Section</label>
+                            {(section.links || []).map((link: any, lIdx: number) => (
+                              <div key={lIdx} className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <input 
+                                    type="text"
+                                    placeholder="Label (EN)"
+                                    value={link.label}
+                                    onChange={(e) => {
+                                      const newSections = [...landingSettings.footerSections];
+                                      newSections[sIdx].links[lIdx].label = e.target.value;
+                                      setLandingSettings({...landingSettings, footerSections: newSections});
+                                    }}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-[11px] font-bold outline-none"
+                                  />
+                                  <input 
+                                    type="text"
+                                    placeholder="Label (AM)"
+                                    value={link.am}
+                                    onChange={(e) => {
+                                      const newSections = [...landingSettings.footerSections];
+                                      newSections[sIdx].links[lIdx].am = e.target.value;
+                                      setLandingSettings({...landingSettings, footerSections: newSections});
+                                    }}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-[11px] font-bold outline-none font-am"
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="text"
+                                    placeholder="Modal Slug (e.g. About Us)"
+                                    value={link.slug}
+                                    onChange={(e) => {
+                                      const newSections = [...landingSettings.footerSections];
+                                      newSections[sIdx].links[lIdx].slug = e.target.value;
+                                      setLandingSettings({...landingSettings, footerSections: newSections});
+                                    }}
+                                    className="flex-1 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-[11px] font-mono outline-none"
+                                  />
+                                  <button 
+                                    onClick={() => {
+                                      const newSections = [...landingSettings.footerSections];
+                                      newSections[sIdx].links.splice(lIdx, 1);
+                                      setLandingSettings({...landingSettings, footerSections: newSections});
+                                    }}
+                                    className="p-2 text-rose-400 hover:text-rose-600"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            <button 
+                               onClick={() => {
+                                 const newSections = [...landingSettings.footerSections];
+                                 newSections[sIdx].links.push({ label: 'New Link', am: 'አዲስ አገናኝ', slug: 'Help Center' });
+                                 setLandingSettings({...landingSettings, footerSections: newSections});
+                               }}
+                               className="w-full py-3 bg-white border border-dashed border-slate-300 rounded-xl text-[10px] font-black text-slate-400 uppercase tracking-widest hover:border-emerald-500 hover:text-emerald-500"
+                            >
+                              <Plus size={12} className="inline mr-1" /> Add Link
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-50" />
+
+                    {/* Rooted in Tradition & CTA Settings */}
+                  <div className="space-y-6">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1 mt-6">Section Text Contents</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       {/* Tradition section */}
+                       <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-4">
+                          <h5 className="font-black text-xs text-slate-700">Rooted in Tradition section</h5>
+                          <input type="text" placeholder="Title (EN)" value={landingSettings.traditionTitle || ''} onChange={(e) => setLandingSettings({...landingSettings, traditionTitle: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none" />
+                          <input type="text" placeholder="Title (AM)" value={landingSettings.traditionTitleAm || ''} onChange={(e) => setLandingSettings({...landingSettings, traditionTitleAm: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-50 outline-none font-am" />
+                          <textarea placeholder="Desc (EN)" value={landingSettings.traditionDesc || ''} onChange={(e) => setLandingSettings({...landingSettings, traditionDesc: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium focus:border-emerald-500 outline-none h-20" />
+                          <textarea placeholder="Desc (AM)" value={landingSettings.traditionDescAm || ''} onChange={(e) => setLandingSettings({...landingSettings, traditionDescAm: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium focus:border-emerald-500 outline-none h-20 font-am" />
+                       </div>
+                       
+                       {/* CTA section */}
+                       <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-4">
+                          <h5 className="font-black text-xs text-slate-700">CTA section</h5>
+                          <input type="text" placeholder="Title (EN)" value={landingSettings.ctaTitle || ''} onChange={(e) => setLandingSettings({...landingSettings, ctaTitle: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none" />
+                          <input type="text" placeholder="Title (AM)" value={landingSettings.ctaTitleAm || ''} onChange={(e) => setLandingSettings({...landingSettings, ctaTitleAm: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-50 outline-none font-am" />
+                          <textarea placeholder="Desc (EN)" value={landingSettings.ctaDesc || ''} onChange={(e) => setLandingSettings({...landingSettings, ctaDesc: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium focus:border-emerald-500 outline-none h-20" />
+                          <textarea placeholder="Desc (AM)" value={landingSettings.ctaDescAm || ''} onChange={(e) => setLandingSettings({...landingSettings, ctaDescAm: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium focus:border-emerald-500 outline-none h-20 font-am" />
+                       </div>
+                    </div>
+                  </div>
+                  <div className="space-y-10 pb-10">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+                        <LayoutGrid className="text-amber-500" /> Ekub Info Bento Items
+                      </h3>
+                      <button 
+                        onClick={() => {
+                          const newItems = [...(landingSettings.footerInfoItems || [])];
+                          newItems.push({ id: Date.now().toString(), title: 'Information', titleAm: 'መረጃ', slug: 'History' });
+                          setLandingSettings({...landingSettings, footerInfoItems: newItems});
+                        }}
+                        className="px-6 py-3 bg-emerald-100 text-emerald-800 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-200"
+                      >
+                        <Plus size={14} className="inline mr-2" /> Add Item
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {(landingSettings.footerInfoItems || []).map((item: any, iIdx: number) => (
+                        <div key={item.id || iIdx} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 relative group">
+                          <button 
+                            onClick={() => {
+                              const newItems = [...landingSettings.footerInfoItems];
+                              newItems.splice(iIdx, 1);
+                              setLandingSettings({...landingSettings, footerInfoItems: newItems});
+                            }}
+                            className="absolute top-4 right-4 text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                          <div className="space-y-4">
+                            <input 
+                              type="text"
+                              placeholder="Title (EN)"
+                              value={item.title || ''}
+                              onChange={(e) => {
+                                const newItems = [...landingSettings.footerInfoItems];
+                                newItems[iIdx].title = e.target.value;
+                                setLandingSettings({...landingSettings, footerInfoItems: newItems});
+                              }}
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none"
+                            />
+                            <input 
+                              type="text"
+                              placeholder="Title (AM)"
+                              value={item.titleAm || ''}
+                              onChange={(e) => {
+                                const newItems = [...landingSettings.footerInfoItems];
+                                newItems[iIdx].titleAm = e.target.value;
+                                setLandingSettings({...landingSettings, footerInfoItems: newItems});
+                              }}
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none font-am"
+                            />
+                            <input 
+                              type="text"
+                              placeholder="Slug"
+                              value={item.slug || ''}
+                              onChange={(e) => {
+                                const newItems = [...landingSettings.footerInfoItems];
+                                newItems[iIdx].slug = e.target.value;
+                                setLandingSettings({...landingSettings, footerInfoItems: newItems});
+                              }}
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-[10px] font-mono outline-none"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-50" />
+
+                  {/* Modal Information Contents Management */}
+                  <div className="space-y-10 pb-10">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+                        <FileSignature className="text-blue-500" /> Information Modal Contents
+                      </h3>
+                      <button 
+                        onClick={() => {
+                          const newMap = {...(landingSettings.footerInfoMap || {})};
+                          const slug = prompt('Enter slug/key (e.g., About Us):');
+                          if (slug) {
+                            newMap[slug] = { am: 'ርዕስ', content: 'English content', contentAm: 'የአማርኛ ይዘት' };
+                            setLandingSettings({...landingSettings, footerInfoMap: newMap});
+                          }
+                        }}
+                        className="px-6 py-3 bg-emerald-100 text-emerald-800 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-200"
+                      >
+                        <Plus size={14} className="inline mr-2" /> Add Content
+                      </button>
+                    </div>
+
+                    <div className="space-y-6">
+                      {Object.keys(landingSettings.footerInfoMap || {}).map((slug) => (
+                        <div key={slug} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm relative group overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+                          <button 
+                            onClick={() => {
+                              if (!confirm('Delete this content?')) return;
+                              const newMap = {...landingSettings.footerInfoMap};
+                              delete newMap[slug];
+                              setLandingSettings({...landingSettings, footerInfoMap: newMap});
+                            }}
+                            className="absolute top-6 right-6 text-rose-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+
+                          <div className="flex flex-col lg:flex-row gap-8">
+                             <div className="lg:w-1/3">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Slug/Key</label>
+                                <div className="text-xs font-mono font-bold text-slate-900 bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">{slug}</div>
+                                
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 pl-1">Amharic Title</label>
+                                <input 
+                                  type="text"
+                                  value={landingSettings.footerInfoMap[slug].am}
+                                  onChange={(e) => {
+                                    const newMap = {...landingSettings.footerInfoMap};
+                                    newMap[slug].am = e.target.value;
+                                    setLandingSettings({...landingSettings, footerInfoMap: newMap});
+                                  }}
+                                  className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-bold outline-none font-am"
+                                />
+                             </div>
+                             <div className="flex-1 space-y-4">
+                                <div>
+                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 pl-1">English Content</label>
+                                  <textarea 
+                                    value={landingSettings.footerInfoMap[slug].content}
+                                    onChange={(e) => {
+                                      const newMap = {...landingSettings.footerInfoMap};
+                                      newMap[slug].content = e.target.value;
+                                      setLandingSettings({...landingSettings, footerInfoMap: newMap});
+                                    }}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-xs font-medium focus:border-emerald-500 transition-colors outline-none h-24 resize-none"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 pl-1">Amharic Content</label>
+                                  <textarea 
+                                    value={landingSettings.footerInfoMap[slug].contentAm}
+                                    onChange={(e) => {
+                                      const newMap = {...landingSettings.footerInfoMap};
+                                      newMap[slug].contentAm = e.target.value;
+                                      setLandingSettings({...landingSettings, footerInfoMap: newMap});
+                                    }}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-xs font-medium focus:border-emerald-500 transition-colors outline-none h-24 resize-none font-am"
+                                  />
+                                </div>
+                             </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Slider Images */}
+                  <div className="space-y-6">
+                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Slider Showcase Images</h4>
+                        <div className="flex items-center gap-2 flex-1 max-w-md">
+                           <input 
+                              type="file" 
+                              onChange={async (e) => {
+                                 if (e.target.files && e.target.files[0]) {
+                                   const url = await uploadImage(e.target.files[0]);
+                                   if (url) {
+                                       setLandingSettings({...landingSettings, sliderImages: [...(landingSettings.sliderImages || []), url]});
+                                   }
+                                 }
+                              }}
+                              className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 transition-colors outline-none"
+                              accept="image/*"
+                           />
+                           <button 
+                              onClick={() => {
+                                 if(newSliderImageUrl.trim()) {
+                                    setLandingSettings({...landingSettings, sliderImages: [...(landingSettings.sliderImages || []), newSliderImageUrl.trim()]});
+                                    setNewSliderImageUrl('');
+                                 }
+                              }}
+                              className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-4 py-2 rounded-xl transition-all whitespace-nowrap active:scale-95"
+                           >
+                              <Plus size={14} /> Add Image
+                           </button>
+                        </div>
+                     </div>
+                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {(landingSettings.sliderImages || []).map((img: string, idx: number) => (
+                           <div key={idx} className="relative group rounded-2xl overflow-hidden aspect-video border-2 border-slate-100">
+                              <img src={img} alt="Slider" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                 <button 
+                                    onClick={() => {
+                                       const newImgs = [...landingSettings.sliderImages];
+                                       newImgs.splice(idx, 1);
+                                       setLandingSettings({...landingSettings, sliderImages: newImgs});
+                                    }}
+                                    className="p-2 bg-rose-500 text-white rounded-lg hover:scale-110 transition-transform"
+                                 >
+                                    <Trash2 size={16} />
+                                 </button>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* Feature Blocks */}
+                  <div className="space-y-6">
+                     <div className="flex items-center justify-between">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Services/Features Grid</h4>
+                        <button 
+                           onClick={() => {
+                              const newFeature = { title: 'New Feature', titleAm: 'አዲስ አገልግሎት', desc: 'Description...', descAm: 'ዝርዝር...', icon: 'Zap', color: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
+                              setLandingSettings({...landingSettings, customFeatures: [...(landingSettings.customFeatures || []), newFeature]});
+                           }}
+                           className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-700 bg-blue-50 px-4 py-2 rounded-xl transition-all"
+                        >
+                           <Plus size={14} /> Add Block
+                        </button>
+                     </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {(landingSettings.customFeatures || []).map((f: any, idx: number) => (
+                           <div key={idx} className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-4 relative shadow-sm">
+                              <button 
+                                 onClick={() => {
+                                    const newFeatures = [...landingSettings.customFeatures];
+                                    newFeatures.splice(idx, 1);
+                                    setLandingSettings({...landingSettings, customFeatures: newFeatures});
+                                 }}
+                                 className="absolute top-6 right-6 text-slate-300 hover:text-rose-500 transition-colors"
+                              >
+                                 <Trash2 size={18} />
+                              </button>
+                              <div className="grid grid-cols-2 gap-4">
+                                 <input 
+                                    type="text" 
+                                    placeholder="Title (EN)"
+                                    value={f.title}
+                                    onChange={(e) => {
+                                       const newF = [...landingSettings.customFeatures];
+                                       newF[idx].title = e.target.value;
+                                       setLandingSettings({...landingSettings, customFeatures: newF});
+                                    }}
+                                    className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none"
+                                 />
+                                 <input 
+                                    type="text" 
+                                    placeholder="ርዕስ (አማ)"
+                                    value={f.titleAm}
+                                    onChange={(e) => {
+                                       const newF = [...landingSettings.customFeatures];
+                                       newF[idx].titleAm = e.target.value;
+                                       setLandingSettings({...landingSettings, customFeatures: newF});
+                                    }}
+                                    className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none font-am"
+                                 />
+                              </div>
+                              <textarea 
+                                 placeholder="Description..."
+                                 value={f.desc}
+                                 onChange={(e) => {
+                                    const newF = [...landingSettings.customFeatures];
+                                    newF[idx].desc = e.target.value;
+                                    setLandingSettings({...landingSettings, customFeatures: newF});
+                                 }}
+                                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:border-emerald-500 outline-none h-20 resize-none"
+                              />
+                              <select 
+                                 value={f.icon}
+                                 onChange={(e) => {
+                                    const newF = [...landingSettings.customFeatures];
+                                    newF[idx].icon = e.target.value;
+                                    setLandingSettings({...landingSettings, customFeatures: newF});
+                                 }}
+                                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none appearance-none"
+                              >
+                                 <option value="Users">Users Icon</option>
+                                 <option value="ShieldCheck">Security Icon</option>
+                                 <option value="Zap">Zap/Speed Icon</option>
+                                 <option value="Eye">Eye/Transparency Icon</option>
+                                 <option value="Gift">Gift Icon</option>
+                                 <option value="BarChart3">Chart Icon</option>
+                              </select>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                   {/* Social Links */}
+                   <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Social Media Links</h4>
+                         <button 
+                            onClick={() => {
+                               const newLink = { platform: 'Twitter', url: '' };
+                               setLandingSettings({...landingSettings, socialLinks: [...(landingSettings.socialLinks || []), newLink]});
+                            }}
+                            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-4 py-2 rounded-xl transition-all"
+                         >
+                            <Plus size={14} /> Add Link
+                         </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         {(landingSettings.socialLinks || []).map((s: any, idx: number) => (
+                            <div key={idx} className="flex gap-4 items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                               <select 
+                                  value={s.platform}
+                                  onChange={(e) => {
+                                     const newLinks = [...landingSettings.socialLinks];
+                                     newLinks[idx].platform = e.target.value;
+                                     setLandingSettings({...landingSettings, socialLinks: newLinks});
+                                  }}
+                                  className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none"
+                               >
+                                  <option value="Twitter">Twitter</option>
+                                  <option value="Facebook">Facebook</option>
+                                  <option value="Instagram">Instagram</option>
+                                  <option value="Globe">Website</option>
+                               </select>
+                               <input 
+                                  type="text" 
+                                  placeholder="URL"
+                                  value={s.url}
+                                  onChange={(e) => {
+                                     const newLinks = [...landingSettings.socialLinks];
+                                     newLinks[idx].url = e.target.value;
+                                     setLandingSettings({...landingSettings, socialLinks: newLinks});
+                                  }}
+                                  className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none"
+                               />
+                               <button 
+                                  onClick={() => {
+                                     const newLinks = [...landingSettings.socialLinks];
+                                     newLinks.splice(idx, 1);
+                                     setLandingSettings({...landingSettings, socialLinks: newLinks});
+                                  }}
+                                  className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-colors"
+                               >
+                                  <Trash2 size={16} />
+                               </button>
+                            </div>
+                         ))}
+                      </div>
+                   </div>
+                  
+                  {/* Additional CTA & Footer Content */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-slate-50">
+                      <div className="col-span-1 md:col-span-2">
+                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4 pl-1">CTA & Footer content</h4>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">CTA Title (EN)</label>
+                        <input 
+                          type="text" 
+                          placeholder="Take the leap."
+                          value={landingSettings.ctaTitle || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, ctaTitle: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none mb-6"
+                        />
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">Footer About (EN)</label>
+                        <textarea 
+                          value={landingSettings.footerAbout || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, footerAbout: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none h-24 resize-none leading-relaxed"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">CTA Title (አማ)</label>
+                        <input 
+                          type="text" 
+                          placeholder="ሁሉንም በአንድ ቦታ"
+                          value={landingSettings.ctaTitleAm || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, ctaTitleAm: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none mb-6"
+                        />
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">Footer About (አማ)</label>
+                        <textarea 
+                          value={landingSettings.footerAboutAm || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, footerAboutAm: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none h-24 resize-none leading-relaxed"
+                        />
+                      </div>
+                      <div className="col-span-1 md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 pl-1">Copyright Text</label>
+                        <input 
+                          type="text" 
+                          value={landingSettings.copyrightText || ''} 
+                          onChange={(e) => setLandingSettings({...landingSettings, copyrightText: e.target.value})}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold focus:border-emerald-500 transition-colors outline-none"
+                        />
+                      </div>
+                   </div>
+                </div>
+             </div>
+           </motion.div>
+         ) : activeTab === 'ai_advisor' ? (
+          <motion.div 
+            key="ai_advisor"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-8 pb-20"
+          >
+            {/* AI Advisor Header */}
+            <div className={`bg-slate-950 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-white/5`}>
+               <div className={`absolute top-0 right-0 w-[500px] h-[500px] bg-violet-600/20 blur-[120px] rounded-full -mr-64 -mt-64 animate-pulse`} />
+               <div className={`absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600/10 blur-[120px] rounded-full -ml-64 -mb-64`} />
+               
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-violet-500/10 text-violet-400 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-violet-500/20">
+                        <Sparkles size={14} className="animate-pulse" />
+                        Gemini AI Intelligent Advisor
+                     </div>
+                     <h2 className="text-5xl font-black text-white uppercase tracking-tighter mb-4 leading-none italic">
+                        AI <span className="text-violet-500">INSIGHTS</span> <span>አማካሪ</span>
+                     </h2>
+                     <p className="text-slate-400 font-medium max-w-xl text-lg leading-relaxed">
+                        የእቁብ ሲስተምዎን ዳታ በአርቴፊሻል ኢንተለጀንስ በመተንተን የተሻሉ ውሳኔዎችን እንዲወስኑ ይረዳዎታል። (Strategic analysis powered by Gemini AI)
+                     </p>
+                  </div>
+                  
+                  <button 
+                     onClick={generateAIInsights}
+                     disabled={isGeneratingInsights}
+                     className={`px-10 py-6 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-[2.5rem] text-sm font-black uppercase tracking-[0.2em] flex items-center gap-4 transition-all shadow-[0_0_50px_rgba(139,92,246,0.3)] active:scale-95 disabled:opacity-50`}
+                  >
+                     {isGeneratingInsights ? <RefreshCw size={20} className="animate-spin" /> : <Zap size={20} />}
+                     {language === 'am' ? 'ትንታኔ አፍልቅ (Generate)' : 'Generate Analysis'}
+                  </button>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+               {/* Analysis Result */}
+               <div className="lg:col-span-2 bg-white rounded-[3rem] p-12 border border-slate-100 shadow-2xl relative">
+                  {!aiInsights && !isGeneratingInsights ? (
+                    <div className="h-[500px] flex flex-col items-center justify-center text-center space-y-6 opacity-40">
+                       <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center">
+                          <EyeOff size={40} className="text-slate-300" />
+                       </div>
+                       <p className="text-xl font-black text-slate-400 uppercase tracking-tighter">No Analysis Generated Yet</p>
+                       <p className="text-sm font-medium text-slate-400 max-w-xs uppercase tracking-widest">Click the button above to start AI deep dive</p>
+                    </div>
+                  ) : isGeneratingInsights ? (
+                    <div className="h-[500px] flex flex-col items-center justify-center text-center space-y-8">
+                        <div className="relative">
+                          <div className="w-24 h-24 border-4 border-violet-100 border-t-violet-600 rounded-full animate-spin" />
+                          <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-violet-600 animate-pulse" size={32} />
+                        </div>
+                        <div className="space-y-2">
+                           <p className="text-2xl font-black text-slate-800 uppercase tracking-tighter italic">Analyzing Ecosystem...</p>
+                           <p className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Running Gemini 3 Flash Pro Inference</p>
+                        </div>
+                    </div>
+                  ) : (
+                    <div className="prose prose-slate max-w-none prose-h1:text-4xl prose-h1:font-black prose-h1:uppercase prose-h1:tracking-tighter prose-h1:italic prose-h1:text-slate-900 prose-h2:text-2xl prose-h2:font-black prose-h2:uppercase prose-h2:text-violet-600 prose-p:text-slate-600 prose-p:font-medium prose-li:text-slate-600 prose-li:font-medium prose-strong:text-slate-900">
+                       <ReactMarkdown>{aiInsights}</ReactMarkdown>
+                    </div>
+                  )}
+               </div>
+
+               {/* AI Stats Context */}
+               <div className="space-y-8">
+                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[3rem] p-10 text-white shadow-xl relative overflow-hidden">
+                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-3xl -mr-16 -mt-16" />
+                     <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-8 border-b border-white/10 pb-4">Analysis Context</h3>
+                     <div className="space-y-6">
+                        {(() => {
+                          const totalCapitalValue = groups.reduce((acc, g) => acc + ((parseInt(g.amount) || 0) * (g.memberCount || 10)), 0);
+                          return [
+                            { label: 'Total Users', value: allUsers.length, icon: Users },
+                            { label: 'Active Capital', value: `ETB ${totalCapitalValue.toLocaleString()}`, icon: DollarSign },
+                            { label: 'KYC Backlog', value: pendingUsers.length, icon: ShieldAlert },
+                            { label: 'System Payouts', value: payouts.length, icon: Trophy },
+                          ].map((stat, i) => (
+                            <div key={i} className="flex items-center justify-between group">
+                               <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                     <stat.icon className="text-violet-400" size={18} />
+                                  </div>
+                                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{stat.label}</span>
+                               </div>
+                               <span className="text-lg font-black">{stat.value}</span>
+                            </div>
+                          ));
+                        })()}
+                     </div>
+                  </div>
+
+                  <div className="bg-violet-50 rounded-[3rem] p-10 border border-violet-100 italic">
+                     <p className="text-[9px] font-black text-violet-600 uppercase tracking-widest mb-4">AI Vision Statement</p>
+                     <p className="text-sm font-bold text-violet-900 leading-relaxed">
+                        "The goal of " + t('common.appName') + " is to bridge traditional informal savings with institutional security. AI ensures every member is backed by data-driven integrity."
+                     </p>
+                  </div>
+               </div>
+            </div>
+          </motion.div>
+        ) : activeTab === 'settings' ? (
+          <motion.div 
+            key="settings"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-8 pb-20"
+          >
+            {/* Settings Header */}
+            <div className="bg-slate-900 rounded-[3rem] p-10 relative overflow-hidden shadow-2xl border border-white/5">
+               <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 blur-[100px] rounded-full -mr-40 -mt-40" />
+               <div className="absolute bottom-0 left-0 w-80 h-80 bg-fuchsia-500/10 blur-[100px] rounded-full -ml-40 -mb-40" />
+               
+               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/10 text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-indigo-500/20">
+                        <Settings size={14} />
+                        System Administration
+                     </div>
+                     <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
+                        አጠቃላይ <span>ቅንብሮች</span> <span className="text-indigo-500">.</span>
+                     </h2>
+                     <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">
+                        የሲስተሙን ቋንቋ፣ የማሳወቂያ መንገዶች፣ እና አጠቃላይ የአስተዳደር ምርጫዎችን ከዚህ ማስተካከል ይችላሉ። (System configuration and admin preferences)
+                     </p>
+                  </div>
+                  
+                  <button 
+                     onClick={saveSystemSettings}
+                     disabled={Object.keys(adminProfileEdits).length === 0 && !isSettingsChanged}
+                     className={`px-8 py-5 rounded-[2rem] text-xs font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all ${
+                       Object.keys(adminProfileEdits).length > 0 || isSettingsChanged
+                         ? 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-[0_0_40px_rgba(99,102,241,0.4)] active:scale-95'
+                         : 'bg-indigo-500/50 text-white/50 cursor-not-allowed'
+                     }`}
+                  >
+                     {isSavingSettings ? (
+                       <RefreshCw size={18} className="animate-spin" />
+                     ) : (
+                       <Save size={18} />
+                     )}
+                     ለውጦቹን አስቀምጥ (Save)
+                  </button>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+               {/* Language & Interface Settings */}
+               <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-xl relative overflow-hidden">
+                  <div className="absolute -top-10 -right-10 text-slate-50 rotate-12">
+                     <Globe size={180} />
+                  </div>
+                  <div className="relative z-10">
+                     <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
+                        <Globe size={24} />
+                     </div>
+                     <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">Language / ቋንቋ</h3>
+                     <p className="text-sm font-medium text-slate-500 mb-8">የስርዓት ቋንቋ (System Language)</p>
+                     
+                     <div className="grid grid-cols-2 gap-4">
+                        <button 
+                           onClick={() => setLanguage('am')}
+                           className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 ${language === 'am' ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900 shadow-lg shadow-indigo-500/20' : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'}`}
+                        >
+                           <span className="text-2xl font-black">አማ</span>
+                           <span className="text-[9px] font-black uppercase tracking-widest">አማርኛ</span>
+                        </button>
+                        <button 
+                           onClick={() => setLanguage('en')}
+                           className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 ${language === 'en' ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900 shadow-lg shadow-indigo-500/20' : 'border-slate-100 bg-white text-slate-500 hover:border-slate-200'}`}
+                        >
+                           <span className="text-2xl font-black">EN</span>
+                           <span className="text-[9px] font-black uppercase tracking-widest">English</span>
+                        </button>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Notifications Settings */}
+               <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-xl relative overflow-hidden">
+                  <div className="absolute -top-10 -right-10 text-slate-50 -rotate-12">
+                     <BellRing size={180} />
+                  </div>
+                  <div className="relative z-10">
+                     <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6">
+                        <BellRing size={24} />
+                     </div>
+                     <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">ማሳወቂያዎች</h3>
+                     <p className="text-sm font-medium text-slate-500 mb-8">ማሳወቂያዎች (Notifications)</p>
+                     
+                     <div className="space-y-4">
+                        <div 
+                           onClick={() => updateSetting('notifyRegistrations', !systemSettings.notifyRegistrations)}
+                           className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors"
+                        >
+                           <div>
+                              <p className="text-xs font-bold text-slate-900">አዲስ ምዝገባ ማሳወቂያ</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Alert on Registration</p>
+                           </div>
+                           <div className={`text-3xl transition-colors ${systemSettings.notifyRegistrations ? 'text-indigo-500' : 'text-slate-200'}`}>
+                              {systemSettings.notifyRegistrations ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                           </div>
+                        </div>
+
+                        <div 
+                           onClick={() => updateSetting('autoApprove', !systemSettings.autoApprove)}
+                           className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors"
+                        >
+                           <div>
+                              <p className="text-xs font-bold text-slate-900">በራስሰር ማጽደቅ</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Auto Approve Users</p>
+                           </div>
+                           <div className={`text-3xl transition-colors ${systemSettings.autoApprove ? 'text-emerald-500' : 'text-slate-200'}`}>
+                              {systemSettings.autoApprove ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Security Settings */}
+               <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-xl relative overflow-hidden">
+                  <div className="absolute -top-10 -right-10 text-slate-50 rotate-45">
+                     <ShieldCheck size={180} />
+                  </div>
+                  <div className="relative z-10">
+                     <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-6">
+                        <Lock size={24} />
+                     </div>
+                     <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">ደህንነት / Security</h3>
+                     <p className="text-sm font-medium text-slate-500 mb-8">የስርዓት ደህንነት (System Security)</p>
+                     
+                     <div className="space-y-4">
+                        <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50 space-y-2">
+                           <div>
+                              <p className="text-xs font-bold text-slate-900">የመጀመሪያ የይለፍ ቃል</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Default User Password</p>
+                           </div>
+                           <input 
+                              type="text" 
+                              value={systemSettings.defaultUserPassword || ''}
+                              onChange={(e) => updateSetting('defaultUserPassword', e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-rose-500/20"
+                              placeholder="e.g. Password@123"
+                           />
+                        </div>
+
+                        <div 
+                           onClick={() => updateSetting('require2FA', !systemSettings.require2FA)}
+                           className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors"
+                        >
+                           <div>
+                              <p className="text-xs font-bold text-slate-900">2FA ማረጋገጫ</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Require 2FA</p>
+                           </div>
+                           <div className={`text-3xl transition-colors ${systemSettings.require2FA ? 'text-rose-500' : 'text-slate-200'}`}>
+                              {systemSettings.require2FA ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                           </div>
+                        </div>
+
+                        <div 
+                           onClick={() => updateSetting('strictLogin', !systemSettings.strictLogin)}
+                           className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors"
+                        >
+                           <div>
+                              <p className="text-xs font-bold text-slate-900">ጥብቅ የመግቢያ ህግ</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Strict Login Checks</p>
+                           </div>
+                           <div className={`text-3xl transition-colors ${systemSettings.strictLogin ? 'text-emerald-500' : 'text-slate-200'}`}>
+                              {systemSettings.strictLogin ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Registration Form Settings */}
+               <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-xl relative overflow-hidden lg:col-span-3">
+                  <div className="absolute -top-10 -right-10 text-slate-50 -rotate-12 pointer-events-none">
+                     <Settings size={180} />
+                  </div>
+                  <div className="relative z-10">
+                     <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
+                        <Settings size={24} />
+                     </div>
+                     <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">የመመዝገቢያ ቅንብሮች / Registration Form settings</h3>
+                     <p className="text-sm font-medium text-slate-500 mb-8">የመመዝገቢያ ፎርም መጨመር እና መቀነስ (Add, remove and manage registration forms)</p>
+                     
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                           <h4 className="text-sm font-bold text-slate-900 mb-4">መሰረታዊ ቅጾች (Standard Form Steps)</h4>
+                           <div onClick={() => updateSetting('signupShowBirthplace', systemSettings.signupShowBirthplace === false ? true : false)} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors">
+                              <div><p className="text-xs font-bold text-slate-900">የትውልድ ቦታ (Birthplace)</p></div>
+                              <div className={`text-3xl transition-colors ${systemSettings.signupShowBirthplace !== false ? 'text-indigo-500' : 'text-slate-200'}`}>
+                                 {systemSettings.signupShowBirthplace !== false ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                              </div>
+                           </div>
+                           <div onClick={() => updateSetting('signupShowAddress', systemSettings.signupShowAddress === false ? true : false)} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors">
+                              <div><p className="text-xs font-bold text-slate-900">አድራሻ (Address)</p></div>
+                              <div className={`text-3xl transition-colors ${systemSettings.signupShowAddress !== false ? 'text-indigo-500' : 'text-slate-200'}`}>
+                                 {systemSettings.signupShowAddress !== false ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                              </div>
+                           </div>
+                           <div onClick={() => updateSetting('signupShowGroup', systemSettings.signupShowGroup === false ? true : false)} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors">
+                              <div><p className="text-xs font-bold text-slate-900">የእቁብ ምርጫ (Equb Group Selection)</p></div>
+                              <div className={`text-3xl transition-colors ${systemSettings.signupShowGroup !== false ? 'text-indigo-500' : 'text-slate-200'}`}>
+                                 {systemSettings.signupShowGroup !== false ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                              </div>
+                           </div>
+                           <div onClick={() => updateSetting('signupShowKYC', systemSettings.signupShowKYC === false ? true : false)} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors">
+                              <div><p className="text-xs font-bold text-slate-900">ማንነት ማረጋገጫ (KYC/ID Upload)</p></div>
+                              <div className={`text-3xl transition-colors ${systemSettings.signupShowKYC !== false ? 'text-indigo-500' : 'text-slate-200'}`}>
+                                 {systemSettings.signupShowKYC !== false ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                              </div>
+                           </div>
+                        </div>
+
+                        <div className="space-y-4">
+                           <div className="flex items-center justify-between mb-4">
+                             <h4 className="text-sm font-bold text-slate-900">ተጨማሪ ቅጾች (Custom Fields)</h4>
+                             <button onClick={() => {
+                               const customFields = [...(systemSettings.signupCustomFields || [])];
+                               customFields.push({ id: 'custom_' + Date.now(), label: 'New Field', labelAm: 'አዲስ ቅጽ', type: 'text', required: false });
+                               updateSetting('signupCustomFields', customFields);
+                             }} className="text-xs font-bold text-indigo-500 hover:text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg">+ አዲስ ጨምር (Add)</button>
+                           </div>
+
+                           {(!systemSettings.signupCustomFields || systemSettings.signupCustomFields.length === 0) && (
+                             <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-2xl">
+                                <p className="text-xs text-slate-400 font-bold">ምንም ተጨማሪ ቅጽ የለም (No custom fields)</p>
+                             </div>
+                           )}
+
+                           {systemSettings.signupCustomFields?.map((field: any, index: number) => (
+                              <div key={field.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 space-y-3">
+                                 <div className="flex justify-between items-center">
+                                    <input 
+                                      className="text-sm font-black bg-transparent border-b border-slate-200 outline-none focus:border-indigo-500 w-1/2 placeholder:font-normal" 
+                                      placeholder="English Label"
+                                      value={field.label} 
+                                      onChange={(e) => {
+                                        const newFields = [...systemSettings.signupCustomFields];
+                                        newFields[index].label = e.target.value;
+                                        updateSetting('signupCustomFields', newFields);
+                                      }}
+                                    />
+                                    <button onClick={() => {
+                                        const newFields = systemSettings.signupCustomFields.filter((_: any, i: number) => i !== index);
+                                        updateSetting('signupCustomFields', newFields);
+                                      }} className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-lg transition-colors">
+                                      <Trash2 size={16} />
+                                    </button>
+                                 </div>
+                                 <input 
+                                    className="text-sm font-bold bg-transparent border-b border-slate-200 outline-none focus:border-indigo-500 w-full placeholder:font-normal" 
+                                    placeholder="Amharic Label (አማርኛ ስም)"
+                                    value={field.labelAm || ''} 
+                                    onChange={(e) => {
+                                      const newFields = [...systemSettings.signupCustomFields];
+                                      newFields[index].labelAm = e.target.value;
+                                      updateSetting('signupCustomFields', newFields);
+                                    }}
+                                 />
+                                 <div className="flex items-center gap-4 mt-2">
+                                     <select 
+                                       className="text-[10px] font-bold px-2 py-1 rounded bg-white border border-slate-200 outline-none"
+                                       value={field.type}
+                                       onChange={(e) => {
+                                          const newFields = [...systemSettings.signupCustomFields];
+                                          newFields[index].type = e.target.value;
+                                          updateSetting('signupCustomFields', newFields);
+                                       }}
+                                     >
+                                         <option value="text">Text / ፅሁፍ</option>
+                                         <option value="number">Number / ቁጥር</option>
+                                         <option value="tel">Phone / ስልክ</option>
+                                     </select>
+                                     
+                                     <label className="flex items-center gap-2 cursor-pointer text-[10px] font-bold text-slate-600">
+                                        <input 
+                                          type="checkbox" 
+                                          className="rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
+                                          checked={field.required}
+                                          onChange={(e) => {
+                                             const newFields = [...systemSettings.signupCustomFields];
+                                             newFields[index].required = e.target.checked;
+                                             updateSetting('signupCustomFields', newFields);
+                                          }}
+                                        />
+                                        ግዴታ (Required)
+                                     </label>
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* System Preferences */}
+               <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-xl lg:col-span-3 relative overflow-hidden">
+                  <div className="absolute top-0 right-10 text-slate-50">
+                     <Sliders size={200} />
+                  </div>
+                  <div className="relative z-10 flex flex-col md:flex-row gap-12">
+                     <div className="flex-1">
+                        <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6">
+                           <Sliders size={24} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">የስርዓት ዝግጅት (System Setup)</h3>
+                        <p className="text-sm font-medium text-slate-500 mb-8">የቡድን መጠን እና የስርዓት እንቅስቃሴ (System and group limits)</p>
+                        
+                        <div className="space-y-8">
+                           <div>
+                              <label className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                                 <span>የቡድን ከፍተኛ አባላት (Max Group Size)</span>
+                                 <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md">{systemSettings.maxGroupSize} Members</span>
+                              </label>
+                              <input 
+                                 type="range" 
+                                 min="5" 
+                                 max="50"
+                                 step="5"
+                                 value={systemSettings.maxGroupSize}
+                                 onChange={(e) => updateSetting('maxGroupSize', parseInt(e.target.value))}
+                                 className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                              />
+                              <div className="flex justify-between mt-2 text-[10px] font-bold text-slate-300">
+                                 <span>5</span>
+                                 <span>50</span>
+                              </div>
+                           </div>
+
+                           <div>
+                              <div className="mb-2">
+                                 <p className="text-xs font-bold text-slate-900">የማጋሪያ ሊንክ (Referral Share Link)</p>
+                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 font-bold">Custom base URL for member sharing invites</p>
+                              </div>
+                              <input 
+                                 type="text" 
+                                 value={systemSettings.shareLink || ''}
+                                 onChange={(e) => updateSetting('shareLink', e.target.value)}
+                                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                 placeholder="e.g. https://myequb.com"
+                              />
+                              <p className="text-[9px] text-slate-400 mt-1.5 font-bold uppercase tracking-wide">
+                                 * ባዶ ከቀረ የወቅቱ ዌብሳይት አድራሻ (domain) በራስሰር ይጠቀማል። (If left empty, the current site origin will be used.)
+                              </p>
+                           </div>
+
+                           <div 
+                              onClick={() => updateSetting('maintenanceMode', !systemSettings.maintenanceMode)}
+                              className={`flex items-center justify-between p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                                 systemSettings.maintenanceMode ? 'border-rose-500 bg-rose-50 text-rose-900 shadow-lg shadow-rose-500/20' : 'border-slate-100 hover:border-slate-200 bg-white'
+                              }`}
+                           >
+                              <div className="flex items-center gap-4">
+                                 <div className={`p-2 rounded-xl flex items-center justify-center ${systemSettings.maintenanceMode ? 'bg-rose-500 text-white shadow-md' : 'bg-slate-100 text-slate-400'}`}>
+                                    <AlertOctagon size={24} />
+                                 </div>
+                                 <div>
+                                    <p className="text-sm font-bold text-slate-900">የጥገና ጊዜ (Maintenance Mode)</p>
+                                    <p className={`text-[10px] font-bold uppercase tracking-widest ${systemSettings.maintenanceMode ? 'text-rose-500' : 'text-slate-400'}`}>
+                                       {systemSettings.maintenanceMode ? 'System is offline for users' : 'System is active normally'}
+                                    </p>
+                                 </div>
+                              </div>
+                              <div className={`text-4xl transition-colors min-w-[40px] flex justify-end ${systemSettings.maintenanceMode ? 'text-rose-500' : 'text-slate-200'}`}>
+                                 {systemSettings.maintenanceMode ? <ToggleRight size={40} /> : <ToggleLeft size={40} />}
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                     
+                     <div className="flex-[0.5] bg-slate-900 rounded-[2rem] p-8 text-white relative overflow-hidden flex flex-col justify-between shadow-2xl">
+                        <div className="absolute -bottom-10 -right-10 text-white/5 rotate-12 pointer-events-none">
+                           <ShieldCheck size={180} />
+                        </div>
+                        <div className="relative z-10">
+                           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center mb-6 backdrop-blur-md">
+                              <Shield size={20} />
+                           </div>
+                           <h4 className="text-lg font-black uppercase tracking-tighter mb-2">Admin Context</h4>
+                           <p className="text-xs text-white/60 font-medium mb-6">Your current administrative access level and environment.</p>
+                           
+                           <div className="space-y-3">
+                              <div className="flex justify-between text-xs border-b border-white/10 pb-3 mt-4">
+                                 <span className="text-white/40 uppercase font-bold tracking-widest">Role</span>
+                                 <span className="font-black text-amber-400 tracking-tight">Super Admin</span>
+                              </div>
+                              <div className="flex justify-between text-xs border-b border-white/10 pb-3">
+                                 <span className="text-white/40 uppercase font-bold tracking-widest">Network</span>
+                                 <span className="font-black text-emerald-400 flex items-center gap-1">
+                                    Connected <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
+                                 </span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                 <span className="text-white/40 uppercase font-bold tracking-widest">Version</span>
+                                 <span className="font-black text-white/80">v2.1.0</span>
+                              </div>
+                           </div>
+                        </div>
+                        
+                        <div className="pt-8 mt-8 border-t border-white/10 relative z-10">
+                           <button 
+                             onClick={() => alert('Cache cleared successfully')}
+                             className="w-full py-4 bg-white/10 hover:bg-white/20 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2"
+                           >
+                             <RefreshCw size={14} /> Clear System Cache
+                           </button>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Admin Profile Configuration */}
+               <div className="bg-white rounded-[3rem] p-8 lg:p-12 border border-slate-100 shadow-xl lg:col-span-2 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 text-slate-50 opacity-50 pointer-events-none">
+                     <User size={300} className="-mr-10 -mt-20" />
+                  </div>
+                  <div className="relative z-10">
+                     <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
+                        <User size={24} />
+                     </div>
+                     <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-2">My Profile (የግል መረጃ)</h3>
+                     <p className="text-sm font-medium text-slate-500 mb-10 max-w-2xl">
+                        እንደ ዋና አድሚን የግል መረጃዎን ከዚህ ማስተካከል ይችላሉ። (Update your personal and administrative details.)
+                     </p>
+                     
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="space-y-4 col-span-1 md:col-span-2 lg:col-span-3 pb-4 border-b border-slate-100">
+                           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Account Details</h4>
+                        </div>
+                        
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block">Full Name / ስም</span>
+                           <input
+                             type="text"
+                             value={adminProfileEdits.fullName !== undefined ? adminProfileEdits.fullName : adminProfile?.fullName || ''}
+                             onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, fullName: e.target.value }))}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                             placeholder="Admin Name"
+                           />
+                        </label>
+                        
+                        <label className="block relative group">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block w-full">Email / ኢሜይል</span>
+                           <input
+                             type="email"
+                             value={auth.currentUser?.email || ''}
+                             readOnly
+                             className="w-full bg-slate-100/70 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-500 cursor-not-allowed font-medium"
+                           />
+                           <div className="absolute right-3 top-9 text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg">Firebase Sync</div>
+                        </label>
+
+                        {adminProfileEdits._isChangingPassword ? (
+                          <div className="space-y-4">
+                            <label className="block relative group">
+                               <div className="flex justify-between items-center mb-2">
+                                 <span className="text-xs font-bold text-slate-700 block">New Password / አዲስ የይለፍ ቃል</span>
+                                 <button type="button" onClick={() => setAdminProfileEdits((p: any) => { const { password, _isChangingPassword, ...rest } = p; return rest;})} className="text-[10px] text-rose-500 font-bold hover:underline">Cancel</button>
+                               </div>
+                               <input
+                                 type="password"
+                                 autoComplete="new-password"
+                                 value={adminProfileEdits.password !== undefined ? adminProfileEdits.password : ''}
+                                 onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, password: e.target.value }))}
+                                 className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                                 placeholder="New password"
+                               />
+                               <div className="absolute right-3 top-9 text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg">Firebase Auth</div>
+                            </label>
+
+                            {adminProfileEdits.password && (
+                              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-amber-50 border border-amber-100 rounded-2xl space-y-2">
+                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest block">የአሁኑን የይለፍ ቃል ያረጋግጡ (Required)</span>
+                                <div className="relative">
+                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-400/50" size={14} />
+                                  <input 
+                                    type="password"
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                    className="w-full pl-9 pr-3 py-2 bg-white border border-amber-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/20"
+                                    placeholder="Enter current password..."
+                                  />
+                                </div>
+                              </motion.div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="block">
+                            <span className="text-xs font-bold text-slate-700 mb-2 block">Password / የይለፍ ቃል</span>
+                            <button
+                              type="button"
+                              onClick={() => setAdminProfileEdits((prev: any) => ({ ...prev, _isChangingPassword: true }))}
+                              className="w-full flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-600 transition-all font-medium"
+                            >
+                              <Lock size={16} />
+                              Change Password
+                            </button>
+                          </div>
+                        )}
+
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block">Phone / ስልክ ቁጥር (Login)</span>
+                           <input
+                             type="tel"
+                             value={adminProfileEdits.phone !== undefined ? adminProfileEdits.phone : adminProfile?.phone || ''}
+                             onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, phone: e.target.value }))}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                             placeholder="09..."
+                           />
+                        </label>
+
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block">Nationality / ዜግነት</span>
+                           <input
+                             type="text"
+                             value={adminProfileEdits.nationality !== undefined ? adminProfileEdits.nationality : adminProfile?.nationality || 'Ethiopian'}
+                             onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, nationality: e.target.value }))}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                             placeholder="Ethiopian"
+                           />
+                        </label>
+
+                        <div className="space-y-4 col-span-1 md:col-span-2 lg:col-span-3 pt-6 pb-4 border-b border-slate-100">
+                           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Address Information / አድራሻ</h4>
+                        </div>
+
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block">Region / ክልል</span>
+                           <input
+                             type="text"
+                             value={adminProfileEdits.addressRegion !== undefined ? adminProfileEdits.addressRegion : adminProfile?.addressRegion || ''}
+                             onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, addressRegion: e.target.value }))}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                             placeholder="Region"
+                           />
+                        </label>
+
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block">Zone / ዞን</span>
+                           <input
+                             type="text"
+                             value={adminProfileEdits.addressZone !== undefined ? adminProfileEdits.addressZone : adminProfile?.addressZone || ''}
+                             onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, addressZone: e.target.value }))}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                             placeholder="Zone"
+                           />
+                        </label>
+
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block">Wereda & City / ወረዳና ከተማ</span>
+                           <input
+                             type="text"
+                             value={adminProfileEdits.addressWereda !== undefined ? adminProfileEdits.addressWereda : adminProfile?.addressWereda || ''}
+                             onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, addressWereda: e.target.value }))}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                             placeholder="Wereda / City"
+                           />
+                        </label>
+
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block">Kebele / ቀበሌ</span>
+                           <input
+                             type="text"
+                             value={adminProfileEdits.addressKebele !== undefined ? adminProfileEdits.addressKebele : adminProfile?.addressKebele || ''}
+                             onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, addressKebele: e.target.value }))}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                             placeholder="Kebele"
+                           />
+                        </label>
+
+                        <div className="space-y-4 col-span-1 md:col-span-2 lg:col-span-3 pt-6 pb-4 border-b border-slate-100">
+                           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identification / መታወቂያ</h4>
+                        </div>
+
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block">Fayda ID / የፋይዳ መታወቂያ</span>
+                           <input
+                             type="text"
+                             value={adminProfileEdits.faydaId !== undefined ? adminProfileEdits.faydaId : adminProfile?.faydaId || ''}
+                             onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, faydaId: e.target.value }))}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                             placeholder="Fayda ID"
+                           />
+                        </label>
+
+                        <label className="block">
+                           <span className="text-xs font-bold text-slate-700 mb-2 block">ID Number / የመታወቂያ ቁጥር</span>
+                           <input
+                             type="text"
+                             value={adminProfileEdits.idNumber !== undefined ? adminProfileEdits.idNumber : adminProfile?.idNumber || ''}
+                             onChange={(e) => setAdminProfileEdits((prev: any) => ({ ...prev, idNumber: e.target.value }))}
+                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                             placeholder="ID Number"
+                           />
+                        </label>
+
+                        <div className="col-span-1 md:col-span-2 lg:col-span-3 pt-6 border-t border-slate-100 flex justify-end">
+                           <button 
+                              onClick={saveSystemSettings}
+                              disabled={Object.keys(adminProfileEdits).filter(k => k !== '_isChangingPassword').length === 0 || isSavingSettings}
+                              className={`px-8 py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all ${
+                                Object.keys(adminProfileEdits).filter(k => k !== '_isChangingPassword').length > 0
+                                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-500/30'
+                                  : 'bg-indigo-50 text-indigo-400 cursor-not-allowed hidden'
+                              }`}
+                           >
+                              {isSavingSettings ? 'ያስቀምጣል...' : 'ለውጡን አስቀምጥ (Save Profile)'}
+                           </button>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {/* Selected Audit Log / Receipt Modal */}
+      <AnimatePresence>
+        {selectedAuditLog && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]"
+            >
+              <div className="p-8 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
+                 <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                      selectedAuditLog.type === 'payment' ? 'bg-emerald-100 text-emerald-600' :
+                      selectedAuditLog.type === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                       {selectedAuditLog.type === 'payment' ? <DollarSign size={20} /> : <FileText size={20} />}
+                    </div>
+                    <div>
+                       <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">የመዝገብ ዝርዝር (Log Details)</h3>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                          {selectedAuditLog.action}
+                       </p>
+                    </div>
+                 </div>
+                 <button 
+                   onClick={() => setSelectedAuditLog(null)}
+                   className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-xl transition-all border border-slate-200"
+                 >
+                   <X size={20} />
+                 </button>
+              </div>
+
+              <div id="audit-receipt-content" className="p-8 overflow-y-auto bg-white flex-1 relative">
+                 <div className="absolute top-4 right-4 opacity-5 pointer-events-none">
+                    <ShieldCheck size={120} />
+                 </div>
+                 
+                 <div className="mb-8 pb-8 border-b border-dashed border-slate-200">
+                    <div className="flex justify-between items-start mb-6">
+                       <div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ተሳታፊ (Entity)</p>
+                          <p className="text-lg font-black text-slate-900">{selectedAuditLog.userName || 'System Auto'}</p>
+                       </div>
+                       <div className="text-right">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">መታወቂያ (ID)</p>
+                          <p className="text-xs font-mono font-bold text-slate-600 bg-slate-50 px-2 py-1 rounded">{selectedAuditLog.id}</p>
+                       </div>
+                    </div>
+
+                    {selectedAuditLog.type === 'payment' && selectedAuditLog.amount && (
+                      <div className="bg-emerald-50 text-emerald-900 p-6 rounded-2xl mb-6 flex justify-between items-center border border-emerald-100">
+                         <div>
+                            <p className="text-[10px] font-black tracking-widest uppercase text-emerald-600/70 mb-1">የክፍያ መጠን (Amount)</p>
+                            <p className="text-3xl font-black">{selectedAuditLog.amount.toLocaleString()} <span className="text-sm">ETB</span></p>
+                         </div>
+                         <div className="w-12 h-12 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                            <CheckCircle size={24} />
+                         </div>
+                      </div>
+                    )}
+
+                    <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">ተጨማሪ መረጃ (Additional Info)</p>
+                       <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                             <span className="text-xs font-bold text-slate-500">ዓይነት (Type)</span>
+                             <span className="text-xs font-black text-slate-800 uppercase">{selectedAuditLog.origin || 'System Update'}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                             <span className="text-xs font-bold text-slate-500">ቀን እና ሰዓት (Timestamp)</span>
+                             <span className="text-xs font-black text-slate-800">{new Date(selectedAuditLog.createdAt?.toDate ? selectedAuditLog.createdAt.toDate() : selectedAuditLog.createdAt).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                             <span className="text-xs font-bold text-slate-500">ሁኔታ (Status)</span>
+                             <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${
+                               selectedAuditLog.status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'
+                             }`}>{selectedAuditLog.status || 'Verified'}</span>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="text-center">
+                    <div className="inline-flex items-center gap-2 text-[10px] font-black text-slate-400 tracking-[0.2em] uppercase">
+                       <Shield size={12} />
+                       {t('common.appName')} System Authenticated
+                    </div>
+                 </div>
+              </div>
+
+              <div className="p-8 bg-slate-50 border-t border-slate-100 shrink-0">
+                 <button 
+                   onClick={() => generateReportPDF('audit-receipt-content', `Audit-Receipt-${selectedAuditLog.id}`)}
+                   className="w-full py-4 bg-slate-900 text-white rounded-[1.5rem] text-xs font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 hover:scale-[1.02] transition-transform"
+                 >
+                   <Download size={18} />
+                   መረጃውን አውርድ (Download Receipt)
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Draw Animation and Selection Modal */}
+      <AnimatePresence>
+        {showDrawModal && selectedDrawGroup && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[3rem] w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]"
+            >
+              {/* Modal Header */}
+              <div className="flex justify-between items-center p-6 border-b border-slate-50 bg-slate-50/30">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-rose-500/20">
+                    <Trophy size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest leading-none">የእጣ አወጣጥ (Draw Event)</h3>
+                    <p className="text-slate-400 text-[10px] mt-1 font-bold">ቡድን {selectedDrawGroup.name}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowDrawModal(false)}
+                  disabled={drawStage === 'animating'}
+                  className="p-2 bg-white text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all shadow-sm disabled:opacity-50"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-8 relative flex flex-col items-center justify-center min-h-[400px]">
+                {drawStage === 'select' && (
+                  <div className="w-full space-y-8 animate-in fade-in zoom-in duration-500">
+                    <div className="text-center space-y-2">
+                       <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">አሸናፊውን ይምረጡ (Select Winner)</h2>
+                       <p className="text-xs font-bold text-slate-500">በዘፈቀደ (Random) ወይም የተመረጠ አባል (Manual Pick) ለዚህ ዙር እጣ መምረጥ ይችላሉ።</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl mx-auto">
+                       {/* Auto Draw Option */}
+                       <div 
+                         onClick={() => startDrawAnimation('auto')}
+                         className="flex flex-col items-center justify-center p-8 rounded-[2rem] bg-gradient-to-br from-indigo-50 to-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/20 transition-all cursor-pointer group"
+                       >
+                          <div className="w-20 h-20 rounded-[2rem] bg-indigo-500 text-white flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/30 group-hover:scale-110 transition-transform">
+                             <RefreshCw size={32} />
+                          </div>
+                          <h3 className="text-lg font-black text-indigo-900 uppercase tracking-widest mb-2 text-center">በዘፈቀደ አውጣ <br/>(Random Draw)</h3>
+                          <p className="text-[10px] font-bold text-indigo-500/80 text-center uppercase tracking-widest">ፍትሀዊ አወጣጥ ለሁሉም</p>
+                       </div>
+
+                       {/* Manual Select Option */}
+                       <div className="flex flex-col p-6 rounded-[2rem] bg-slate-50 border-2 border-slate-200 transition-all">
+                          <div className="w-12 h-12 rounded-xl bg-slate-200 text-slate-500 flex items-center justify-center mb-4">
+                             <User size={20} />
+                          </div>
+                          <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">አባል ምረጥ (Manual Select)</h3>
+                          <p className="text-[9px] font-bold text-slate-500 mb-6 uppercase tracking-widest">አድሚን ብቻ የሚጠቀምበት</p>
+
+                          <div className="mt-auto space-y-4">
+                             <select 
+                               value={manualWinnerId}
+                               onChange={e => setManualWinnerId(e.target.value)}
+                               className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-rose-500"
+                             >
+                               <option value="">-- አባል ይምረጡ --</option>
+                               {selectedDrawGroup.members
+                                  .filter((m: any) => !m.wonDraw && !ineligibleMembers.find(im => im.id === m.id))
+                                  .map((m: any) => (
+                                    <option key={m.id} value={m.id}>{m.fullName}</option>
+                                  ))
+                               }
+                             </select>
+                             <button
+                               onClick={() => {
+                                 if (!manualWinnerId) {
+                                   alert('እባክዎትን አባል ይምረጡ! (Please select a member)');
+                                   return;
+                                 }
+                                 startDrawAnimation(manualWinnerId);
+                               }}
+                               disabled={!manualWinnerId}
+                               className="w-full p-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all font-mono"
+                             >
+                               አሸናፊ አድርግ (Confirm)
+                             </button>
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {drawStage === 'animating' && (
+                  <div className="flex flex-col items-center justify-center space-y-8 py-10 w-full animate-in fade-in duration-300 relative">
+                     <div className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none opacity-20">
+                        <div className="w-96 h-96 bg-amber-400 blur-[100px] rounded-full animate-pulse blur-3xl"></div>
+                        <div className="w-96 h-96 bg-rose-500 blur-[100px] rounded-full animate-pulse delay-700 blur-3xl mix-blend-screen absolute"></div>
+                     </div>
+                     <div className="relative z-10 w-40 h-40">
+                       <motion.div 
+                         className="w-full h-full rounded-[3rem] bg-gradient-to-tr from-amber-400 to-rose-500 flex items-center justify-center shadow-2xl shadow-rose-500/40 border-4 border-white"
+                         animate={{ rotate: 360, scale: [1, 1.1, 1] }}
+                         transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                       >
+                          <Gift size={64} className="text-white drop-shadow-md" />
+                       </motion.div>
+                     </div>
+                     <div className="text-center relative z-10">
+                        <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest animate-pulse">እጣ አወጣጥ በሂደት ላይ...</h2>
+                        <p className="text-xs font-bold text-slate-500 mt-2 uppercase tracking-[0.3em]">Drawing Winner...</p>
+                        <div className="flex gap-2 justify-center mt-6">
+                           {[1, 2, 3].map(i => (
+                             <motion.div 
+                               key={i} 
+                               className="w-3 h-3 bg-rose-500 rounded-full"
+                               animate={{ y: [0, -10, 0] }}
+                               transition={{ repeat: Infinity, delay: i * 0.2, duration: 0.6 }}
+                             />
+                           ))}
+                        </div>
+                     </div>
+
+                     {/* Ineligible Members Warning */}
+                     {ineligibleMembers.length > 0 && (
+                       <div className="bg-rose-50 border border-rose-100 p-6 rounded-[2rem] w-full max-w-2xl mx-auto">
+                          <div className="flex items-center gap-3 text-rose-600 mb-3">
+                             <AlertTriangle size={20} />
+                             <span className="text-xs font-black uppercase tracking-widest">እጣ ውስጥ የማይገቡ አባላት (Excluded Members)</span>
+                          </div>
+                          <p className="text-[10px] font-bold text-rose-500 mb-4 uppercase tracking-widest leading-relaxed">
+                             የሚከተሉት አባላት ክፍያ ስላልጨረሱ ወይም ጎዶሎ ቀን ስላለባቸው በዚህ ዙር እጣ ውስጥ አይካተቱም።
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                             {ineligibleMembers.map(m => (
+                                <div key={m.id} className="px-3 py-1.5 bg-white border border-rose-100 rounded-lg text-[10px] font-bold text-rose-600 shadow-sm">
+                                   {m.fullName}
+                                </div>
+                             ))}
+                          </div>
+                       </div>
+                     )}
+                  </div>
+                )}
+
+                {drawStage === 'result' && drawWinner && (
+                  <div className="flex flex-col items-center justify-center w-full animate-in zoom-in fade-in duration-500 relative">
+                     <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPgo8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJub25lIi8+CgkJPGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZkNzAwIiBzdHJva2Utd2lkdGg9IjEiPgoJCQk8cGF0aCBkPSJNMCAwIEwxMDAgMTAwIE0xMDAgMCBMMCAxMDAiIC8+CgkJPC9nPgoJCTwvc3ZnPg==')] opacity-5 pointer-events-none"></div>
+
+                     <motion.div 
+                       initial={{ scale: 0 }}
+                       animate={{ scale: 1, rotate: [0, -5, 5, 0] }}
+                       transition={{ type: 'spring', stiffness: 200, damping: 10 }}
+                       className="w-32 h-32 bg-gradient-to-br from-amber-300 to-amber-500 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/50 mb-6 border-8 border-white p-4 relative z-10"
+                     >
+                        <Trophy size={60} className="text-white drop-shadow-lg" />
+                     </motion.div>
+
+                     <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-rose-500 uppercase tracking-tighter text-center mb-2">{drawWinner.fullName}</h2>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] bg-slate-100 px-3 py-1 rounded-full">{language === 'am' ? 'የዚህ ዙር አሸናፊ!' : 'Winner of this Round!'}</p>
+
+                     <div className="grid grid-cols-2 gap-4 w-full max-w-sm mt-8 border-t border-slate-100 pt-6">
+                        <div className="text-center p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                           <p className="text-[8px] font-black text-emerald-600/60 uppercase tracking-widest mb-1">ስልክ</p>
+                           <p className="text-xs font-black text-emerald-700">{drawWinner.phone}</p>
+                        </div>
+                        <div className="text-center p-4 bg-amber-50 rounded-2xl border border-amber-100 relative group">
+                           <p className="text-[8px] font-black text-amber-600/60 uppercase tracking-widest mb-1">ዋስ ያስፈልጋል</p>
+                           <p className="text-xs font-black text-amber-700 flex items-center justify-center gap-1">
+                             <ShieldAlert size={12} /> ግዴታ
+                           </p>
+                           
+                           {/* Tooltip to show requirement context */}
+                           <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-slate-900 text-white text-[9px] p-3 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 font-bold shadow-xl">
+                              እጣ ደራሽ የሆነ አባል ክፍያ ያልተጠናቀቀበት ጊዜ ላይ ዋስ የማምጣት ግዴታ አለበት።
+                           </div>
+                        </div>
+                     </div>
+
+                     <button 
+                       onClick={() => setShowDrawModal(false)}
+                       className="mt-10 px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all"
+                     >
+                       ጨርስ (Done)
+                     </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* KYC Modal */}
+      {showKYCModal && selectedUser && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center p-4 z-[100]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-100"
+          >
+            <div className="flex justify-between items-center p-6 border-b border-slate-50 bg-slate-50/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+                  <ShieldCheck size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest leading-none">{t('admin.identity_verification')}</h3>
+                  <p className="text-slate-400 text-[10px] mt-1 font-bold">{t('admin.reviewing_profile')} {selectedUser.fullName}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowKYCModal(false)} 
+                className="p-2 bg-white text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all shadow-sm"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                   <div className="relative group">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-1">{t('admin.liveness_check')}</p>
+                    <div 
+                      className="aspect-square rounded-[2rem] overflow-hidden border-2 border-slate-50 shadow-inner bg-slate-50 relative group cursor-pointer"
+                      onClick={() => selectedUser.faceScan && setShowFullProfileImg(selectedUser.faceScan)}
+                    >
+                      <img src={selectedUser.faceScan} alt="Face" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                      <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
+                          <Eye size={20} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('profile.full_name')}</p>
+                      <p className="text-xs font-black text-slate-900 uppercase">{selectedUser.fullName}</p>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">National ID Number</p>
+                      <p className="text-xs font-black text-slate-900 tracking-tighter">{selectedUser.nationalId || t('admin.pending_upload')}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-1">{t('admin.document_verification')}</p>
+                  <div className="space-y-3">
+                    <div 
+                      className="aspect-[1.5/1] rounded-[1.5rem] overflow-hidden border border-slate-100 shadow-sm bg-slate-50 group cursor-pointer relative"
+                      onClick={() => selectedUser.idFront && setShowFullProfileImg(selectedUser.idFront)}
+                    >
+                      <img src={selectedUser.idFront} alt="ID Front" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <div className="absolute top-2 right-2 px-2 py-1 bg-white/80 backdrop-blur-md rounded-lg text-[7px] font-black uppercase text-indigo-500 shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">ID Front</div>
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                         <Search size={24} className="text-white" />
+                      </div>
+                    </div>
+                    <div 
+                      className="aspect-[1.5/1] rounded-[1.5rem] overflow-hidden border border-slate-100 shadow-sm bg-slate-50 group cursor-pointer relative"
+                      onClick={() => selectedUser.idBack && setShowFullProfileImg(selectedUser.idBack)}
+                    >
+                      <img src={selectedUser.idBack} alt="ID Back" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      <div className="absolute top-2 right-2 px-2 py-1 bg-white/80 backdrop-blur-md rounded-lg text-[7px] font-black uppercase text-indigo-500 shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">ID Back</div>
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                         <Search size={24} className="text-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CheckCircle size={12} className="text-emerald-500" />
+                      <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Metadata OK</p>
+                    </div>
+                    <p className="text-[10px] font-bold text-emerald-700/70 leading-tight">IP Address: Verified • No prior registration found for this device.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Member Information Section */}
+              <div className="mt-8 pt-8 border-t border-slate-100 space-y-6">
+                <div className="flex items-center gap-3">
+                   <div className="p-2 bg-amber-500 rounded-xl text-white">
+                      <FileText size={18} />
+                   </div>
+                   <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">{language === 'am' ? 'ሙሉ የአባላት መረጃ' : 'Full Member Details'}</h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Auth & Security */}
+                  <div className="p-6 bg-rose-50/50 border border-rose-100 rounded-3xl space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                       <Shield size={14} className="text-rose-500" />
+                       <span className="text-[9px] font-black text-rose-600 uppercase tracking-widest">{language === 'am' ? 'የደህንነት መረጃ' : 'Security Info'}</span>
+                    </div>
+                    <div className="space-y-3">
+                       <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የስልክ ቁጥር' : 'Phone Number'}</p>
+                          <p className="text-sm font-black text-slate-900">{selectedUser.phone}</p>
+                       </div>
+                       <div>
+                          <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የይለፍ ቃል (Password)' : 'User Password'}</p>
+                          <div className="flex items-center gap-2">
+                             <Lock size={12} className="text-rose-500" />
+                             <p className="text-sm font-black text-rose-600 font-mono tracking-tight">********</p>
+                          </div>
+                          <p className="text-[7px] font-bold text-rose-400 mt-1 italic leading-tight">
+                             {language === 'am' ? '* ይህ መረጃ ለአድሚን ብቻ የሚታይ ነው።' : '* Visible to administrator only.'}
+                          </p>
+                       </div>
+                    </div>
+                  </div>
+
+                  {/* Equb Plan Details */}
+                  <div className="p-6 bg-emerald-50/50 border border-emerald-100 rounded-3xl space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                       <Zap size={14} className="text-emerald-500" />
+                       <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{language === 'am' ? 'የእቁብ ምርጫ' : 'Ekub Plan'}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                       <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'ተደጋጋሚነት' : 'Frequency'}</p>
+                          <p className="text-xs font-black text-slate-900 uppercase">{selectedUser.frequency || 'N/A'}</p>
+                       </div>
+                       <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'መጠን' : 'Amount'}</p>
+                          <p className="text-xs font-black text-slate-900">{selectedUser.amount?.toLocaleString() || 0} ETB</p>
+                       </div>
+                       <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የአባላት ብዛት' : 'Member Limit'}</p>
+                          <p className="text-xs font-black text-slate-900">{selectedUser.memberLimit || 'N/A'}</p>
+                       </div>
+                       <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የእጣ ብዛት' : 'Slots'}</p>
+                          <p className="text-xs font-black text-slate-900">{selectedUser.slots || 1}</p>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Birthplace & Age */}
+                  <div className="p-6 bg-blue-50/50 border border-blue-100 rounded-3xl space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                       <User size={14} className="text-blue-500" />
+                       <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{language === 'am' ? 'የትውልድ መረጃ' : 'Birth Info'}</span>
+                    </div>
+                    <div className="space-y-3">
+                       <div className="flex justify-between items-center">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'ዕድሜ' : 'Age'}</p>
+                          <p className="text-xs font-black text-slate-900">{selectedUser.age || 'N/A'} {language === 'am' ? 'ዓመት' : 'Years'}</p>
+                       </div>
+                       <div className="flex justify-between items-center">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'የትውልድ ቀን (EC)' : 'Birth Date (EC)'}</p>
+                          <p className="text-xs font-black text-slate-900">{selectedUser.ethBirthDate || 'N/A'}</p>
+                       </div>
+                       <div className="flex justify-between items-center">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'የትውልድ ቀን (GC)' : 'Birth Date (GC)'}</p>
+                          <p className="text-xs font-black text-slate-900">{selectedUser.gcBirthDate || 'N/A'}</p>
+                       </div>
+                       <div className="pt-2 border-t border-blue-100">
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የትውልድ ቦታ' : 'Birthplace'}</p>
+                          <p className="text-[10px] font-bold text-slate-700 leading-tight">
+                             {selectedUser.birthCountry}, {selectedUser.birthRegion}, {selectedUser.birthZone}, {selectedUser.birthWoreda}, {selectedUser.birthKebele}
+                          </p>
+                       </div>
+                    </div>
+                  </div>
+
+                  {/* Current Address */}
+                  <div className="p-6 bg-purple-50/50 border border-purple-100 rounded-3xl space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                       <MapPin size={14} className="text-purple-500" />
+                       <span className="text-[9px] font-black text-purple-600 uppercase tracking-widest">{language === 'am' ? 'አድራሻ' : 'Address'}</span>
+                    </div>
+                    <div className="space-y-3">
+                       <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'ሀገር' : 'Country'}</p>
+                          <p className="text-xs font-black text-slate-900">{selectedUser.addressCountry || 'ኢትዮጵያ'}</p>
+                       </div>
+                       <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'ክልል/ዞን' : 'Region/Zone'}</p>
+                          <p className="text-xs font-black text-slate-900">{selectedUser.addressRegion} / {selectedUser.addressZone}</p>
+                       </div>
+                       <div className="grid grid-cols-2 gap-2">
+                          <div>
+                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'ወረዳ' : 'Woreda'}</p>
+                             <p className="text-xs font-black text-slate-900">{selectedUser.addressWoreda}</p>
+                          </div>
+                          <div>
+                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'ቀበሌ' : 'Kebele'}</p>
+                             <p className="text-xs font-black text-slate-900">{selectedUser.addressKebele}</p>
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+              {selectedUser.status === 'pending' ? (
+                <>
+                  <button 
+                    onClick={() => { rejectUser(selectedUser.id); setShowKYCModal(false); }}
+                    className="flex-1 py-4 bg-white text-rose-500 border border-rose-100 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-rose-50 transition-all flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <XCircle size={18} /> {t('admin.reject_request')}
+                  </button>
+                  <button 
+                    onClick={() => { approveUser(selectedUser.id); setShowKYCModal(true); setShowKYCModal(false); }}
+                    className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
+                  >
+                    <CheckCircle size={18} className="text-emerald-400" /> {t('admin.confirm_approve_member')}
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => setShowKYCModal(false)}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
+                >
+                  <X size={18} /> ዝጋ (Close)
+                </button>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Receipt Modal (Hidden usually, used for PDF generation) */}
+      {showReceiptModal && selectedPayment && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[110]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden relative"
+          >
+            {/* Header with Close Button */}
+            <div className="flex justify-between items-center p-8 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                  <FileText size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">
+                    {language === 'am' ? 'የክፍያ ደረሰኝ' : 'Payment Receipt'}
+                  </h3>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">Transaction Preview</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowReceiptModal(false)}
+                className="w-12 h-12 bg-slate-50 text-slate-400 rounded-full hover:bg-rose-50 hover:text-rose-500 transition-all flex items-center justify-center group"
+              >
+                <X size={24} className="group-hover:rotate-90 transition-transform duration-500" />
+              </button>
+            </div>
+
+            <div className="p-8 max-h-[70vh] overflow-y-auto bg-slate-50/50">
+              {/* Receipt Content for Capture */}
+              <div 
+                id={`receipt-${selectedPayment.id}`}
+                className="bg-white p-6 rounded-[2rem] border-2 border-slate-50 relative overflow-hidden shadow-sm mx-auto max-w-sm"
+              >
+                {/* Watermark Logo bg */}
+                <div className="absolute -right-6 -bottom-6 opacity-[0.03] transform rotate-12 pointer-events-none">
+                  <ShieldCheck size={160} />
+                </div>
+                <div className="absolute -left-6 -top-6 opacity-[0.02] transform -rotate-12 pointer-events-none">
+                  <FileText size={140} />
+                </div>
+
+                <div className="flex justify-between items-start mb-6 pb-4 border-b border-slate-100 relative z-10">
+                  <div>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tighter mb-0.5">{language === 'am' ? 'መሊቅ እቁብ' : 'MELIQ EKUB'}</h1>
+                    <p className="text-[7px] font-black text-indigo-500 uppercase tracking-[0.2em]">{language === 'am' ? 'ህጋዊ ደረሰኝ' : 'Official Payment Receipt'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
+                    <p className="text-[10px] font-black text-slate-900 font-mono">#{selectedPayment.receiptId || selectedPayment.id.slice(0, 8).toUpperCase()}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 relative z-10">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የአባል ስም' : 'Member Name'}</p>
+                      <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">{selectedPayment.userName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'እቁብ/ምድብ' : 'Group/Round'}</p>
+                      <p className="text-xs font-black text-slate-900 leading-tight truncate">{selectedPayment.groupName}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የተከፈለበት ቀን' : 'Payment Date'}</p>
+                      <p className="text-[10px] font-black text-slate-900">
+                        {selectedPayment.createdAt?.toDate ? selectedPayment.createdAt.toDate().toLocaleDateString() : new Date(selectedPayment.createdAt).toLocaleDateString()}
+                      </p>
+                      {selectedPayment.paymentDetails?.time && (
+                        <p className="text-[9px] font-black text-slate-500 mt-0.5">
+                          {selectedPayment.paymentDetails.time}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የክፍያ መንገድ' : 'Payment Method'}</p>
+                      <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
+                        {selectedPayment.paymentDetails?.method || (selectedPayment.receiptImage ? 'Bank Transfer' : 'Cash/Manual')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.5rem] flex justify-between items-center text-white mt-6 shadow-inner">
+                    <div>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'የተከፈለው መጠን' : 'Amount Paid'}</p>
+                      <p className="text-xl font-black">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">ETB</span></p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'ሁኔታ' : 'Status'}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">{language === 'am' ? 'ተረጋግጧል' : 'Verified'}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex justify-between items-end relative z-10">
+                    <div className="inline-block px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
+                      <p className="text-[7px] font-bold text-slate-500 italic max-w-[160px] leading-relaxed">
+                        {language === 'am' ? '"እናመሰግናለን። ቁጠባዎ ደህንነቱ የተጠበቀ ነው።"' : '"Thank you. Your savings are secure with us."'}
+                      </p>
+                    </div>
+                    <div className="text-center w-20">
+                       <div className="border-b border-slate-300 w-full mb-1"></div>
+                       <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'ፊርማ' : 'Signature'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-dashed border-slate-200 flex justify-between items-center relative z-10">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck size={12} className="text-indigo-500" />
+                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">Digital Auth Verified</p>
+                  </div>
+                  <div className="text-right text-[6px] font-black text-slate-300 uppercase tracking-widest">
+                    © {new Date().getFullYear()} {t('common.appName').toUpperCase()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
+               <p className="text-[10px] font-bold text-slate-400 max-w-[200px] text-center sm:text-left">
+                  {language === 'am' ? 'ይህ ሰነድ በዲጂታል መንገድ የተረጋገጠ እና በህግ ተቀባይነት ያለው ነው።' : 'This document is digitally verified and legally binding.'}
+               </p>
+               <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <button 
+                    onClick={() => setShowReceiptModal(false)}
+                    className="flex-1 sm:flex-none px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+                  >
+                    {language === 'am' ? 'ተመለስ' : 'Go Back'}
+                  </button>
+                  <button 
+                    onClick={() => generatePDF(selectedPayment)}
+                    className="flex-1 sm:flex-none px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-95"
+                  >
+                    <Download size={18} />
+                    {language === 'am' ? 'ያውርዱ (PDF)' : 'Download PDF'}
+                  </button>
+               </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {showNotifModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl"
+          >
+            <h3 className="text-xl font-black text-slate-900 mb-6">{t('admin.send_notification')}</h3>
+            <div className="space-y-4">
+              <input 
+                placeholder={t('admin.subject')} 
+                className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-amber-500/20 text-sm font-medium" 
+                onChange={e => setNotification({...notification, title: e.target.value})} 
+              />
+              <textarea 
+                placeholder={t('admin.message')} 
+                rows={4}
+                className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-amber-500/20 text-sm font-medium resize-none" 
+                onChange={e => setNotification({...notification, message: e.target.value})} 
+              />
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setShowNotifModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all">{t('admin.cancel')}</button>
+                <button onClick={sendNotification} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-amber-600 transition-all shadow-lg shadow-slate-900/10">{t('admin.send')}</button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Add Group Modal */}
+      {showAddGroupModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex items-center justify-center p-4 z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          >
+            {/* Header */}
+            <div className="p-8 bg-gradient-to-br from-indigo-600 to-indigo-900 flex justify-between items-start relative overflow-hidden shrink-0">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-3xl rounded-full transform translate-x-1/2 -translate-y-1/2"></div>
+              <div className="relative z-10 flex gap-4 items-center">
+                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/20">
+                   <Zap size={24} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white uppercase tracking-tighter">አዲስ ቡድን ፍጠር</h3>
+                  <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mt-1">Create New Ekub Group</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAddGroupModal(false)} 
+                className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-xl transition-all text-white relative z-10"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddGroupSubmit} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+               <div className="space-y-2">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-4">የቡድኑ ስም (Group Name) *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={addGroupForm.name} 
+                    onChange={e => setAddGroupForm({...addGroupForm, name: e.target.value})} 
+                    placeholder="e.g. የካቲት ዕቁብ"
+                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all"
+                  />
+               </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-4">መጠን በብር (Amount) *</label>
+                    <input 
+                      type="number" 
+                      required 
+                      min="1"
+                      value={addGroupForm.amount} 
+                      onChange={e => setAddGroupForm({...addGroupForm, amount: Number(e.target.value)})} 
+                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all font-mono"
+                    />
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-4">አባላት ብዛት (Capacity) *</label>
+                    <input 
+                      type="number" 
+                      required 
+                      min="2"
+                      value={addGroupForm.memberCount} 
+                      onChange={e => setAddGroupForm({...addGroupForm, memberCount: Number(e.target.value)})} 
+                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all font-mono"
+                    />
+                 </div>
+               </div>
+
+               <div className="space-y-2">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-4">የእቁብ አይነት (Type) *</label>
+                  <select 
+                    required 
+                    value={addGroupForm.type} 
+                    onChange={e => setAddGroupForm({...addGroupForm, type: e.target.value})} 
+                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all appearance-none"
+                  >
+                    <option value="daily">በየቀኑ (Daily)</option>
+                    <option value="fivedays">በየ5 ቀኑ (5 Days)</option>
+                    <option value="weekly">በየሳምንቱ (Weekly)</option>
+                    <option value="monthly">በየወሩ (Monthly)</option>
+                  </select>
+               </div>
+
+              <div className="pt-4 flex gap-4">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddGroupModal(false)}
+                  className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-100 transition-all"
+                >
+                  አቋርጥ
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 hover:shadow-indigo-500/50 hover:-translate-y-0.5 transition-all"
+                >
+                  ቡድን ፍጠር
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Manage Group Modal */}
+      {showManageGroupModal && selectedGroup && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl"
+          >
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-base font-black text-slate-900 leading-none">{selectedGroup.name}</h3>
+                <p className="text-slate-400 text-[10px] font-black uppercase mt-1 tracking-widest">Management</p>
+              </div>
+              <button onClick={() => setShowManageGroupModal(false)} className="p-1.5 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-100">
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 grid grid-cols-2 gap-4">
+                  <div className="text-center">
+                    <p className="text-xs font-black text-slate-900">{selectedGroup.memberCount}/{selectedGroup.limit}</p>
+                    <p className="text-[8px] text-slate-400 uppercase font-black tracking-widest">Users</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-black text-gold-600">{selectedGroup.amount} ETB</p>
+                    <p className="text-[8px] text-slate-400 uppercase font-black tracking-widest">Fee</p>
+                  </div>
+              </div>
+
+              <div className="space-y-2">
+                {selectedGroup.status === 'registration' || selectedGroup.status === 'open' ? (
+                  <button 
+                    onClick={() => startGroup(selectedGroup.id)}
+                    className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <Zap size={14} /> Start Group
+                  </button>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => openDrawModal(selectedGroup)}
+                      className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <Trophy size={14} /> Draw Winner
+                    </button>
+                    <div className="p-3 bg-gold-50 rounded-xl border border-gold-100 text-center">
+                      <p className="text-[8px] font-black text-gold-600 uppercase tracking-widest mb-1">Previous Victor</p>
+                      <p className="text-[11px] font-black text-slate-900">{selectedGroup.lastWinner || 'None'}</p>
+                    </div>
+                  </>
+                )}
+                
+                <button 
+                  onClick={async () => {
+                    if (confirm(`Are you sure you want to delete the group ${selectedGroup.name}?`)) {
+                      try {
+                        await deleteDoc(doc(db, 'groups', selectedGroup.id));
+                        setShowManageGroupModal(false);
+                        alert('Group deleted successfully.');
+                      } catch (e) {
+                        console.error("Error deleting group:", e);
+                        alert('Failed to delete group.');
+                      }
+                    }
+                  }}
+                  className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm border border-rose-100 flex items-center justify-center gap-2 hover:bg-rose-100 transition-colors"
+                >
+                  <Trash2 size={14} /> Delete Group
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Select User For Payment Modal */}
+      {showSelectUserForPayment && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+          >
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">አባል ይምረጡ</h3>
+                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Select user for payment</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowSelectUserForPayment(false);
+                  setSearchTermForPayment('');
+                }} 
+                className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors shadow-sm border border-slate-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-8 flex-1 overflow-hidden flex flex-col gap-6">
+              <div className="relative">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text" 
+                  autoFocus
+                  placeholder="በስም ወይም በስልክ ቁጥር ይፈልጉ (Search by name/phone)..."
+                  value={searchTermForPayment}
+                  onChange={e => setSearchTermForPayment(e.target.value)}
+                  className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-200 transition-all"
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+                {allUsers.filter(u => 
+                  u.fullName?.toLowerCase().includes(searchTermForPayment.toLowerCase()) || 
+                  u.phone?.includes(searchTermForPayment) ||
+                  u.memberCode?.toLowerCase().includes(searchTermForPayment.toLowerCase())
+                ).slice(0, 50).map(u => {
+                  const uGroup = groups.find(g => g.id === u.groupId);
+                  return (
+                  <button
+                    key={u.id}
+                    onClick={() => {
+                      if (!uGroup && !u.amount) {
+                         alert(language === 'am' ? 'ይህ አባል ምንም አይነት እቁብ/ክፍያ አልተመደበለትም።' : 'This user is not assigned to any group or amount.');
+                         return;
+                      }
+                      setSelectedMember(u);
+                      setManualPaymentGroup(uGroup || { id: 'manual', name: 'Manual Assignment', amount: u.totalPerSlot || u.amount || 0 });
+                      setShowSelectUserForPayment(false);
+                      setSearchTermForPayment('');
+                      setShowManualPaymentModal(true);
+                    }}
+                    className="w-full text-left p-4 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                        <User size={20} />
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{u.fullName}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">{u.phone} • {u.memberCode || 'No Code'}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-black text-emerald-600">{(u.totalPerSlot || uGroup?.amount || 0).toLocaleString()} <span className="text-[10px]">ብር</span></p>
+                      <p className="text-[9px] font-bold text-slate-400 mt-0.5 uppercase">{uGroup?.name || '---'}</p>
+                    </div>
+                  </button>
+                )})}
+                
+                {allUsers.filter(u => 
+                  u.fullName?.toLowerCase().includes(searchTermForPayment.toLowerCase()) || 
+                  u.phone?.includes(searchTermForPayment)
+                ).length === 0 && (
+                  <div className="py-12 text-center text-slate-400">
+                    <User size={32} className="mx-auto mb-3 opacity-20" />
+                    <p className="font-bold text-sm">አባል አልተገኘም</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Manual Payment Modal */}
+      {showManualPaymentModal && selectedMember && manualPaymentGroup && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
+          >
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-base font-black text-slate-900">Add Contribution</h3>
+                <p className="text-slate-400 text-[10px] font-bold">{selectedMember.fullName}</p>
+              </div>
+              <button onClick={() => setShowManualPaymentModal(false)} className="p-1.5 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-100">
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl p-4 mb-6 space-y-3 border border-slate-100">
+              <div className="flex justify-between items-center">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Rate / Slot</span>
+                <span className="text-xs font-black text-slate-900">{(selectedMember.totalPerSlot || manualPaymentGroup.amount)} ETB</span>
+              </div>
+              
+              <div>
+                <label className="block text-[8px] font-black text-slate-400 uppercase mb-1.5 tracking-widest">Quantity (Cycles)</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  value={paymentCount}
+                  onChange={(e) => setPaymentCount(parseInt(e.target.value) || 1)}
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-gold-500/20"
+                />
+              </div>
+
+              <div className="h-px bg-slate-200" />
+              <div className="flex justify-between items-center">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Record</span>
+                <span className="text-base font-black text-gold-600">{((selectedMember.totalPerSlot || manualPaymentGroup.amount) * paymentCount)} ETB</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setShowManualPaymentModal(false)} className="py-3 bg-slate-100 text-slate-400 rounded-xl font-bold text-xs">Cancel</button>
+              <button onClick={handleManualPayment} className="py-3 bg-slate-900 text-white rounded-xl font-bold text-xs shadow-lg">Save Record</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      {/* Full Profile Image Modal */}
+      {showFullProfileImg && (
+        <div className="fixed inset-0 z-[120] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowFullProfileImg(null)}>
+           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative max-w-4xl w-full flex justify-center items-center">
+             <button onClick={() => setShowFullProfileImg(null)} className="absolute -top-12 right-0 w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/25 transition-colors">
+               <X size={20} />
+             </button>
+             <img src={showFullProfileImg} alt="Profile" className="max-w-full max-h-[80vh] rounded-3xl object-contain shadow-2xl" />
+           </motion.div>
+        </div>
+      )}
+
+      {/* ID Card Modal */}
+      {showIDCardModal && selectedIDUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white p-8 rounded-[3rem] w-full max-w-2xl shadow-2xl space-y-6 m-auto"
+          >
+            <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl">
+              <h3 className="text-xl font-black uppercase tracking-tight text-slate-900">{language === 'am' ? 'የአባልነት መታወቂያ' : 'Member ID Card'}</h3>
+              <button onClick={() => setShowIDCardModal(false)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 border border-slate-200 transition-all shadow-sm">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="overflow-x-auto pb-8 w-full -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
+              <div id="admin-id-card-content" className="flex flex-row gap-6 w-max mx-auto p-2 bg-transparent relative">
+                
+                {/* Front Side */}
+                <div className="w-[520px] aspect-[1.586/1] shrink-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 border-[4px] border-white/30 text-white rounded-[2rem] p-6 flex flex-col justify-between shadow-[0_20px_50px_rgba(168,85,247,0.4)] relative overflow-hidden backdrop-blur-sm">
+                   <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 rounded-full blur-[80px] -translate-y-1/2 pointer-events-none" />
+                   <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-300/20 rounded-full blur-[80px] translate-y-1/2 pointer-events-none" />
+                   
+                   <div className="flex justify-between items-start z-10 relative">
+                       <div className="flex items-center gap-3 min-w-0">
+                         <div className="w-10 h-10 shrink-0 rounded-xl bg-white flex items-center justify-center p-[2px] shadow-lg">
+                            <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-pink-500 rounded-[10px] flex items-center justify-center">
+                              <span className="font-display font-black text-white text-lg drop-shadow-md">M</span>
+                            </div>
+                         </div>
+                         <div className="min-w-0">
+                           <span className="font-black text-sm tracking-tight text-white mb-0.5 block leading-none drop-shadow-md">{selectedIDUser.groupName || 'MELIQ EKUB'}</span>
+                           <h4 className="text-[8px] uppercase tracking-widest text-pink-200 font-black leading-none mt-1 drop-shadow-sm">{language === 'am' ? 'የአባልነት መታወቂያ' : 'Membership ID Card'}</h4>
+                         </div>
+                       </div>
+                       <div className="bg-white/90 backdrop-blur-md p-1.5 rounded-xl shadow-xl border border-white/50">
+                         <QRCode value={JSON.stringify({uid: selectedIDUser.uid, code: selectedIDUser.memberCode || `MEM-${selectedIDUser.uid?.substring(0, 6).toUpperCase()}`})} size={48} bgColor="transparent" fgColor="#0f172a" level="M" />
+                       </div>
+                   </div>
+
+                   <div className="z-10 relative flex gap-5 items-center mt-auto mb-4 bg-white/10 p-3 rounded-3xl border border-white/20 backdrop-blur-md shadow-inner">
+                      <div 
+                        className="w-24 h-24 rounded-2xl border-[3px] border-white/40 overflow-hidden shrink-0 shadow-2xl cursor-pointer hover:border-white transition-all bg-indigo-900/50"
+                        onClick={() => {
+                          if (selectedIDUser.faceScan) setShowFullProfileImg(selectedIDUser.faceScan);
+                        }}
+                      >
+                         {selectedIDUser.faceScan ? (
+                           <img src={selectedIDUser.faceScan} alt="Profile" className="w-full h-full object-cover" />
+                         ) : (
+                           <div className="w-full h-full flex items-center justify-center">
+                             <User size={32} className="text-white/50" />
+                           </div>
+                         )}
+                      </div>
+                        <div className="flex-1 space-y-2 min-w-0 h-full flex flex-col justify-center">
+                          <div className="bg-white/10 rounded-xl p-2 border border-white/10 shadow-sm">
+                            <span className="text-[8px] text-white/70 uppercase tracking-widest font-black inline-block mb-1">{language === 'am' ? 'ሙሉ ስም / Full Name' : 'Full Name'}</span>
+                            <p className="font-display font-black text-sm tracking-tight leading-tight text-white break-words drop-shadow-sm">{selectedIDUser.fullName || '---'}</p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                             <div className="bg-white/10 rounded-xl p-2 border border-white/20 shadow-sm col-span-1">
+                                <span className="text-[7px] text-emerald-300 uppercase tracking-widest font-black inline-block mb-1">{language === 'am' ? 'ምድብ / GROUP' : 'GROUP'}</span>
+                                <p className="font-black text-[10px] tracking-tighter text-white leading-none truncate drop-shadow-sm">{selectedIDUser.groupName || selectedIDUser.ekubType || '---'}</p>
+                             </div>
+                             <div className="bg-white/10 rounded-xl p-2 border border-white/20 shadow-sm col-span-1">
+                                <span className="text-[7px] text-amber-300 uppercase tracking-widest font-black inline-block mb-1">{language === 'am' ? 'መለያ / CODE' : 'CODE'}</span>
+                                <p className="font-black text-[10px] tracking-tighter text-white leading-none uppercase drop-shadow-sm">{selectedIDUser.memberCode || '---'}</p>
+                             </div>
+                             <div className="bg-white/10 rounded-xl p-2 border border-white/20 shadow-sm col-span-1">
+                                <span className="text-[7px] text-blue-300 uppercase tracking-widest font-black inline-block mb-1">{language === 'am' ? 'መዋጮ / AMOUNT' : 'AMOUNT'}</span>
+                                <p className="font-black text-[10px] tracking-tighter text-white leading-none uppercase drop-shadow-sm">{selectedIDUser.amount ? selectedIDUser.amount.toLocaleString() : '---'}</p>
+                             </div>
+                          </div>
+                        </div>
+                   </div>
+
+                   <div className="z-10 relative flex justify-between items-end border-t border-white/20 pt-3">
+                       <div className="flex gap-4">
+                          <div>
+                             <span className="text-[8px] text-white/70 uppercase tracking-widest font-black mb-1 block">{language === 'am' ? 'ልዩ ኮድ' : 'Unique Code'}</span>
+                             <p className="font-black tracking-widest text-sm text-pink-200 drop-shadow-sm">
+                               {selectedIDUser.memberCode || `MEM-${selectedIDUser.uid?.substring(0, 6).toUpperCase()}`}
+                             </p>
+                          </div>
+                          <div className="border-l border-white/20 pl-4">
+                             <span className="text-[8px] text-white/70 uppercase tracking-widest font-black mb-1 block">{language === 'am' ? 'የተመዘገቡበት' : 'Joined Date'}</span>
+                             <p className="font-bold text-xs tracking-widest text-white drop-shadow-sm">
+                               {selectedIDUser.createdAt?.toDate ? selectedIDUser.createdAt.toDate().toLocaleDateString() : 'N/A'}
+                             </p>
+                          </div>
+                       </div>
+                       <div className="text-right">
+                          <span className="text-[8px] text-white/70 uppercase tracking-widest font-black mb-0.5 block">{language === 'am' ? 'የመዋጮ መጠን' : 'Amount'}</span>
+                          <p className="font-black text-sm tracking-tighter text-white drop-shadow-md">
+                              {selectedIDUser.amount?.toLocaleString() || '---'} <span className="text-[8px] text-amber-300">ETB</span>
+                          </p>
+                       </div>
+                   </div>
+                </div>
+
+                {/* Back Side */}
+                <div className="w-[520px] aspect-[1.586/1] shrink-0 bg-gradient-to-br from-teal-500 via-emerald-600 to-cyan-600 border-[4px] border-white/30 text-white rounded-[2rem] p-6 flex flex-col justify-between shadow-[0_20px_50px_rgba(16,185,129,0.4)] relative overflow-hidden backdrop-blur-sm">
+                   <div className="absolute bottom-0 right-0 w-64 h-64 bg-yellow-300/20 rounded-full blur-[80px] pointer-events-none" />
+                   <div className="absolute top-0 left-0 w-64 h-64 bg-white/20 rounded-full blur-[80px] pointer-events-none" />
+                   
+                   <div className="flex items-center gap-2 border-b-2 border-dashed border-white/30 pb-3 relative z-10">
+                     <Shield size={16} className="text-white drop-shadow-md" />
+                     <span className="font-black text-white text-xs uppercase tracking-widest drop-shadow-md">{language === 'am' ? 'ማረጋገጫ (BACK)' : 'Verification'}</span>
+                   </div>
+
+                   <div className="space-y-4 flex-1 relative z-10 pt-3">
+                      <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 shadow-inner">
+                         <p className="text-[8px] text-white/80 font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 drop-shadow-sm">
+                           <MapPin size={10} />
+                           {language === 'am' ? 'ሙሉ አድራሻ / Full Address' : 'Full Address'}
+                         </p>
+                         <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-[10px] font-bold text-white leading-none">
+                           <div className="bg-white/5 p-2 rounded-lg border border-white/10 shadow-sm">
+                              <span className="block text-[7px] text-white/60 font-black mb-1 uppercase tracking-widest">{language === 'am' ? 'ክልል / Region' : 'Region'}</span>
+                              <span className="drop-shadow-sm">{selectedIDUser.addressRegion || '---'}</span>
+                           </div>
+                           <div className="bg-white/5 p-2 rounded-lg border border-white/10 shadow-sm">
+                              <span className="block text-[7px] text-white/60 font-black mb-1 uppercase tracking-widest">{language === 'am' ? 'ዞን / ወረዳ (Zone/Woreda)' : 'Zone/Woreda'}</span>
+                              <span className="drop-shadow-sm">{selectedIDUser.addressZone || selectedIDUser.addressWoreda || '---'}</span>
+                           </div>
+                           <div className="bg-white/5 p-2 rounded-lg border border-white/10 shadow-sm">
+                              <span className="block text-[7px] text-white/60 font-black mb-1 uppercase tracking-widest">{language === 'am' ? 'ቀበሌ / Kebele' : 'Kebele'}</span>
+                              <span className="drop-shadow-sm">{selectedIDUser.addressKebele || '---'}</span>
+                           </div>
+                           <div className="bg-white/5 p-2 rounded-lg border border-white/10 shadow-sm">
+                              <span className="block text-[7px] text-white/60 font-black mb-1 uppercase tracking-widest">{language === 'am' ? 'የቤት ቁጥር / House No.' : 'House No.'}</span>
+                              <span className="drop-shadow-sm">{selectedIDUser.addressHouseNumber || selectedIDUser.houseNumber || '---'}</span>
+                           </div>
+                         </div>
+                      </div>
+
+                      {/* Birth Place Section */}
+                      <div className="bg-white/5 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-inner">
+                         <p className="text-[7px] text-white/60 font-black uppercase tracking-widest mb-1.5 flex items-center gap-1.5 leading-none">
+                           <Home size={10} className="text-emerald-200" />
+                           {language === 'am' ? 'የትውልድ ቦታ / Birth Place' : 'Birth Place'}
+                         </p>
+                         <div className="grid grid-cols-3 gap-2 text-[8px] font-bold text-white/90">
+                            <div className="truncate bg-white/5 p-1 rounded-md border border-white/5">
+                              <span className="text-[5px] opacity-60 block uppercase mb-0.5 leading-none">{language === 'am' ? 'ክልል' : 'Reg.'}</span>
+                              {selectedIDUser.birthRegion || '---'}
+                            </div>
+                            <div className="truncate bg-white/5 p-1 rounded-md border border-white/5">
+                              <span className="text-[5px] opacity-60 block uppercase mb-0.5 leading-none">{language === 'am' ? 'ዞን' : 'Zone'}</span>
+                              {selectedIDUser.birthZone || '---'}
+                            </div>
+                            <div className="truncate bg-white/5 p-1 rounded-md border border-white/5">
+                              <span className="text-[5px] opacity-60 block uppercase mb-0.5 leading-none">{language === 'am' ? 'ወረዳ' : 'Wor.'}</span>
+                              {selectedIDUser.birthWoreda || '---'}
+                            </div>
+                         </div>
+                      </div>
+
+                      {/* Professional & Ekub Info */}
+                      <div className="bg-white/5 backdrop-blur-md p-3 rounded-xl border border-white/10 shadow-inner">
+                         <p className="text-[7px] text-white/60 font-black uppercase tracking-widest mb-1.5 flex items-center gap-1.5 leading-none">
+                           <FileSignature size={10} className="text-blue-200" />
+                           {language === 'am' ? 'ተጨማሪ መረጃ / Additional Info' : 'Additional Info'}
+                         </p>
+                         <div className="grid grid-cols-2 gap-2 text-[8px] font-bold text-white/90">
+                            <div className="bg-white/5 p-1.5 rounded-md border border-white/5">
+                              <span className="text-[6px] opacity-60 block uppercase mb-0.5 leading-none">{language === 'am' ? 'የስራ አይነት' : 'Job Title'}</span>
+                              {selectedIDUser.jobTitle || '---'}
+                            </div>
+                            <div className="bg-white/5 p-1.5 rounded-md border border-white/5">
+                              <span className="text-[6px] opacity-60 block uppercase mb-0.5 leading-none">{language === 'am' ? 'የእቁብ ምድብ' : 'Ekub Type'}</span>
+                              <span className="text-emerald-300">{selectedIDUser.ekubType || '---'}</span>
+                            </div>
+                            <div className="bg-white/5 p-1.5 rounded-md border border-white/5">
+                              <span className="text-[6px] opacity-60 block uppercase mb-0.5 leading-none">{language === 'am' ? 'የመለያ ኮድ' : 'Member Code'}</span>
+                              <span className="text-amber-300 font-black">{selectedIDUser.memberCode || '---'}</span>
+                            </div>
+                            <div className="bg-white/5 p-1.5 rounded-md border border-white/5">
+                              <span className="text-[6px] opacity-60 block uppercase mb-0.5 leading-none">{language === 'am' ? 'የመዋጮ መጠን' : 'Amount'}</span>
+                              <span className="text-blue-300">{selectedIDUser.amount ? `${selectedIDUser.amount.toLocaleString()} ETB` : '---'}</span>
+                            </div>
+                            <div className="bg-white/5 p-1.5 rounded-md border border-white/5">
+                              <span className="text-[6px] opacity-60 block uppercase mb-0.5 leading-none">{language === 'am' ? 'የአባልነት ደረጃ' : 'Member Level'}</span>
+                              <span className="text-purple-300 font-black">{(selectedIDUser.amount || 0) > 5000 ? 'GOLD' : 'SILVER'}</span>
+                            </div>
+                            <div className="bg-white/5 p-1.5 rounded-md border border-white/5">
+                              <span className="text-[6px] opacity-60 block uppercase mb-0.5 leading-none">{language === 'am' ? 'የሚያበቃበት ቀን' : 'Valid Until'}</span>
+                              <span className="text-rose-300">
+                                {selectedIDUser.createdAt?.toDate ? new Date(selectedIDUser.createdAt.toDate().getFullYear() + 1, selectedIDUser.createdAt.toDate().getMonth(), selectedIDUser.createdAt.toDate().getDate()).toLocaleDateString() : '---'}
+                              </span>
+                            </div>
+                         </div>
+                      </div>
+
+                      <div className="text-[8px] text-white font-bold leading-relaxed bg-black/20 backdrop-blur-md p-3 rounded-xl border border-white/10 flex items-start gap-2 shadow-inner">
+                        <AlertTriangle size={12} className="text-amber-300 shrink-0 mt-0.5 drop-shadow-md" />
+                        <p className="drop-shadow-sm">
+                          {language === 'am' ? 'ይህ መታወቂያ ካርድ ለሌላ አካል አሳልፎ መስጠት የተከለከለ ነው። ይህ ካርድ አባል መሆንዎን ያረጋግጣል። ካርዱ ቢጠፋ በአፋጣኝ ለዕቁቡ አስተዳደር ማሳወቅ የርስዎ ግዴታ ነው።' : 'This ID card is strictly non-transferable and verifies your active membership. If lost or misplaced, you must notify the administration immediately.'}
+                        </p>
+                      </div>
+                   </div>
+
+                   <div className="mt-auto relative z-10 bg-white/90 backdrop-blur-md rounded-xl overflow-hidden p-2 pt-3 pb-1 shadow-2xl flex flex-col items-center justify-center border border-white/50 mx-4">
+                      <div className="text-[7px] font-black uppercase tracking-widest text-slate-800 mb-1 leading-none text-center">
+                         {language === 'am' ? 'ባርኮዷን ስካን በማድረግ ያረጋግጡ / Scan to Verify' : 'Scan to Verify Authenticity'}
+                      </div>
+                      <Barcode 
+                        value={selectedIDUser.uid ? selectedIDUser.uid.substring(0, 18).toUpperCase() : 'PENDING'} 
+                        format="CODE128"
+                        width={1.2} 
+                        height={24} 
+                        displayValue={true} 
+                        fontSize={8} 
+                        background="transparent" 
+                        lineColor="#0f172a" 
+                        margin={0}
+                      />
+                   </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-center mt-6">
+              <button 
+                onClick={async () => {
+                  const element = document.getElementById('admin-id-card-content');
+                  if (!element) return;
+                  const canvas = await htmlToImage.toCanvas(element, { pixelRatio: 4, backgroundColor: null });
+                  const imgData = canvas.toDataURL('image/png');
+                  const pdf = new jsPDF('l', 'mm', 'a4');
+                  pdf.addImage(imgData, 'PNG', 15, 40, 267, 85);
+                  pdf.save(`${selectedIDUser.fullName || 'Member'}_ID.pdf`);
+                }}
+                className="w-full max-w-sm py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-xl"
+              >
+                <Download size={16} /> {language === 'am' ? 'ያውርዱ / Download PDF' : 'Download ID PDF'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Scanner Modal */}
+      {showScanner && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white p-8 rounded-[3rem] w-full max-w-md shadow-2xl"
+          >
+            <div className="flex justify-between items-center mb-6">
+               <h3 className="text-xl font-black uppercase tracking-tight">{language === 'am' ? 'መታወቂያ ስካን ያድርጉ' : 'Scan Member ID'}</h3>
+               <button onClick={() => setShowScanner(false)} className="w-10 h-10 bg-slate-50 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-900 transition-colors">
+                  <X size={20} />
+               </button>
+            </div>
+            <div className="h-64 bg-slate-900 rounded-[2rem] border-4 border-indigo-500/20 flex flex-col items-center justify-center text-indigo-400 overflow-hidden relative">
+               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10" />
+               <div className="w-full h-1 bg-indigo-500 absolute top-0 left-0 animate-pulse shadow-[0_0_20px_10px_rgba(99,102,241,0.4)]" />
+               <Camera size={48} className="mb-4 opacity-50" />
+               <p className="text-xs font-bold uppercase tracking-widest">Waiting for camera...</p>
+               <p className="text-[10px] text-indigo-300/50 mt-2 text-center px-8">Point the camera at the member's QR code to pull up their profile</p>
+            </div>
+            <div className="mt-6 flex justify-center">
+              <button onClick={() => setShowScanner(false)} className="py-3 px-8 bg-slate-100 text-slate-600 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 transition-all">
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditUserModal && editUserForm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white p-8 rounded-[3rem] w-full max-w-md shadow-2xl"
+          >
+            <div className="flex justify-between items-center mb-6 px-2">
+              <h3 className="text-xl font-black text-slate-900">{t('admin.edit')}</h3>
+              <button onClick={() => setShowEditUserModal(false)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-100">
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditUserSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">ሙሉ ስም</label>
+                    <input type="text" value={editUserForm.fullName} onChange={e => setEditUserForm({...editUserForm, fullName: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">ስልክ ቁጥር</label>
+                    <input type="text" value={editUserForm.phone} onChange={e => setEditUserForm({...editUserForm, phone: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+               </div>
+               
+               <div>
+                  <label className="block text-xs font-black text-slate-900 mb-2">የይለፍ ቃል (Password)</label>
+                  <div className="relative">
+                     <input 
+                       type={showUserPassword ? "text" : "password"} 
+                       value={editUserForm.password || ''} 
+                       onChange={e => setEditUserForm({...editUserForm, password: e.target.value})} 
+                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-5 pr-12 py-4 text-sm font-mono font-bold text-indigo-600" 
+                     />
+                     <button 
+                       type="button"
+                       onClick={() => setShowUserPassword(!showUserPassword)}
+                       className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                     >
+                        {showUserPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                     </button>
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">ክልል</label>
+                    <input type="text" value={editUserForm.addressRegion || ''} onChange={e => setEditUserForm({...editUserForm, addressRegion: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">ዞን / ወረዳ</label>
+                    <input type="text" value={editUserForm.addressZone || ''} onChange={e => setEditUserForm({...editUserForm, addressZone: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">ቀበሌ</label>
+                    <input type="text" value={editUserForm.addressKebele || ''} onChange={e => setEditUserForm({...editUserForm, addressKebele: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">የቤት ቁጥር</label>
+                    <input type="text" value={editUserForm.addressHouseNumber || ''} onChange={e => setEditUserForm({...editUserForm, addressHouseNumber: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">የስራ አይነት</label>
+                    <input type="text" value={editUserForm.jobTitle || ''} onChange={e => setEditUserForm({...editUserForm, jobTitle: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">የእቁብ ምድብ</label>
+                    <input type="text" value={editUserForm.ekubType || ''} onChange={e => setEditUserForm({...editUserForm, ekubType: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">የመለያ ኮድ</label>
+                    <input type="text" value={editUserForm.memberCode || ''} onChange={e => setEditUserForm({...editUserForm, memberCode: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">የመዋጮ መጠን (ETB)</label>
+                    <input type="number" value={editUserForm.amount || ''} onChange={e => setEditUserForm({...editUserForm, amount: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">የእቁብ እጣ ብዛት (Slots)</label>
+                    <input type="number" min="1" value={editUserForm.slots} onChange={e => setEditUserForm({...editUserForm, slots: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-black text-slate-900 mb-2">ሁኔታ (Status)</label>
+                    <select value={editUserForm.status} onChange={e => setEditUserForm({...editUserForm, status: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700">
+                      <option value="pending">Pending</option>
+                      <option value="active">Active</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                 </div>
+               </div>
+               
+               <button type="submit" className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black shadow-xl shadow-amber-500/20 hover:bg-amber-600 transition-all mt-4">
+                  አስቀምጥ (Save)
+               </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Edit Admin Modal */}
+      {showEditAdminModal && editAdminForm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white p-8 rounded-[3rem] w-full max-w-md shadow-2xl"
+          >
+            <div className="flex justify-between items-center mb-6 px-2">
+              <h3 className="text-xl font-black text-slate-900">{t('admin.administrator')} ({editAdminForm.fullName})</h3>
+              <button onClick={() => setShowEditAdminModal(false)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-100">
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditAdminSubmit} className="space-y-4">
+               <div>
+                  <label className="block text-xs font-black text-slate-900 mb-2">ሙሉ ስም (Full Name)</label>
+                  <input type="text" required value={editAdminForm.fullName || ''} onChange={e => setEditAdminForm({...editAdminForm, fullName: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-slate-900 mb-2">ስልክ (Phone)</label>
+                  <input type="text" value={editAdminForm.phone || ''} onChange={e => setEditAdminForm({...editAdminForm, phone: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700" />
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-slate-900 mb-2">ሃላፊነት (Role)</label>
+                  <select value={editAdminForm.role || 'admin'} onChange={e => setEditAdminForm({...editAdminForm, role: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700">
+                    <option value="admin">Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                  </select>
+               </div>
+                {editAdminForm.role === 'admin' && (
+                  <div className="bg-slate-50 p-4 rounded-2xl space-y-3 border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ስልጣን (Permissions)</p>
+                    <div className="grid grid-cols-1 gap-2">
+                       {[
+                         { id: 'manageUsers', label: language === 'am' ? 'አባላትን ማስተዳደር (Manage Members)' : 'Manage Members' },
+                         { id: 'manageGroups', label: language === 'am' ? 'ቡድኖችን ማስተዳደር (Manage Groups)' : 'Manage Groups' },
+                         { id: 'approvePayments', label: language === 'am' ? 'ክፍያዎችን ማረጋገጥ (Approve Payments)' : 'Approve Payments' },
+                         { id: 'manageDraws', label: language === 'am' ? 'እጣ ማውጣት መቆጣጠር (Conduct Draws)' : 'Conduct Draws' },
+                         { id: 'manageMessages', label: language === 'am' ? 'መልእክቶች እና ቻት (Manage Chat & Messages)' : 'Manage Chat & Messages' },
+                         { id: 'registerMembers', label: language === 'am' ? 'አባላት መመዝገብ (Register Members)' : 'Register Members' }
+                       ].map(p => (
+                         <label key={p.id} className="flex items-center gap-3 cursor-pointer group">
+                           <input 
+                             type="checkbox" 
+                             checked={editAdminForm.permissions?.[p.id] || false} 
+                             onChange={e => setEditAdminForm({
+                               ...editAdminForm, 
+                               permissions: { ...editAdminForm.permissions, [p.id]: e.target.checked }
+                             })}
+                             className="w-5 h-5 rounded-lg border-slate-200 text-indigo-600 focus:ring-indigo-500/20 transition-all"
+                           />
+                           <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900 transition-colors">{p.label}</span>
+                         </label>
+                       ))}
+                    </div>
+                  </div>
+                )}
+               <button type="submit" className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black shadow-xl shadow-amber-500/20 hover:bg-amber-600 transition-all mt-4">
+                  አስቀምጥ (Save Changes)
+               </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Add Admin Modal */}
+      {showAddAdminModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-white">
+                  <UserPlus size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">አዲስ አስተዳዳሪ (Admin Registration)</h3>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Configure Admin Profile & Credentials</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAddAdminModal(false)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-black transition-all"
+              >
+                <X size={14} />
+                <span>ዝጋ</span>
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleAddAdminSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+               {/* Profile Picture & General info in compact layout */}
+               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100/50 space-y-3">
+                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">የግል መረጃ (Primary Bio)</p>
+                 
+                 <div className="flex flex-col sm:flex-row gap-4 items-center">
+                   {/* Avatar upload */}
+                   <div className="relative w-16 h-16 rounded-full border-2 border-dashed border-slate-200 bg-white flex items-center justify-center overflow-hidden group hover:border-amber-500 transition-all cursor-pointer">
+                     {addAdminForm.profilePic ? (
+                       <img src={addAdminForm.profilePic} alt="Profile" className="w-full h-full object-cover" />
+                     ) : (
+                       <div className="text-center p-1">
+                         <Camera className="mx-auto text-slate-400" size={14} />
+                         <span className="text-[8px] font-bold text-slate-400 block mt-0.5">ፎቶ ስቀል</span>
+                       </div>
+                     )}
+                     <input 
+                       type="file" 
+                       accept="image/*" 
+                       className="absolute inset-0 opacity-0 cursor-pointer" 
+                       onChange={(e) => handleAdminPhotoUpload(e, 'profilePic')} 
+                     />
+                   </div>
+                   
+                   {/* Name Fields */}
+                   <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+                     <div>
+                       <label className="block text-[10px] font-black text-slate-700 mb-1">ሙሉ ስም</label>
+                       <input 
+                         type="text" 
+                         required 
+                         placeholder="ሙሉ ስም አስገባ" 
+                         value={addAdminForm.fullName} 
+                         onChange={e => setAddAdminForm({...addAdminForm, fullName: e.target.value})} 
+                         className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" 
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-black text-slate-700 mb-1">የናት ስም ሙሉ</label>
+                       <input 
+                         type="text" 
+                         required 
+                         placeholder="የናት ሙሉ ስም" 
+                         value={addAdminForm.motherName} 
+                         onChange={e => setAddAdminForm({...addAdminForm, motherName: e.target.value})} 
+                         className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" 
+                       />
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Phone, Email, Role */}
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                   <div>
+                     <label className="block text-[10px] font-black text-slate-700 mb-1">ስልክ ቁጥር</label>
+                     <input 
+                       type="text" 
+                       required
+                       placeholder="09..." 
+                       value={addAdminForm.phone} 
+                       onChange={e => setAddAdminForm({...addAdminForm, phone: e.target.value})} 
+                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" 
+                     />
+                   </div>
+                   <div>
+                     <label className="block text-[10px] font-black text-slate-700 mb-1">ኢሜይል</label>
+                     <input 
+                       type="email" 
+                       placeholder="አማራጭ ኢሜይል" 
+                       value={addAdminForm.email} 
+                       onChange={e => setAddAdminForm({...addAdminForm, email: e.target.value})} 
+                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" 
+                     />
+                   </div>
+                   <div>
+                     <label className="block text-[10px] font-black text-slate-700 mb-1">ሚና (Role)</label>
+                     <select 
+                       value={addAdminForm.role} 
+                       onChange={e => setAddAdminForm({...addAdminForm, role: e.target.value})} 
+                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors cursor-pointer"
+                     >
+                       <option value="admin">Admin</option>
+                       <option value="super_admin">Super Admin</option>
+                     </select>
+                   </div>
+                 </div>
+               </div>
+               
+               {/* Password row */}
+               <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100/50 space-y-1.5 mt-2 mb-4">
+                 <label className="block text-[10px] font-black text-amber-800 uppercase tracking-wider">ለአዲሱ አድሚን መግቢያ የይለፍ ቃል (Assign Login Password)</label>
+                 <input 
+                   type="text" 
+                   required
+                   placeholder="የይለፍ ቃል ያስገቡ (ለምሳሌ: Admin123!)" 
+                   value={addAdminForm.password} 
+                   onChange={e => setAddAdminForm({...addAdminForm, password: e.target.value})} 
+                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" 
+                 />
+                 <p className="text-[9px] font-semibold text-slate-400 mt-0.5">አድሚኑ በዚሁ የይለፍ ቃል እና በስልካቸው/በኢሜይላቸው መግባት ይችላሉ። (ያለ የይለፍ ቃል 'Admin123!' በዲፎልት ያገለግላል)</p>
+               </div>
+
+               {addAdminForm.role === 'admin' && (
+                 <div className="bg-slate-50 p-4 rounded-2xl space-y-3 border border-slate-100">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ስልጣን (Permissions)</p>
+                   <div className="grid grid-cols-1 gap-2">
+                      {[
+                        { id: 'manageUsers', label: language === 'am' ? 'አባላትን ማስተዳደር' : 'Manage Users' },
+                        { id: 'manageGroups', label: language === 'am' ? 'ቡድኖችን ማስተዳደር' : 'Manage Groups' },
+                        { id: 'approvePayments', label: language === 'am' ? 'ክፍያ ማጽደቅ' : 'Approve Payments' },
+                        { id: 'manageDraws', label: language === 'am' ? 'እጣ ማውጣት' : 'Conduct Draws' },
+                        { id: 'manageMessages', label: language === 'am' ? 'መልእክቶች እና ቻት' : 'Manage Chat & Messages' },
+                        { id: 'registerMembers', label: language === 'am' ? 'አዲስ አባላትን መመዝገብ' : 'Register Members' }
+                      ].map(p => (
+                        <label key={p.id} className="flex items-center gap-3 cursor-pointer group">
+                          <input 
+                            type="checkbox" 
+                            checked={(addAdminForm.permissions as any)?.[p.id]} 
+                            onChange={e => setAddAdminForm({
+                              ...addAdminForm, 
+                              permissions: { ...addAdminForm.permissions, [p.id]: e.target.checked }
+                            })}
+                            className="w-5 h-5 rounded-lg border-slate-200 text-indigo-600 focus:ring-indigo-500/20 transition-all"
+                          />
+                          <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900 transition-colors">{p.label}</span>
+                        </label>
+                      ))}
+                   </div>
+                 </div>
+               )}
+               <div className="bg-blue-50 p-4 rounded-2xl mt-4">
+                 <p className="text-xs font-bold text-blue-700 leading-relaxed">ማሳሰቢያ: አዲሱ አስተዳዳሪ ወደ ሲስተሙ ሎግ-ኢን ለማድረግ አካውንቱን በዚሁ ኢሜይል ወይም ስልክ ቁጥር መመዝገብ (Sign up) ይኖርበታል።</p>
+               </div>
+               {/* Address & Experience Info of Admin (አድራሻ እና የስራ ሁኔታ) */}
+               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 mt-3">
+                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">አድራሻ እና የስራ ልምድ (Address & Experience)</p>
+                 
+                 <div className="grid grid-cols-2 gap-2">
+                   <div>
+                     <label className="block text-[9px] font-black text-slate-600 mb-0.5">ዜግነት / ሀገር</label>
+                     <input 
+                       type="text" 
+                       required 
+                       placeholder="ዜግነት / ሀገር" 
+                       value={addAdminForm.addressCountry} 
+                       onChange={e => setAddAdminForm({...addAdminForm, addressCountry: e.target.value})} 
+                       className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500 transition-colors" 
+                     />
+                   </div>
+                   <div>
+                     <label className="block text-[9px] font-black text-slate-600 mb-0.5">ክልል</label>
+                     <input 
+                       type="text" 
+                       required 
+                       placeholder="ክልል" 
+                       value={addAdminForm.addressRegion} 
+                       onChange={e => setAddAdminForm({...addAdminForm, addressRegion: e.target.value})} 
+                       className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500 transition-colors" 
+                     />
+                   </div>
+                 </div>
+
+                 <div className="grid grid-cols-3 gap-1.5">
+                   <div>
+                     <label className="block text-[9px] font-black text-slate-600 mb-0.5">ዞን</label>
+                     <input 
+                       type="text" 
+                       placeholder="ዞን" 
+                       value={addAdminForm.addressZone} 
+                       onChange={e => setAddAdminForm({...addAdminForm, addressZone: e.target.value})} 
+                       className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500 transition-colors" 
+                     />
+                   </div>
+                   <div>
+                     <label className="block text-[9px] font-black text-slate-600 mb-0.5">ወረዳ</label>
+                     <input 
+                       type="text" 
+                       placeholder="ወረዳ" 
+                       value={addAdminForm.addressWoreda} 
+                       onChange={e => setAddAdminForm({...addAdminForm, addressWoreda: e.target.value})} 
+                       className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500 transition-colors" 
+                     />
+                   </div>
+                   <div>
+                     <label className="block text-[9px] font-black text-slate-600 mb-0.5">ቀበሌ</label>
+                     <input 
+                       type="text" 
+                       placeholder="ቀበሌ" 
+                       value={addAdminForm.addressKebele} 
+                       onChange={e => setAddAdminForm({...addAdminForm, addressKebele: e.target.value})} 
+                       className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500 transition-colors" 
+                     />
+                   </div>
+                 </div>
+
+                 <div>
+                   <label className="block text-[9px] font-black text-slate-600 mb-0.5">የስራ ልምድ (Years of Experience / Bio)</label>
+                   <textarea 
+                     rows={1} 
+                     placeholder="የስራ ሁኔታ ወይም የስራ ልምድ መግለጫ..." 
+                     value={addAdminForm.experience} 
+                     onChange={e => setAddAdminForm({...addAdminForm, experience: e.target.value})} 
+                     className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500 transition-colors resize-none" 
+                   />
+                 </div>
+               </div>
+
+               {/* National ID Uploads (ናሽናል መታወቂያ) */}
+               <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2 mt-3">
+                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ናሽናል መታወቂያ (National ID Plates)</p>
+                 
+                 <div className="grid grid-cols-2 gap-2">
+                   {/* ID Front */}
+                   <div>
+                     <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-wide mb-1">የፊት ገጽ (Front)</span>
+                     <div className="relative border border-dashed border-slate-300 rounded-lg bg-white p-2 hover:border-amber-500 transition-all cursor-pointer flex flex-col items-center justify-center min-h-[64px] overflow-hidden">
+                       {addAdminForm.idFront ? (
+                         <div className="relative w-full h-12 flex items-center justify-center">
+                           <img src={addAdminForm.idFront} alt="ID Front" className="absolute inset-0 w-full h-full object-cover rounded" />
+                           <div className="absolute inset-0 bg-slate-900/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity rounded">
+                             <span className="text-[8px] text-white font-bold bg-slate-900/85 px-1.5 py-0.5 rounded">ቀይር</span>
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="text-center">
+                           <CreditCard className="mx-auto text-slate-400 mb-0.5" size={14} />
+                           <span className="text-[8px] font-bold text-slate-400 block">ፊት (Front)</span>
+                         </div>
+                       )}
+                       <input 
+                         type="file" 
+                         accept="image/*" 
+                         className="absolute inset-0 opacity-0 cursor-pointer" 
+                         onChange={(e) => handleAdminPhotoUpload(e, 'idFront')} 
+                       />
+                     </div>
+                   </div>
+
+                   {/* ID Back */}
+                   <div>
+                     <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-wide mb-1">የጀርባ ገጽ (Back)</span>
+                     <div className="relative border border-dashed border-slate-300 rounded-lg bg-white p-2 hover:border-amber-500 transition-all cursor-pointer flex flex-col items-center justify-center min-h-[64px] overflow-hidden">
+                       {addAdminForm.idBack ? (
+                         <div className="relative w-full h-12 flex items-center justify-center">
+                           <img src={addAdminForm.idBack} alt="ID Back" className="absolute inset-0 w-full h-full object-cover rounded" />
+                           <div className="absolute inset-0 bg-slate-900/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity rounded">
+                             <span className="text-[8px] text-white font-bold bg-slate-900/85 px-1.5 py-0.5 rounded">ቀይር</span>
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="text-center">
+                           <CreditCard className="mx-auto text-slate-400 mb-0.5" size={14} />
+                           <span className="text-[8px] font-bold text-slate-400 block">ጀርባ (Back)</span>
+                         </div>
+                       )}
+                       <input 
+                         type="file" 
+                         accept="image/*" 
+                         className="absolute inset-0 opacity-0 cursor-pointer" 
+                         onChange={(e) => handleAdminPhotoUpload(e, 'idBack')} 
+                       />
+                     </div>
+                   </div>
+                 </div>
+               </div>
+
+                <div className="flex gap-2.5 mt-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowAddAdminModal(false)}
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1"
+                  >
+                    <span>ተመለስ</span>
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="flex-1 py-2.5 bg-amber-500 text-white hover:bg-amber-600 rounded-xl font-black shadow-lg shadow-amber-500/20 transition-all text-xs flex items-center justify-center gap-1"
+                  >
+                    <span>አስተዳዳሪ ጨምር</span>
+                  </button>
+                </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Add User Modal */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl flex items-center justify-center p-4 z-[100]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 40 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col relative"
+          >
+            {/* Header */}
+            <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-900 text-white">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gold-400 rounded-2xl flex items-center justify-center shadow-lg shadow-gold-400/20">
+                   <Users size={24} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black uppercase tracking-tighter">አዲስ አባል ምዝገባ</h3>
+                  <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Register New Member with Full Profile</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAddUserModal(false)} 
+                className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-2xl transition-all text-white"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddUserSubmit} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar pb-32">
+               {/* Section 1: Basic Identity */}
+               <div className="space-y-6">
+                 <div className="flex items-center gap-3 mb-2">
+                   <span className="w-8 h-8 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center text-[10px] font-black border border-amber-100">1</span>
+                   <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">የግል መረጃ (Personal Info)</h4>
+                 </div>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ሙሉ ስም (Full Name) *</label>
+                       <div className="relative group">
+                          <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                          <input 
+                            type="text" 
+                            required 
+                            placeholder="የአባሉ ስም"
+                            value={addUserForm.fullName} 
+                            onChange={e => setAddUserForm({...addUserForm, fullName: e.target.value})} 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all" 
+                          />
+                       </div>
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ስልክ ቁጥር (Phone Number) *</label>
+                       <div className="relative group">
+                          <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                          <input 
+                            type="tel" 
+                            required 
+                            placeholder="09..."
+                            value={addUserForm.phone} 
+                            onChange={e => setAddUserForm({...addUserForm, phone: e.target.value})} 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all" 
+                          />
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ለመግቢያ የሚሆን የይለፍ ቃል *</label>
+                       <div className="relative group">
+                          <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" size={18} />
+                          <input 
+                            type="text" 
+                            required 
+                            placeholder="ቢያንስ 6 አሃዝ"
+                            value={addUserForm.password} 
+                            onChange={e => setAddUserForm({...addUserForm, password: e.target.value})} 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all font-mono" 
+                          />
+                        </div>
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">የስራ መደብ (Job Title)</label>
+                        <input 
+                          type="text" 
+                          placeholder="Profession"
+                          value={addUserForm.jobTitle} 
+                          onChange={e => setAddUserForm({...addUserForm, jobTitle: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all" 
+                        />
+                     </div>
+                  </div>
+               </div>
+
+               {/* Section 2: Birthplace */}
+               <div className="space-y-6">
+                 <div className="flex items-center gap-3 mb-2">
+                   <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-[10px] font-black border border-blue-100">2</span>
+                   <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">የትውልድ ቦታ (Birthplace)</h4>
+                 </div>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">የትውልድ ቀን (GC)</label>
+                       <div className="relative group">
+                          <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={18} />
+                          <input 
+                            type="date" 
+                            value={addUserForm.birthDate} 
+                            onChange={e => handleBirthDateChange(e.target.value)} 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-200 transition-all" 
+                          />
+                       </div>
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">የትውልድ ቀን (EC - አማራጭ)</label>
+                       <div className="relative group">
+                          <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={18} />
+                          <input 
+                            type="text" 
+                            placeholder="ቀን/ወር/ዓ.ም"
+                            value={addUserForm.birthDateEC} 
+                            onChange={e => setAddUserForm({...addUserForm, birthDateEC: e.target.value})} 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-200 transition-all" 
+                          />
+                       </div>
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">እድሜ (Age)</label>
+                       <div className="relative group">
+                          <Clock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={18} />
+                          <input 
+                            type="number" 
+                            readOnly
+                            value={addUserForm.age} 
+                            className="w-full bg-slate-100 border border-slate-200 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-400 outline-none cursor-not-allowed" 
+                          />
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                     <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ሀገር (Country)</label>
+                        <select 
+                          value={addUserForm.birthCountry} 
+                          onChange={e => setAddUserForm({...addUserForm, birthCountry: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none appearance-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-200 transition-all"
+                        >
+                           <option value="ኢትዮጵያ">ኢትዮጵያ</option>
+                           <option value="Other">Other</option>
+                        </select>
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ክልል (Region)</label>
+                        <select 
+                          value={addUserForm.birthRegion}
+                          onChange={e => setAddUserForm({...addUserForm, birthRegion: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none appearance-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-200 transition-all"
+                        >
+                           {['አዲስ አበባ', 'ድሬዳዋ', 'ኦሮሚያ', 'አማራ', 'ትግራይ', 'ሶማሌ', 'አፋር', 'ደቡብ', 'ደቡብ ምዕራብ', 'ሲዳማ', 'ማዕከላዊ', 'ቤንሻንጉል ጉሙዝ', 'ጋምቤላ', 'ሐረሪ'].map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ዞን/ክ.ከተማ (Zone)</label>
+                        <input 
+                          type="text" 
+                          placeholder="Zone"
+                          value={addUserForm.birthZone} 
+                          onChange={e => setAddUserForm({...addUserForm, birthZone: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-200 transition-all" 
+                        />
+                     </div>
+                     <div className="space-y-1.5 md:col-span-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ወረዳ (Woreda)</label>
+                        <input 
+                          type="text" 
+                          placeholder="Woreda"
+                          value={addUserForm.birthWoreda} 
+                          onChange={e => setAddUserForm({...addUserForm, birthWoreda: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-200 transition-all" 
+                        />
+                     </div>
+                     <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ቀበሌ (Kebele)</label>
+                        <input 
+                          type="text" 
+                          placeholder="Kebele"
+                          value={addUserForm.birthKebele} 
+                          onChange={e => setAddUserForm({...addUserForm, birthKebele: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-200 transition-all" 
+                        />
+                     </div>
+                  </div>
+               </div>
+
+               {/* Section 3: Address */}
+               <div className="space-y-6">
+                 <div className="flex items-center gap-3 mb-2">
+                   <span className="w-8 h-8 rounded-full bg-purple-50 text-purple-500 flex items-center justify-center text-[10px] font-black border border-purple-100">3</span>
+                   <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">የአሁን አድራሻ (Current Address)</h4>
+                 </div>
+                 
+                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                     <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ሀገር (Country)</label>
+                        <select 
+                          value={addUserForm.addressCountry} 
+                          onChange={e => setAddUserForm({...addUserForm, addressCountry: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none appearance-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-200 transition-all"
+                        >
+                           <option value="ኢትዮጵያ">ኢትዮጵያ</option>
+                           <option value="Other">Other</option>
+                        </select>
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ክልል (Region)</label>
+                        <select 
+                          value={addUserForm.addressRegion} 
+                          onChange={e => setAddUserForm({...addUserForm, addressRegion: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none appearance-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-200 transition-all"
+                        >
+                           {['አዲስ አበባ', 'ድሬዳዋ', 'ኦሮሚያ', 'አማራ', 'ትግራይ', 'ሶማሌ', 'አፋር', 'ደቡብ', 'ደቡብ ምዕራብ', 'ሲዳማ', 'ማዕከላዊ', 'ቤንሻንጉል ጉሙዝ', 'ጋምቤላ', 'ሐረሪ'].map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ዞን/ክ.ከተማ (Zone)</label>
+                        <input 
+                          type="text" 
+                          placeholder="Zone"
+                          value={addUserForm.addressZone} 
+                          onChange={e => setAddUserForm({...addUserForm, addressZone: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-200 transition-all" 
+                        />
+                     </div>
+                     <div className="space-y-1.5 md:col-span-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ወረዳ (Woreda)</label>
+                        <input 
+                          type="text" 
+                          placeholder="Woreda"
+                          value={addUserForm.addressWoreda} 
+                          onChange={e => setAddUserForm({...addUserForm, addressWoreda: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-200 transition-all" 
+                        />
+                     </div>
+                     <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">ቀበሌ (Kebele)</label>
+                        <input 
+                          type="text" 
+                          placeholder="Kebele"
+                          value={addUserForm.addressKebele} 
+                          onChange={e => setAddUserForm({...addUserForm, addressKebele: e.target.value})} 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-200 transition-all" 
+                        />
+                     </div>
+                  </div>
+               </div>
+
+               {/* Section 4: Ekub Config */}
+               <div className="space-y-6">
+                 <div className="flex items-center gap-3 mb-2">
+                   <span className="w-8 h-8 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center text-[10px] font-black border border-orange-100">4</span>
+                   <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">የእቁብ መረጃ (Ekub Details)</h4>
+                 </div>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">የእቁብ አይነት (Ekub Type)</label>
+                       <div className="relative group">
+                          <Folder className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-orange-500 transition-colors" size={18} />
+                          <select 
+                            value={addUserForm.ekubType} 
+                            onChange={e => setAddUserForm({...addUserForm, ekubType: e.target.value})} 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-700 outline-none appearance-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-200 transition-all"
+                          >
+                            <option value="">-- ይምረጡ --</option>
+                            <option value="Daily">እለታዊ (Daily)</option>
+                            <option value="Weekly">ሳምንታዊ (Weekly)</option>
+                            <option value="Monthly">ወርሃዊ (Monthly)</option>
+                            <option value="FiveDays">የ 5 ቀን (5 Days)</option>
+                            <option value="TenDays">የ 10 ቀን (10 Days)</option>
+                          </select>
+                       </div>
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">የእቁብ ቡድን (Select Group)</label>
+                       <div className="relative group">
+                          <Folder className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-orange-500 transition-colors" size={18} />
+                          <select 
+                            value={addUserForm.groupId} 
+                            onChange={e => setAddUserForm({...addUserForm, groupId: e.target.value})} 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-700 outline-none appearance-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-200 transition-all"
+                          >
+                            <option value="">-- ወደፊት የሚመደብ (Assign Later) --</option>
+                            {groups.map(g => (
+                              <option key={g.id} value={g.id}>{g.name} - ({(g.amount).toLocaleString()} ብር)</option>
+                            ))}
+                          </select>
+                       </div>
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">የእጣ ብዛት (Total Slots) *</label>
+                       <div className="relative group">
+                          <Hash className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-orange-500 transition-colors" size={18} />
+                          <input 
+                            type="number" 
+                            min="1" 
+                            required 
+                            value={addUserForm.slots} 
+                            onChange={e => setAddUserForm({...addUserForm, slots: parseInt(e.target.value) || 1})} 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-200 transition-all" 
+                          />
+                       </div>
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2 flex flex-col md:flex-row gap-4 w-full items-end">
+                       <div className="w-full flex-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest mb-1.5 block">የእጣ ፍላጎት (Preferred Item)</label>
+                          <div className="relative group">
+                             <Trophy className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-orange-500 transition-colors" size={18} />
+                             <select 
+                               value={addUserForm.preferredItem} 
+                               onChange={e => setAddUserForm({...addUserForm, preferredItem: e.target.value})} 
+                               className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-6 py-4 text-sm font-bold text-slate-700 outline-none appearance-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-200 transition-all"
+                             >
+                               <option value="">-- ይምረጡ --</option>
+                               <option value="Cash (ጥሬ ገንዘብ)">Cash (ጥሬ ገንዘብ)</option>
+                               <option value="Car (መኪና)">Car (መኪና)</option>
+                               <option value="House (ቤት)">House (ቤት)</option>
+                               <option value="Electronics (ኤሌክትሮኒክስ)">Electronics (ኤሌክትሮኒክስ)</option>
+                               <option value="Gold (ወርቅ)">Gold (ወርቅ)</option>
+                               <option value="Other (ሌላ)">Other (ሌላ)</option>
+                             </select>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+               </div>
+
+               {/* Section 5: KYC and Files */}
+               <div className="space-y-6">
+                 <div className="flex items-center gap-3 mb-2">
+                   <span className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-[10px] font-black border border-emerald-100">5</span>
+                   <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">የማንነት ማረጋገጫ (KYC / Banking)</h4>
+                 </div>
+
+                 <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">መታወቂያ/ፋይዳ ቁጥር (National ID)</label>
+                       <input 
+                         type="text" 
+                         placeholder="ID Number"
+                         value={addUserForm.nationalId} 
+                         onChange={e => setAddUserForm({...addUserForm, nationalId: e.target.value})} 
+                         className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-200 transition-all" 
+                       />
+                    </div>
+                 </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-3">
+                      <p className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">የፋይዳ ፊት (ID Front)</p>
+                      <div className="relative aspect-[3/2] rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden group hover:border-emerald-400 transition-all">
+                        {addUserForm.idFront ? (
+                          <>
+                            <img src={addUserForm.idFront} className="w-full h-full object-cover" alt="ID Front" />
+                            <button 
+                              type="button"
+                              onClick={() => setAddUserForm({...addUserForm, idFront: ''})}
+                              className="absolute top-4 right-4 w-10 h-10 bg-rose-500 text-white rounded-xl flex items-center justify-center shadow-lg transform translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all"
+                            >
+                              <History size={20} />
+                            </button>
+                          </>
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center gap-4 bg-slate-50">
+                             <label className="flex flex-col items-center justify-center cursor-pointer bg-white shadow-sm border border-slate-200 rounded-[1.5rem] p-4 hover:border-emerald-400 group/btn transition-all">
+                               <ImageIcon className="text-slate-300 mb-2 group-hover/btn:text-emerald-500 transition-colors" size={24} />
+                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover/btn:text-emerald-500 transition-colors">ጋለሪ</span>
+                               <input type="file" accept="image/*" className="hidden" onChange={(e) => handleIdPhotoUpload(e, 'idFront')} />
+                             </label>
+                             <label className="flex flex-col items-center justify-center cursor-pointer bg-white shadow-sm border border-slate-200 rounded-[1.5rem] p-4 hover:border-emerald-400 group/btn transition-all">
+                               <Camera className="text-slate-300 mb-2 group-hover/btn:text-emerald-500 transition-colors" size={24} />
+                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover/btn:text-emerald-500 transition-colors">ካሜራ</span>
+                               <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleIdPhotoUpload(e, 'idFront')} />
+                             </label>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <p className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">የፋይዳ ጀርባ (ID Back)</p>
+                      <div className="relative aspect-[3/2] rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden group hover:border-emerald-400 transition-all">
+                        {addUserForm.idBack ? (
+                          <>
+                            <img src={addUserForm.idBack} className="w-full h-full object-cover" alt="ID Back" />
+                            <button 
+                              type="button"
+                              onClick={() => setAddUserForm({...addUserForm, idBack: ''})}
+                              className="absolute top-4 right-4 w-10 h-10 bg-rose-500 text-white rounded-xl flex items-center justify-center shadow-lg transform translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all"
+                            >
+                              <History size={20} />
+                            </button>
+                          </>
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center gap-4 bg-slate-50">
+                             <label className="flex flex-col items-center justify-center cursor-pointer bg-white shadow-sm border border-slate-200 rounded-[1.5rem] p-4 hover:border-emerald-400 group/btn transition-all">
+                               <ImageIcon className="text-slate-300 mb-2 group-hover/btn:text-emerald-500 transition-colors" size={24} />
+                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover/btn:text-emerald-500 transition-colors">ጋለሪ</span>
+                               <input type="file" accept="image/*" className="hidden" onChange={(e) => handleIdPhotoUpload(e, 'idBack')} />
+                             </label>
+                             <label className="flex flex-col items-center justify-center cursor-pointer bg-white shadow-sm border border-slate-200 rounded-[1.5rem] p-4 hover:border-emerald-400 group/btn transition-all">
+                               <Camera className="text-slate-300 mb-2 group-hover/btn:text-emerald-500 transition-colors" size={24} />
+                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover/btn:text-emerald-500 transition-colors">ካሜራ</span>
+                               <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleIdPhotoUpload(e, 'idBack')} />
+                             </label>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <p className="text-[9px] font-black text-slate-400 uppercase ml-4 tracking-widest">የፊት ስካን (Face Scan)</p>
+                      <div className="relative aspect-[3/2] rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden group hover:border-emerald-400 transition-all">
+                        {addUserForm.faceScan ? (
+                          <>
+                            <img src={addUserForm.faceScan} className="w-full h-full object-cover" alt="Face Scan" />
+                            <button 
+                              type="button"
+                              onClick={() => setAddUserForm({...addUserForm, faceScan: ''})}
+                              className="absolute top-4 right-4 w-10 h-10 bg-rose-500 text-white rounded-xl flex items-center justify-center shadow-lg transform translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all"
+                            >
+                              <History size={20} />
+                            </button>
+                          </>
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center gap-4 bg-slate-50">
+                             <label className="flex flex-col items-center justify-center cursor-pointer bg-white shadow-sm border border-slate-200 rounded-[1.5rem] p-4 hover:border-emerald-400 group/btn transition-all">
+                               <ImageIcon className="text-slate-300 mb-2 group-hover/btn:text-emerald-500 transition-colors" size={24} />
+                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover/btn:text-emerald-500 transition-colors">ጋለሪ</span>
+                               <input type="file" accept="image/*" className="hidden" onChange={(e) => handleIdPhotoUpload(e, 'faceScan')} />
+                             </label>
+                             <label className="flex flex-col items-center justify-center cursor-pointer bg-white shadow-sm border border-slate-200 rounded-[1.5rem] p-4 hover:border-emerald-400 group/btn transition-all">
+                               <Camera className="text-slate-300 mb-2 group-hover/btn:text-emerald-500 transition-colors" size={24} />
+                               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover/btn:text-emerald-500 transition-colors">ካሜራ</span>
+                               <input type="file" accept="image/*" capture="user" className="hidden" onChange={(e) => handleIdPhotoUpload(e, 'faceScan')} />
+                             </label>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+               </div>
+
+               {/* Section 6: Info Box (Confirmation Note) */}
+               <div className="space-y-6">
+                 <div className="flex items-center gap-3 mb-2">
+                   <span className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-black shadow-lg">6</span>
+                   <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">ማረጋገጫ (Confirmation)</h4>
+                 </div>
+                 <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] flex gap-6 shadow-2xl relative overflow-hidden group">
+                   <div className="absolute right-0 top-0 w-32 h-32 bg-rose-500/10 blur-3xl rounded-full -mr-16 -mt-16"></div>
+                   <div className="w-16 h-16 shrink-0 bg-white/10 rounded-2xl flex items-center justify-center text-rose-400 shadow-xl border border-white/5 group-hover:scale-110 transition-transform">
+                      <Lock size={28} />
+                   </div>
+                   <div className="relative z-10 flex-1">
+                      <p className="text-sm font-black text-white uppercase tracking-widest mb-2">ለአባሉ የመግቢያ መረጃ (Login Credentials)</p>
+                      <p className="text-[11px] font-bold text-slate-400 leading-relaxed">
+                         አባሉ በሚቀጥለው ጊዜ ወደ መሊክ እቁብ ለመግባት <span className="text-rose-400 font-black">{addUserForm.phone || 'ስልክ ቁጥራቸው'}</span> እና ከላይ ያስገቡትን <span className="text-rose-400 font-black">የይለፍ ቃል</span> በመጠቀም መግባት ይችላሉ። ሲመዘገቡ የሚሰጣቸውን የአባል መለያ ኮድም ከገቡ በኋላ ያገኙታል።
+                      </p>
+                   </div>
+                 </div>
+               </div>
+            </form>
+
+            {/* Footer Actions */}
+            <div className="absolute bottom-0 left-0 right-0 p-8 pt-4 bg-white/80 backdrop-blur-md border-t border-slate-50 flex gap-4">
+              <button 
+                type="button" 
+                onClick={() => setShowAddUserModal(false)}
+                className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-100 transition-all"
+              >
+                አቋርጥ (Cancel)
+              </button>
+              <button 
+                onClick={(e) => { e.preventDefault(); handleAddUserSubmit(e); }}
+                disabled={isAddingUser}
+                className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {isAddingUser ? <RefreshCw size={18} className="animate-spin" /> : <><Users size={18} /> አባሉን መዝግብ</>}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Schedule Draw Modal */}
+      {showScheduleDrawModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 z-[130]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-[3.5rem] shadow-2xl w-full max-w-lg p-8 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/5 blur-[80px] rounded-full -mr-24 -mt-24"></div>
+            
+            <div className="flex items-center justify-between mb-8 relative z-10">
+               <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-amber-50 text-amber-500 rounded-3xl flex items-center justify-center shadow-inner">
+                     <Calendar size={28} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-1">የእጣ ቀን መቁጠሪያ</h3>
+                    <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">{scheduledDrawGroup?.name}</p>
+                  </div>
+               </div>
+               <button onClick={() => setShowScheduleDrawModal(false)} className="w-12 h-12 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-colors shadow-sm">
+                  <X size={24} />
+               </button>
+            </div>
+
+            <div className="space-y-6 relative z-10">
+               <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-4 tracking-widest">ቀጣይ እጣ የሚወጣበት ቀን (Date)</label>
+                  <div className="relative group">
+                     <Calendar className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-amber-500 transition-colors" size={20} />
+                     <input 
+                       type="date" 
+                       value={drawScheduleDate}
+                       onChange={(e) => setDrawScheduleDate(e.target.value)}
+                       className="w-full bg-slate-50 border border-slate-100 rounded-3xl pl-16 pr-6 py-5 text-base font-black text-slate-900 outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-200 transition-all shadow-inner" 
+                     />
+                  </div>
+               </div>
+
+               <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-4 tracking-widest">እጣ የሚወጣበት ሰዓት (Time)</label>
+                  <div className="relative group">
+                     <Clock className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-amber-500 transition-colors" size={20} />
+                     <input 
+                       type="time" 
+                       value={drawScheduleTime}
+                       onChange={(e) => setDrawScheduleTime(e.target.value)}
+                       className="w-full bg-slate-50 border border-slate-100 rounded-3xl pl-16 pr-6 py-5 text-base font-black text-slate-900 outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-200 transition-all shadow-inner" 
+                     />
+                  </div>
+               </div>
+
+               <div className="bg-amber-50 p-6 rounded-[2.5rem] border border-amber-100/50 flex gap-4">
+                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-amber-500 shadow-sm shrink-0">
+                     <BellRing size={24} />
+                  </div>
+                  <div>
+                     <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">አውቶማቲክ ማሳወቂያ (Notification)</p>
+                     <p className="text-[11px] font-bold text-amber-700/60 leading-relaxed">
+                        እጣው የሚወጣበትን ቀን ሲመዘግቡ ለሁሉም የቡድኑ አባላት አውቶማቲክ ማሳወቂያ በውስጥ መልዕክት ይላክላቸዋል።
+                     </p>
+                  </div>
+               </div>
+
+               <button 
+                 onClick={handleScheduleDraw}
+                 className="w-full py-6 bg-slate-900 text-white rounded-[2.5rem] font-black text-sm uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-amber-500 transition-all active:scale-95 flex items-center justify-center gap-3"
+               >
+                 <CheckCircle size={20} /> የእጣ ቀኑን መዝግብ
+               </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Payment Review Modal */}
+      <AnimatePresence>
+        {paymentReviewModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[120]">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white max-w-2xl w-full rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center">
+                    <Eye size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{language === 'am' ? 'የክፍያ ማረጋገጫ' : 'Review Payment'}</h3>
+                    <p className="text-[10px] font-bold text-slate-400">{paymentReviewModal.userName}</p>
+                  </div>
+                </div>
+                <button onClick={() => setPaymentReviewModal(null)} className="w-10 h-10 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide bg-slate-50">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Amount</span>
+                    <span className="text-lg font-black text-slate-900">{paymentReviewModal.amount?.toLocaleString()} ETB</span>
+                  </div>
+                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                    <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Receipt ID</span>
+                    <span className="text-sm font-mono font-bold text-slate-700">#{paymentReviewModal.receiptId || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {paymentReviewModal.receiptUrl && (
+                  <div className="bg-white p-2 rounded-3xl border border-slate-100 shadow-sm">
+                    <img src={paymentReviewModal.receiptUrl} alt="Receipt" className="w-full h-auto max-h-80 object-contain rounded-2xl" />
+                  </div>
+                )}
+                
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
+                    {language === 'am' ? 'መልእክት / ምክንያት (ካለ)' : 'Feedback / Reason (Optional)'}
+                  </label>
+                  <textarea
+                     value={paymentReviewMessage}
+                     onChange={(e) => setPaymentReviewMessage(e.target.value)}
+                     className="w-full bg-slate-50 rounded-xl p-3 text-sm border-none focus:ring-2 focus:ring-indigo-100 text-slate-700 resize-none h-24"
+                     placeholder={language === 'am' ? 'ለአባሉ የሚያስተላልፉት መልእክት ወይም ያልተመዘገበበት ምክንያት...' : 'Type reason for rejection or note for admin...'}
+                  />
+                </div>
+              </div>
+
+              <div className="p-6 bg-white border-t border-slate-100 flex gap-3 shrink-0">
+                 <button 
+                   onClick={() => rejectPayment(paymentReviewModal.id)}
+                   className="flex-1 py-4 bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-500 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
+                 >
+                   <XCircle size={16} className="inline mr-2" />
+                   {language === 'am' ? 'ውድቅ አድርግ (Reject)' : 'Reject'}
+                 </button>
+                 <button 
+                   onClick={() => approvePayment(paymentReviewModal.id)}
+                   className="flex-[2] py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-500/20 transition-all"
+                 >
+                   <CheckCircle size={16} className="inline mr-2" />
+                   {language === 'am' ? 'አፅድቅ (Approve)' : 'Approve Payment'}
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSuccessModal(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-2xl text-center overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-3xl rounded-full -mr-16 -mt-16"></div>
+              <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg border border-emerald-100 animate-bounce-slow">
+                <CheckCircle size={40} />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">{successModalConfig.title}</h3>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest leading-relaxed mb-8">{successModalConfig.message}</p>
+              <button
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-black transition-all active:scale-95"
+              >
+                {successModalConfig.buttonText}
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete User/Admin Modal */}
+      <AnimatePresence>
+        {userToDelete && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setUserToDelete(null)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl text-center overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 blur-3xl rounded-full -mr-16 -mt-16"></div>
+              <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg border border-rose-100 animate-pulse">
+                <Trash2 size={40} />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">
+                {language === 'am' ? 'በቋሚነት አጥፋ' : 'Delete Permanently'}
+              </h3>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest leading-relaxed mb-6">
+                {language === 'am' ? 'ይህንን አድሚን/አባል በቋሚነት መሰረዝ ይፈልጋሉ? ይህ እርምጃ አይቀለበስም።' : 'Are you sure you want to delete this admin/member permanently? This action cannot be undone.'}
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                 <button
+                   onClick={confirmDeleteUserAdmin}
+                   className="w-full py-4 bg-rose-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:bg-rose-600 transition-all active:scale-95 flex items-center justify-center gap-2"
+                 >
+                    <Trash2 size={16} /> {language === 'am' ? 'አዎ፣ አጥፋ' : 'Yes, Delete'}
+                 </button>
+                 <button
+                   onClick={() => setUserToDelete(null)}
+                   className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-200 transition-all active:scale-95"
+                 >
+                   {language === 'am' ? 'ተመለስ' : 'Cancel'}
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* End Cycle Modal */}
+      <AnimatePresence>
+        {showEndCycleModal && selectedGroup && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowEndCycleModal(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl text-center overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 blur-3xl rounded-full -mr-16 -mt-16"></div>
+              <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg border border-rose-100 animate-pulse">
+                <RefreshCw size={40} />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">
+                {language === 'am' ? 'ዙር መዝጊያ' : 'End Cycle'}
+              </h3>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest leading-relaxed mb-6">
+                {language === 'am' ? `ይህ ሂደት ${selectedGroup?.name} አባላትን ወደ ማህደር (Archive) በማስገባት አዲስ ዙር ምዝገባ ይጀምራል። እርግጠኛ ነዎት?` : `This action will archive members of ${selectedGroup?.name} and start a new round registration. Are you sure?`}
+              </p>
+              
+              <div className="flex gap-4">
+                  <button
+                    disabled={isLoading}
+                    onClick={() => setShowEndCycleModal(false)}
+                    className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-200 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {language === 'am' ? 'ተመለስ' : 'Cancel'}
+                  </button>
+                  <button
+                    disabled={isLoading}
+                    onClick={async () => {
+                      setIsLoading(true);
+                      try {
+                          const round = selectedGroup.currentRound || 1;
+                          const qMembers = query(collection(db, 'users'), where('groupId', '==', selectedGroup.id));
+                          const membersSnap = await getDocs(qMembers);
+                          
+                          for (const memberDoc of membersSnap.docs) {
+                              const memberData = memberDoc.data();
+                              await addDoc(collection(db, 'archived_members'), {
+                                  ...memberData,
+                                  originalUserId: memberDoc.id,
+                                  archivedAt: serverTimestamp(),
+                                  round: round,
+                                  groupId: selectedGroup.id,
+                                  groupName: selectedGroup.name
+                              });
+                              await deleteDoc(doc(db, 'users', memberDoc.id));
+                          }
+
+                          await updateDoc(doc(db, 'groups', selectedGroup.id), {
+                              currentRound: round + 1,
+                              status: 'pending',
+                              memberCount: 0
+                          });
+                          
+                          setShowEndCycleModal(false);
+                          setSelectedGroup(null);
+                          setShowSuccessModal(true);
+                          setSuccessModalConfig({
+                              title: language === 'am' ? 'ዙሩ ተዘግቷል' : 'Cycle Ended',
+                              message: language === 'am' ? 'በተሳካ ሁኔታ ዙሩ ተዘግቶ አዲስ ምዝገባ ተጀምሯል።' : 'Cycle ended successfully and new registration started.',
+                              buttonText: t('common.done')
+                          });
+                      } catch (e) {
+                          console.error(e);
+                          handleFirestoreError(e, OperationType.WRITE, 'archive_cycle');
+                      }
+                      setIsLoading(false);
+                    }}
+                    className="flex-1 py-4 bg-rose-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-[0_8px_32px_-8px_rgba(244,63,94,0.5)] hover:bg-rose-600 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                     {isLoading ? <RefreshCw size={14} className="animate-spin" /> : <Archive size={14} />}
+                     {language === 'am' ? 'እርግጠኛ ነኝ ዘጋው' : 'Confirm End Cycle'}
+                  </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Exquisite Cosmic Phone / Video Calling System Overlay */}
+      <AnimatePresence>
+        {callState !== 'idle' && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              className="relative w-full max-w-lg bg-slate-900 rounded-[3rem] p-8 text-center text-white border border-slate-800 shadow-3xl overflow-hidden flex flex-col items-center justify-between min-h-[500px]"
+            >
+              {/* Animated glowing backdrop ring */}
+              <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-indigo-500/10 to-transparent blur-3xl rounded-full" />
+              
+              {/* Header: Call Type status */}
+              <div className="relative z-10 w-full flex items-center justify-between mb-4">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse" />
+                  {callType === 'video' ? 'ቪዲዮ ጥሪ (Video Call)' : 'የድምጽ ጥሪ (Voice Call)'}
+                </span>
+                
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700/50">
+                  {callState === 'ringing' ? 'እየጠራ ነው...' : callState === 'connected' ? 'የተገናኘ' : 'የተዘጋ'}
+                </span>
+              </div>
+
+              {/* Video Feed / Avatar Area */}
+              <div className="relative z-10 my-6 flex-1 flex flex-col items-center justify-center w-full">
+                {callType === 'video' && callState === 'connected' && !callIsVideoOff ? (
+                  <div className="relative w-full h-[240px] rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-indigo-500/5 shadow-2xl">
+                     {/* Local feed */}
+                     <video 
+                       ref={localVideoRef} 
+                       autoPlay 
+                       playsInline 
+                       muted 
+                       className="w-full h-full object-cover" 
+                     />
+                     <div className="absolute bottom-3 left-3 px-2.5 py-1 bg-slate-950/70 border border-slate-800 backdrop-blur-sm rounded-lg text-[8px] font-bold uppercase tracking-widest text-slate-300">
+                       Local View
+                     </div>
+                     <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-[8px] font-black uppercase tracking-widest text-emerald-400">
+                       <span className="w-1 h-1 rounded-full bg-emerald-400 animate-ping" />
+                       Fidelity HD
+                     </div>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <span className="absolute inset-0 rounded-full bg-indigo-500/10 animate-ping scale-110" />
+                    <span className="absolute inset-0 rounded-full bg-indigo-500/5 animate-pulse scale-125" />
+                    
+                    <div className="relative w-32 h-32 rounded-[2.5rem] bg-slate-800 border-4 border-slate-700 shadow-2xl flex items-center justify-center overflow-hidden">
+                      {callTargetAvatar ? (
+                        <img src={callTargetAvatar} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={48} className="text-slate-400" />
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <h3 className="text-2xl font-black mt-6 tracking-tight">{callTargetName}</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1.5">
+                  ይውሰዱ • {callState === 'connected' ? `እየተነጋገሩ ነው [${Math.floor(callDuration / 60)}:${(callDuration % 60).toString().padStart(2, '0')}]` : 'የስርዓት ጥሪ'}
+                </p>
+              </div>
+
+              {/* Call Controls Bar */}
+              <div className="relative z-10 w-full bg-slate-950/50 rounded-[2rem] p-4 border border-slate-800/80 mt-6 flex justify-around items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setCallIsMuted(!callIsMuted)}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                    callIsMuted ? 'bg-rose-500 text-white shadow-lg' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                  }`}
+                  title={callIsMuted ? 'Unmute' : 'Mute'}
+                >
+                  {callIsMuted ? <MicOff size={18} /> : <Mic size={18} />}
+                </button>
+
+                {/* Video Feed Toggle */}
+                {callType === 'video' && (
+                  <button
+                    type="button"
+                    onClick={() => setCallIsVideoOff(!callIsVideoOff)}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                      callIsVideoOff ? 'bg-rose-500 text-white shadow-lg' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                    }`}
+                    title={callIsVideoOff ? 'Turn Video On' : 'Turn Video Off'}
+                  >
+                    {callIsVideoOff ? <VideoOff size={18} /> : <Video size={18} />}
+                  </button>
+                )}
+
+                {/* Speakerphone Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setCallIsSpeakerOn(!callIsSpeakerOn)}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                    callIsSpeakerOn ? 'bg-indigo-50 text-white shadow-lg' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                  }`}
+                  title="Speakerphone"
+                >
+                  <Volume2 size={18} className={callIsSpeakerOn ? 'animate-bounce' : ''} />
+                </button>
+
+                {/* End call button */}
+                <button
+                  type="button"
+                  onClick={endCall}
+                  className="w-16 h-16 rounded-[1.5rem] bg-rose-600 hover:bg-rose-700 hover:rotate-12 hover:scale-105 active:scale-90 text-white flex items-center justify-center transition-all shadow-xl shadow-rose-600/30"
+                  title="End Call"
+                >
+                  <PhoneOff size={24} />
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* Delete Message Modal */}
+      <AnimatePresence>
+        {deleteMsgConfig.isOpen && (
+           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+             <motion.div
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               exit={{ opacity: 0 }}
+               onClick={() => setDeleteMsgConfig({ isOpen: false, messageId: null })}
+               className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+             />
+             <motion.div
+               initial={{ opacity: 0, scale: 0.9, y: 20 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               exit={{ opacity: 0, scale: 0.9, y: 20 }}
+               className="relative w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl overflow-hidden"
+             >
+               <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 blur-3xl rounded-full -mr-16 -mt-16"></div>
+               <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mb-6 shadow-sm border border-rose-100">
+                 <Trash2 size={28} />
+               </div>
+               <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">
+                 {language === 'am' ? 'መልእክት አጥፋ' : 'Delete Message'}
+               </h3>
+               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest leading-relaxed mb-8">
+                 {language === 'am' ? 'መልእክቱን ከራስዎ ብቻ ማጥፋት ወይስ ለሁሉም አባላት ማጥፋት ይፈልጋሉ?' : 'Do you want to delete this message just for you, or for everyone?'}
+               </p>
+               
+               <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => confirmDeleteMessage('forEveryone')}
+                    className="w-full py-4 bg-rose-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:bg-rose-600 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                     <Users size={16} /> {language === 'am' ? 'ከሁለቱም አጥፋ (Delete for everyone)' : 'Delete for Everyone'}
+                  </button>
+                  <button
+                    onClick={() => confirmDeleteMessage('forMe')}
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                     <User size={16} /> {language === 'am' ? 'ከኔ ብቻ አጥፋ (Delete for me)' : 'Delete for Me'}
+                  </button>
+                  <button
+                    onClick={() => setDeleteMsgConfig({ isOpen: false, messageId: null })}
+                    className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-200 transition-all active:scale-95"
+                  >
+                    {language === 'am' ? 'ተመለስ' : 'Cancel'}
+                  </button>
+               </div>
+             </motion.div>
+           </div>
+        )}
+      </AnimatePresence>
+  </main>
+</div>
+);
+}

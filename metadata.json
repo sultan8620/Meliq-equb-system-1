@@ -1,0 +1,6 @@
+{
+  "name": "Meliq Ekub Management System",
+  "description": "A comprehensive platform for managing traditional rotating savings (Ekub) with member tracking, payment management, and admin oversight (መሊቅ እቁብ).",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,203 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Global Deny
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Helper Primitives
+    // ===============================================================
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    
+    // Admin check: Trusted emails and Explicit Admin Users
+    function isAdmin() { 
+      return isSignedIn() && (
+        (request.auth.token.email != null && (
+          request.auth.token.email in ["sefadinkedir@gmail.com", "0900000000@melikekub.com", "900000000@melikekub.com", "0986204981@melikekub.com", "admin.rescue.1779028367630@melikekub.com"] ||
+          request.auth.token.email.matches('^admin\\..*@melikekub\\.com$')
+        )) ||
+        request.auth.uid in ["EbINObixvBPYds6caQQXkv1s0482", "2efVS25RgYYyUpPiirKH3AxMY9s2", "wQpmsQWp3b2N83K1U0jF2s1wL212"] ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'])
+      );
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    // Group Membership Check
+    function isGroupMember(groupId) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('groupId', '') == groupId;
+    }
+
+    // ===============================================================
+    // Entity Validations (Pillar 2)
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.uid == request.auth.uid 
+             && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100
+             && data.phone is string
+             && data.role in ['user', 'admin', 'super_admin']
+             && data.status in ['pending', 'active', 'rejected']
+             && (data.createdAt == request.time || data.createdAt is timestamp);
+    }
+
+    function isValidPayment(data) {
+      return data.userId == request.auth.uid
+             && data.amount is number && data.amount > 0
+             && data.status in ['pending', 'approved', 'rejected']
+             && data.createdAt == request.time;
+    }
+
+    function isValidMessage(data) {
+      return data.senderId == request.auth.uid
+             && data.text is string && data.text.size() <= 2000
+             && data.createdAt == request.time;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // Collection: users
+    match /users/{userId} {
+      allow get: if true; 
+      allow list: if true; 
+      
+      allow create: if (isOwner(userId) && isValidId(userId) && isValidUser(incoming()) 
+                      && (incoming().role == 'user' || isAdmin())
+                      && (incoming().status in ['pending', 'active']))
+                      || isAdmin();
+      
+      allow update: if (isOwner(userId) && isValidId(userId) && (
+        // Action: Self Update (Restricted)
+        incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'birthCountry', 'birthRegion', 'birthZone', 'birthWoreda', 'birthKebele', 'addressCountry', 'addressRegion', 'addressZone', 'addressWoreda', 'addressKebele', 'preferredItem', 'faceScan', 'idFront', 'idBack', 'nationalId', 'teamId', 'groupId', 'memberCode', 'slots'])
+        && (incoming().role == existing().role || isAdmin())
+        && (incoming().status == existing().status || isAdmin())
+      )) || isAdmin();
+      
+      allow delete: if isAdmin();
+    }
+
+    // Collection: groups
+    match /groups/{groupId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (incoming().status == 'registration' || isAdmin());
+      allow update: if isSignedIn() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Collection: payments
+    match /payments/{paymentId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if (isOwner(incoming().userId) && isValidPayment(incoming())) || isAdmin();
+      allow update: if isAdmin(); // Users cannot modify payments once sent
+      allow delete: if isAdmin() || (isOwner(resource.data.userId) && resource.data.status == 'pending');
+    }
+
+    // Collection: messages
+    match /messages/{messageId} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.senderId) || 
+        isOwner(resource.data.targetUserId) || 
+        resource.data.targetType == 'all' ||
+        (resource.data.groupId != null && isGroupMember(resource.data.groupId)) ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isValidMessage(incoming());
+      allow update, delete: if isOwner(resource.data.senderId) || isAdmin();
+    }
+
+    // Collection: notifications
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() && (isOwner(resource.data.recipientId) || isAdmin() || resource.data.recipientId == 'admin');
+      allow create: if isAdmin() || (isSignedIn() && incoming().recipientId == 'admin');
+      allow update: if isOwner(resource.data.recipientId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Collection: support_tickets
+    match /support_tickets/{ticketId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isOwner(incoming().userId);
+      allow update, delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    // Collection: marketplace
+    match /marketplace/{itemId} {
+      allow read: if true;
+      allow create: if isOwner(incoming().sellerId);
+      allow update, delete: if isOwner(resource.data.sellerId) || isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Administration & Settings (Public Read)
+    match /system_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /audit_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /legal_rules/{ruleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /landing_settings/{settingsId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Secondary Assets
+    match /guarantors/{id} { 
+      allow read: if isOwner(resource.data.memberId) || isAdmin();
+      allow create: if isOwner(incoming().memberId) || isAdmin();
+      allow update, delete: if isOwner(resource.data.memberId) || isAdmin();
+    }
+    match /loans/{id} { allow read: if isOwner(resource.data.userId) || isAdmin(); allow create: if isOwner(incoming().userId); allow update, delete: if isAdmin(); }
+    match /payouts/{id} { allow read: if isOwner(resource.data.userId) || isAdmin(); allow write: if isAdmin(); }
+    match /teams/{id} { 
+      allow read: if isSignedIn(); 
+      allow create: if isOwner(incoming().memberId) || isAdmin();
+      allow update, delete: if isOwner(resource.data.memberId) || isAdmin();
+    }
+    match /penalties/{id} { allow read: if isOwner(resource.data.userId) || isAdmin(); allow write: if isAdmin(); }
+    
+    match /rejected_members/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+    
+    // Additional Collections for Admin Operations
+    match /archived_members/{id} { allow read, write: if isAdmin(); }
+    match /admin_forms/{id} { 
+      allow read: if isAdmin() || resource.data.userId == request.auth.uid; 
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isAdmin() || resource.data.userId == request.auth.uid; 
+    }
+    match /upcoming_draws/{id} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /draw_history/{id} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    
+    // Generic Catch-all for designated IDs if needed
+    match /system_stats/{id} { allow read: if true; allow write: if isAdmin(); }
+  }
+}

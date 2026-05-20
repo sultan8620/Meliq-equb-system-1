@@ -1,0 +1,178 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a member or admin of the Equb system.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "password": { "type": "string" },
+        "birthCountry": { "type": "string" },
+        "birthRegion": { "type": "string" },
+        "birthZone": { "type": "string" },
+        "birthWoreda": { "type": "string" },
+        "birthKebele": { "type": "string" },
+        "birthYear": { "type": "string" },
+        "birthMonth": { "type": "string" },
+        "birthDay": { "type": "string" },
+        "calendarType": { "type": "string" },
+        "addressCountry": { "type": "string" },
+        "addressRegion": { "type": "string" },
+        "addressZone": { "type": "string" },
+        "addressWoreda": { "type": "string" },
+        "addressKebele": { "type": "string" },
+        "birthDate": { "type": "string" },
+        "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly"] },
+        "memberLimit": { "type": "number" },
+        "amount": { "type": "number" },
+        "customAmount": { "type": "string" },
+        "slots": { "type": "number" },
+        "nationalId": { "type": "string" },
+        "idFront": { "type": "string" },
+        "idBack": { "type": "string" },
+        "faceScan": { "type": "string" },
+        "memberCode": { "type": "string" },
+        "commission": { "type": "number" },
+        "totalPerSlot": { "type": "number" },
+        "totalPayout": { "type": "number" },
+        "totalCyclePayment": { "type": "number" },
+        "age": { "type": "number" },
+        "ethBirthDate": { "type": "string" },
+        "groupId": { "type": "string" },
+        "teamId": { "type": "string" },
+        "isVerified": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["pending", "active", "rejected"] },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "phone", "frequency", "memberCode", "status", "role", "createdAt"]
+    },
+    "Group": {
+      "title": "Group",
+      "description": "Represents an Equb group.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "limit": { "type": "number" },
+        "amount": { "type": "number" },
+        "memberCount": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Represents a member's team or squad.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "memberId": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "pending", "locked"] },
+        "points": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "memberId", "status", "createdAt"]
+    },
+    "LegalRule": {
+      "title": "Legal Rule",
+      "description": "Rules and regulations governing the Equb system.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "amTitle": { "type": "string" },
+        "amDescription": { "type": "string" },
+        "category": { "type": "string", "enum": ["general", "guarantor"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "amTitle"]
+    },
+    "LandingSettings": {
+      "title": "Landing Page Settings",
+      "description": "Customizable content for the landing page.",
+      "type": "object",
+      "properties": {
+        "heroTitle": { "type": "string" },
+        "heroTitleAm": { "type": "string" },
+        "heroTitleModern": { "type": "string" },
+        "heroTitleModernAm": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "heroSubtitleAm": { "type": "string" },
+        "welcomeText": { "type": "string" },
+        "welcomeTextAm": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "bgBlob1Color": { "type": "string" },
+        "bgBlob2Color": { "type": "string" },
+        "featuresTitle": { "type": "string" },
+        "featuresTitleAm": { "type": "string" },
+        "featuresDesc": { "type": "string" },
+        "featuresDescAm": { "type": "string" },
+        "ctaTitle": { "type": "string" },
+        "ctaTitleAm": { "type": "string" },
+        "ctaDesc": { "type": "string" },
+        "ctaDescAm": { "type": "string" },
+        "footerAbout": { "type": "string" },
+        "footerAboutAm": { "type": "string" },
+        "footerAddress": { "type": "string" },
+        "footerEmail": { "type": "string" },
+        "copyrightText": { "type": "string" },
+        "copyrightTextAm": { "type": "string" },
+        "sliderImages": { "type": "array", "items": { "type": "string" } },
+        "socialLinks": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "platform": { "type": "string" },
+              "url": { "type": "string" }
+            }
+          }
+        },
+        "customFeatures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "titleAm": { "type": "string" },
+              "desc": { "type": "string" },
+              "descAm": { "type": "string" },
+              "icon": { "type": "string" },
+              "color": { "type": "string" }
+            }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and Equb membership details."
+    },
+    "/groups/{groupId}": {
+      "schema": "Group",
+      "description": "Equb group details."
+    },
+    "/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Member team details."
+    },
+    "/legal_rules/{ruleId}": {
+      "schema": "LegalRule",
+      "description": "Official rules and terms of service."
+    },
+    "/landing_settings/{settingsId}": {
+      "schema": "LandingSettings",
+      "description": "Landing page customization data."
+    },
+    "/rejected_members/{memberId}": {
+      "schema": "User",
+      "description": "Archive of rejected member applications. These users can re-register because they are removed from the main users collection."
+    }
+  }
+}
