@@ -73,11 +73,20 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, userData, loading, isAdmin } = useAuth();
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-      <div className="w-12 h-12 border-4 border-gold-500 border-t-transparent rounded-full animate-spin mb-4" />
+      <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
       <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">በመጫን ላይ...</p>
     </div>
   );
-  if (!user || !userData) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" />;
+  
+  if (!userData) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">የአባል መረጃ በመጫን ላይ...</p>
+      </div>
+    );
+  }
   
   if (!isAdmin && (userData.status === 'pending' || userData.status === 'rejected')) {
     return <Navigate to="/pending-approval" replace />;
@@ -87,14 +96,25 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, userData, isAdmin, loading } = useAuth();
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
       <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
       <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">በመጫን ላይ...</p>
     </div>
   );
-  if (!user || !isAdmin) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" />;
+
+  if (!userData) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">የአድሚን መረጃ በመጫን ላይ...</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) return <Navigate to="/login" />;
   return <>{children}</>;
 };
 

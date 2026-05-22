@@ -236,6 +236,40 @@ export default function Login() {
     setError(null);
 
     try {
+      // 1. Check if the user exists in Firestore first
+      let hasAccount = false;
+      const inputVal = phoneNumber.trim();
+      const cleanInputPhone = isEmailInput ? '' : normalizePhone(inputVal);
+      const isBootstrapAdmin = !isEmailInput && (cleanInputPhone === '0900000000' || cleanInputPhone === '0986204981');
+
+      if (!isBootstrapAdmin) {
+        if (isEmailInput) {
+          const lowerEmail = inputVal.toLowerCase();
+          const q = query(collection(db, 'users'), where('email', '==', lowerEmail));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            hasAccount = true;
+          }
+        } else {
+          const nineDigit = cleanInputPhone.startsWith('0') ? cleanInputPhone.substring(1) : cleanInputPhone;
+          const countryCodeOnly = `251${nineDigit}`;
+          const formatsToSearch = [cleanInputPhone, nineDigit, countryCodeOnly];
+          
+          const q = query(
+            collection(db, 'users'),
+            where('phone', 'in', formatsToSearch)
+          );
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            hasAccount = true;
+          }
+        }
+
+        if (!hasAccount) {
+          throw { code: 'custom/account-not-found' };
+        }
+      }
+
       let uniqueFormats: string[] = [];
       if (isEmailInput) {
         uniqueFormats = [phoneNumber.trim().toLowerCase()];
@@ -303,7 +337,9 @@ export default function Login() {
       }
     } catch (err: any) {
       console.error('Login Error:', err);
-      if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+      if (err.code === 'custom/account-not-found') {
+          setError(language === 'am' ? 'ይህ መለያ (አካውንት) አልተፈጠረም። እባክዎ መጀመሪያ ለመግባት ይመዝገቡ!' : 'This account is not registered yet. Please sign up to create an account first!');
+      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
           setError(language === 'am' ? 'የተሳሳተ ስልክ/ኢሜይል ወይም የይለፍ ቃል ነው። እባክዎ በትክክል መሙላትዎን ያረጋግጡ።' : t('auth.invalid_credentials') + " (Please double check your credentials and password)");
       } else if (err.code === 'auth/too-many-requests') {
           setError(language === 'am' ? 'እባክዎ ለጥቂት ደቂቃዎች ይጠብቁ። በጣም ብዙ ሙከራዎች ተደርገዋል።' : 'Too many requests. Please wait a few minutes.');
