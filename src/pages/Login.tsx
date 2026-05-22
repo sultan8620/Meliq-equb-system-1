@@ -41,7 +41,22 @@ export default function Login() {
       if (isAdmin) {
         navigate('/admin');
       } else if (userData.status === 'pending' || userData.status === 'rejected') {
-        navigate('/pending-approval');
+        const checkFreshStatus = async () => {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            if (userDoc.exists()) {
+              const freshData = userDoc.data();
+              if (freshData.status === 'active' || (freshData.status !== 'pending' && freshData.status !== 'rejected')) {
+                navigate('/dashboard');
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn("Error double checking fresh status:", e);
+          }
+          navigate('/pending-approval');
+        };
+        checkFreshStatus();
       } else {
         navigate('/dashboard');
       }
