@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Mail, Lock, LogIn, Chrome, ArrowRight, Phone, CheckCircle, ChevronLeft, ChevronRight, ShieldCheck as ShieldIcon, RefreshCw, Hash, Eye, EyeOff, MessageCircle, AlertTriangle } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { useLanguage } from '../lib/LanguageContext';
+import { useAuth } from '../components/FirebaseProvider';
 import { doc, getDoc, query, collection, where, getDocs, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 export const normalizePhone = (phone: string) => {
@@ -19,6 +20,7 @@ export const normalizePhone = (phone: string) => {
 
 export default function Login() {
   const { language, setLanguage, t } = useLanguage();
+  const { user, userData, isAdmin, loading: authLoading } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -33,6 +35,18 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (!authLoading && user && userData) {
+      if (isAdmin) {
+        navigate('/admin');
+      } else if (userData.status === 'pending' || userData.status === 'rejected') {
+        navigate('/pending-approval');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, userData, isAdmin, authLoading, navigate]);
 
   // Validate phone number or email inputs
   const isEmailInput = phoneNumber.trim().includes('@');
@@ -298,7 +312,10 @@ export default function Login() {
       
       // Check if user document exists
       const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef).catch(e => handleFirestoreError(e, OperationType.GET, `users/${user.uid}`));
+      const userDoc = await getDoc(userDocRef).catch(e => {
+        handleFirestoreError(e, OperationType.GET, `users/${user.uid}`);
+        throw e;
+      });
       
       const userEmailLower = user.email?.toLowerCase() || '';
       const isSuperAdminEmail = userEmailLower === 'sefadinkedir@gmail.com' || 
@@ -307,10 +324,10 @@ export default function Login() {
                                 userEmailLower === '0986204981@melikekub.com' ||
                                 userEmailLower.startsWith('admin.');
 
-      const existingData = userDoc?.exists() ? userDoc.data() : null;
+      const existingData = userDoc.exists() ? userDoc.data() : null;
       const isAdmin = isSuperAdminEmail || existingData?.role === 'admin' || existingData?.role === 'super_admin';
       
-      if (!userDoc?.exists()) {
+      if (!userDoc.exists()) {
         // Create basic user doc for Google logins - Use setDoc with a specific role
         await setDoc(userDocRef, {
           uid: user.uid,
@@ -321,7 +338,10 @@ export default function Login() {
           status: 'active',
           isVerified: true,
           createdAt: serverTimestamp()
-        }).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${user.uid}`));
+        }).catch(e => {
+          handleFirestoreError(e, OperationType.WRITE, `users/${user.uid}`);
+          throw e;
+        });
       } else if (isSuperAdminEmail && existingData?.role !== 'super_admin') {
         // Upgrade to super_admin if email matches but role didn't (e.g. was just 'admin')
         await updateDoc(userDocRef, { role: 'super_admin' });

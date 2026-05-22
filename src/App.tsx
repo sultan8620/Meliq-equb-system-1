@@ -70,7 +70,7 @@ const MaintenanceGuard = ({ children }: { children: React.ReactNode }) => {
 };
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, userData, loading } = useAuth();
+  const { user, userData, loading, isAdmin } = useAuth();
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
       <div className="w-12 h-12 border-4 border-gold-500 border-t-transparent rounded-full animate-spin mb-4" />
@@ -78,6 +78,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     </div>
   );
   if (!user || !userData) return <Navigate to="/login" />;
+  
+  if (!isAdmin && (userData.status === 'pending' || userData.status === 'rejected')) {
+    return <Navigate to="/pending-approval" replace />;
+  }
+  
   return <>{children}</>;
 };
 

@@ -7,11 +7,13 @@ import { LogOut, Zap, Globe, Soup } from 'lucide-react';
 import { useLanguage } from '../lib/LanguageContext';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, isAdmin } = useAuth();
+  const { user, userData, isAdmin } = useAuth();
   const { language, setLanguage, t } = useLanguage();
 
   const { pathname } = useLocation();
   const isLanding = pathname === '/';
+
+  const isPendingUser = user && !isAdmin && (userData?.status === 'pending' || userData?.status === 'rejected');
 
   if (isLanding) return <main>{children}</main>;
 
@@ -46,7 +48,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
             ) : (
               <div className="flex items-center gap-1 sm:gap-3">
-                <Link to="/dashboard" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-emerald-600 font-bold hover:text-emerald-700 transition-colors hidden xs:block">{t('nav.dashboard')}</Link>
+                {isPendingUser ? (
+                  <Link to="/pending-approval" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-500 font-bold hover:text-amber-600 transition-colors hidden xs:block">
+                    {language === 'am' ? 'ይሁንታ ማረጋገጫ' : 'Pending Approval'}
+                  </Link>
+                ) : (
+                  <Link to="/dashboard" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-emerald-600 font-bold hover:text-emerald-700 transition-colors hidden xs:block">{t('nav.dashboard')}</Link>
+                )}
                 {isAdmin && <Link to="/admin" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-indigo-500 hover:text-indigo-600 transition-colors hidden sm:block">{t('nav.admin')}</Link>}
                 <button 
                   onClick={async () => { await signOut(auth); window.location.href = '/'; }} 
