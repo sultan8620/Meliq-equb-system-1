@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Mail, Lock, MapPin, Phone, Calendar, DollarSign, FileText, CheckCircle, Upload, Key, ChevronRight, ChevronLeft, Hash, Camera, CreditCard, Scan, X, RefreshCw, Eye, EyeOff, ShieldIcon, Users, Chrome, Image as ImageIcon, Zap, ArrowRight, Clock } from 'lucide-react';
+import { User, Mail, Lock, MapPin, Phone, Calendar, DollarSign, FileText, CheckCircle, Upload, Key, ChevronRight, ChevronLeft, Hash, Camera, CreditCard, Scan, X, RefreshCw, Eye, EyeOff, ShieldIcon, Users, Chrome, Image as ImageIcon, Zap, ArrowRight, Clock, UserCheck } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { useLanguage } from '../lib/LanguageContext';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, orderBy, serverTimestamp, onSnapshot, deleteDoc } from 'firebase/firestore';
@@ -163,7 +163,7 @@ export default function Signup() {
     ekubType: '',
     addressCountry: 'ኢትዮጵያ', addressRegion: 'አዲስ አበባ', addressZone: '', addressWoreda: '', addressKebele: '', addressHouseNumber: '',
     birthDate: '',
-    frequency: 'daily', memberLimit: 10, amount: 1000, customAmount: '', slots: 1,
+    frequency: 'tendays', memberLimit: 10, amount: 1000, customAmount: '', slots: 1,
     nationalId: '', idFront: null as string | null, idBack: null as string | null, faceScan: null as string | null, preferredItem: 'Cash (ጥሬ ገንዘብ)'
   });
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -290,7 +290,7 @@ export default function Signup() {
   }, [formData.frequency]);
 
   const currentAmounts = useMemo(() => {
-    return formData.frequency === 'daily' || formData.frequency === 'fivedays' ? DAILY_AMOUNTS : OTHER_AMOUNTS;
+    return formData.frequency === 'daily' || formData.frequency === 'fivedays' || formData.frequency === 'tendays' ? DAILY_AMOUNTS : OTHER_AMOUNTS;
   }, [formData.frequency]);
 
   useEffect(() => {
@@ -396,8 +396,67 @@ export default function Signup() {
     }
   }, [birthInfo.gcDate]);
 
+  const toggleCalendarType = (targetType: 'GC' | 'EC') => {
+    if (targetType === formData.calendarType) return;
+
+    const y = parseInt(formData.birthYear);
+    const m = parseInt(formData.birthMonth);
+    const d = parseInt(formData.birthDay);
+
+    if (isNaN(y) || isNaN(m) || isNaN(d)) {
+      setFormData(prev => ({ ...prev, calendarType: targetType }));
+      return;
+    }
+
+    if (targetType === 'EC') {
+      // Convert current GC values to EC
+      try {
+        const birth = new Date(y, m - 1, d);
+        if (!isNaN(birth.getTime())) {
+          const eth = ethDateTime.fromEuropeanDate(birth);
+          setFormData(prev => ({
+            ...prev,
+            calendarType: 'EC',
+            birthYear: String(eth.year),
+            birthMonth: String(eth.month),
+            birthDay: String(eth.date)
+          }));
+        } else {
+          setFormData(prev => ({ ...prev, calendarType: 'EC' }));
+        }
+      } catch (e) {
+        setFormData(prev => ({ ...prev, calendarType: 'EC' }));
+      }
+    } else {
+      // Convert current EC values to GC
+      try {
+        const gc = ethDateTime.toEuropeanDate(y, m, d);
+        if (gc && !isNaN(gc.getTime())) {
+          setFormData(prev => ({
+            ...prev,
+            calendarType: 'GC',
+            birthYear: String(gc.getFullYear()),
+            birthMonth: String(gc.getMonth() + 1),
+            birthDay: String(gc.getDate())
+          }));
+        } else {
+          setFormData(prev => ({ ...prev, calendarType: 'GC' }));
+        }
+      } catch (e) {
+        setFormData(prev => ({ ...prev, calendarType: 'GC' }));
+      }
+    }
+  };
+
+  const groupCreationInstance = useRef<string>('');
+
   useEffect(() => {
+    let active = true;
     const fetchGroups = async () => {
+      if (!finalAmount || finalAmount <= 0) {
+        if (active) setAvailableGroups([]);
+        return;
+      }
       try {
         const q = query(
           collection(db, 'groups'), 
@@ -407,24 +466,95 @@ export default function Signup() {
         );
         const snapshot = await getDocs(q).catch(err => {
           if (err.message?.includes('permissions')) {
-            console.warn("Permission denied for groups fetch. Signup may depend on public group accessibility.");
-            return { empty: true, docs: [] };
+            console.warn("Permission denied for groups fetch.");
+            return null;
           }
           throw err;
         });
+
+        if (!active) return;
+
+        let groups: any[] = [];
         if (snapshot && !snapshot.empty) {
-          const groups = snapshot.docs
+          groups = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as any))
             .filter(g => ['open', 'registration'].includes(g.status))
             .sort((a, b) => a.name.localeCompare(b.name));
-          setAvailableGroups(groups);
+        }
+
+        const validOpenGroups = groups.filter(g => g.memberCount < g.limit);
+
+        if (validOpenGroups.length === 0) {
+          const creationKey = `${formData.frequency}_${formData.memberLimit}_${finalAmount}`;
+          if (groupCreationInstance.current === creationKey) {
+            return;
+          }
+          groupCreationInstance.current = creationKey;
+
+          // No open group available for this combination! Auto-create one immediately.
+          const groupsRef = collection(db, 'groups');
+          
+          const qAll = query(
+            groupsRef, 
+            where('type', '==', formData.frequency),
+            where('limit', '==', formData.memberLimit),
+            where('amount', '==', finalAmount)
+          );
+          const allSnapshot = await getDocs(qAll);
+          const count = allSnapshot ? allSnapshot.docs.length : 0;
+
+          const getLetterName = (num: number) => {
+            let name = '';
+            while (num >= 0) {
+              name = String.fromCharCode(65 + (num % 26)) + name;
+              num = Math.floor(num / 26) - 1;
+            }
+            return name;
+          };
+          const newName = `ምድብ ${getLetterName(count)}`;
+
+          const newDoc = {
+            name: newName,
+            type: formData.frequency,
+            limit: formData.memberLimit,
+            amount: finalAmount,
+            memberCount: 0,
+            status: 'registration',
+            createdAt: serverTimestamp()
+          };
+
+          const newGroupRef = await addDoc(groupsRef, newDoc);
+          const newGroupData = { id: newGroupRef.id, ...newDoc, createdAt: new Date() };
+          
+          if (active) {
+            groups = [newGroupData];
+            setAvailableGroups(groups);
+            setSelectedGroup(newGroupData);
+          }
+          groupCreationInstance.current = '';
+        } else {
+          if (active) {
+            setAvailableGroups(groups);
+            // If currently selected group isn't in the loaded groups, or is full, or none chosen, auto-select first open group with enough slots
+            const currentSelectedInList = groups.find(g => g.id === selectedGroup?.id);
+            const chosenSlots = formData.slots || 1;
+            
+            if (!selectedGroup || !currentSelectedInList || (currentSelectedInList.memberCount + chosenSlots > currentSelectedInList.limit)) {
+              const firstWithSpace = groups.find(g => (g.memberCount + chosenSlots) <= g.limit) || groups[0];
+              setSelectedGroup(firstWithSpace);
+            }
+          }
         }
       } catch (error) {
-        console.error("Error fetching groups:", error);
+        console.error("Error fetching or creating groups:", error);
+        groupCreationInstance.current = '';
       }
     };
     fetchGroups();
-  }, [formData.frequency, formData.memberLimit, finalAmount]);
+    return () => {
+      active = false;
+    };
+  }, [formData.frequency, formData.memberLimit, finalAmount, formData.slots]);
 
   const startScan = (mode: 'face' | 'idFront' | 'idBack' = 'face') => {
     setCameraMode(mode);
@@ -554,7 +684,7 @@ export default function Signup() {
   };
 
   const generateUniqueCode = async (frequency: string) => {
-    const prefix = frequency === 'daily' ? 'D' : frequency === 'weekly' ? 'W' : frequency === 'fivedays' ? 'F' : 'M';
+    const prefix = frequency === 'tendays' ? 'T' : frequency === 'daily' ? 'D' : frequency === 'weekly' ? 'W' : frequency === 'fivedays' ? 'F' : 'M';
     let isUnique = false;
     let code = '';
     while (!isUnique) {
@@ -704,7 +834,7 @@ export default function Signup() {
 
       // Generate member code after authentication to satisfy security rules
       const generateUniqueMemberCode = async () => {
-        const prefix = formData.frequency === 'daily' ? 'D' : formData.frequency === 'weekly' ? 'W' : formData.frequency === 'fivedays' ? 'F' : 'M';
+        const prefix = formData.frequency === 'tendays' ? 'T' : formData.frequency === 'daily' ? 'D' : formData.frequency === 'weekly' ? 'W' : formData.frequency === 'fivedays' ? 'F' : 'M';
         let isUnique = false;
         let code = '';
         while (!isUnique) {
@@ -810,11 +940,10 @@ export default function Signup() {
       try {
         await deleteDoc(doc(db, 'rejected_members', userCredential.user.uid)).catch(() => {});
         const { password: _, confirmPassword: __, ...userDataToSave } = updatedFormData;
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
+        const userDocRaw = {
           uid: userCredential.user.uid, 
-          ...userDataToSave,
           phone: cleanPhone,
-          profession: formData.profession,
+          profession: formData.profession || '',
           email: dummyEmail,
           authEmail: dummyEmail,
           memberCode: memberCode,
@@ -833,8 +962,16 @@ export default function Signup() {
           isVerified: true,
           status: systemSettings.autoApprove ? 'active' : 'pending',
           role: isAdminPhone ? 'admin' : 'user',
-          createdAt: serverTimestamp()
-        }, { merge: true });
+          createdAt: serverTimestamp(),
+          ...userDataToSave
+        };
+
+        const cleanUserDocData: any = {};
+        for (const [key, val] of Object.entries(userDocRaw)) {
+          cleanUserDocData[key] = val === undefined ? null : val;
+        }
+
+        await setDoc(doc(db, 'users', userCredential.user.uid), cleanUserDocData, { merge: true });
       } catch (error) {
         handleFirestoreError(error, OperationType.CREATE, `users/${userCredential.user.uid}`);
       }
@@ -888,10 +1025,10 @@ export default function Signup() {
         memberCode,
         registeredInfo: { 
           name: formData.fullName, 
-          profession: formData.profession,
+          profession: formData.profession || '',
           group: targetGroup.name,
           phone: formData.phone,
-          frequency: formData.frequency === 'daily' ? t('signup.daily') : formData.frequency === 'weekly' ? t('signup.weekly') : formData.frequency === 'monthly' ? t('signup.monthly') : t('signup.fivedays'),
+          frequency: formData.frequency === 'tendays' ? t('signup.tendays') : formData.frequency === 'fivedays' ? t('signup.fivedays') : formData.frequency === 'weekly' ? t('signup.weekly') : t('signup.monthly'),
           amount: finalAmount,
           memberLimit: formData.memberLimit,
           totalPayout: totalPayoutPerSlot,
@@ -1103,8 +1240,8 @@ export default function Signup() {
               {stepConfig[step - 1]?.id === 'birthplace' && (
                 <div className="space-y-6">
                   <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl">
-                    <button onClick={() => setFormData({...formData, calendarType: 'GC'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.calendarType === 'GC' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>International (GC)</button>
-                    <button onClick={() => setFormData({...formData, calendarType: 'EC'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.calendarType === 'EC' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>Ethiopian (EC)</button>
+                    <button onClick={() => toggleCalendarType('GC')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.calendarType === 'GC' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>International (GC)</button>
+                    <button onClick={() => toggleCalendarType('EC')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.calendarType === 'EC' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>Ethiopian (EC)</button>
                   </div>
 
                   <div className="grid grid-cols-3 gap-4 p-6 bg-slate-50 border border-slate-100 rounded-[2rem]">
@@ -1129,14 +1266,25 @@ export default function Signup() {
                   </div>
                   
                   {birthInfo.age > 0 && (
-                    <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex justify-between items-center">
-                      <div>
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('signup.age')}</div>
-                        <div className="text-lg font-black text-slate-900">{birthInfo.age} {language === 'am' ? 'ዓመት' : 'Years'}</div>
+                    <div className="p-5 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-[2rem] border border-emerald-100 flex flex-col gap-4">
+                      <div className="flex justify-between items-center pb-3 border-b border-emerald-100/60">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{language === 'am' ? 'የተሰላ እድሜ' : 'Calculated Age'}</div>
+                          <div className="text-xl font-black text-emerald-950">{birthInfo.age} {language === 'am' ? 'ዓመት' : 'Years'}</div>
+                        </div>
+                        <div className="bg-emerald-500 text-white font-bold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider">
+                          {birthInfo.age >= 18 ? (language === 'am' ? 'ተፈቅዷል (18+)' : 'Eligible (18+)') : (language === 'am' ? 'ዕድሜው አልደረሰም' : 'Under 18')}
+                        </div>
                       </div>
-                      <div className="text-right">
-                         <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{formData.calendarType === 'EC' ? 'GC Date' : 'EC Date'}</div>
-                         <div className="text-sm font-bold text-emerald-600">{formData.calendarType === 'EC' ? birthInfo.gcDate : birthInfo.ethDate}</div>
+                      <div className="grid grid-cols-2 gap-4 text-xs font-medium text-slate-600">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የኢትዮጵያ ቀን (EC)' : 'Ethiopian Date (EC)'}</div>
+                          <div className="text-emerald-800 font-extrabold text-[13px]">{birthInfo.ethDate}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የፈረንጅ ቀን (GC)' : 'Gregorian Date (GC)'}</div>
+                          <div className="text-emerald-800 font-extrabold text-[13px]">{birthInfo.gcDate}</div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1186,16 +1334,15 @@ export default function Signup() {
                     <div className="space-y-2">
                       <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{t('signup.frequency')}</label>
                       <select value={formData.frequency} onChange={(e) => setFormData({...formData, frequency: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
-                        <option value="daily">{t('signup.daily')}</option>
+                        <option value="tendays">{t('signup.tendays')}</option>
                         <option value="fivedays">{t('signup.fivedays')}</option>
-                        <option value="tendays">{language === 'am' ? 'በየ10 ቀኑ' : 'Every 10 Days'}</option>
                         <option value="weekly">{t('signup.weekly')}</option>
                         <option value="monthly">{t('signup.monthly')}</option>
                       </select>
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{t('signup.member_limit')}</label>
+                       <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{t('signup.member_limit')}</label>
                       <select value={formData.memberLimit} onChange={(e) => setFormData({...formData, memberLimit: Number(e.target.value)})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
                         {currentMemberLimits.map(limit => <option key={limit} value={limit}>{limit} {t('common.members')}</option>)}
                       </select>
@@ -1207,9 +1354,8 @@ export default function Signup() {
                       {language === 'am' ? 'የእቁብ አይነት ዝርዝር' : 'Equb Type Details'}
                     </p>
                     <p className="text-xs font-medium text-emerald-600 leading-relaxed">
-                      {formData.frequency === 'daily' && t('signup.daily_desc')}
+                      {formData.frequency === 'tendays' && t('signup.tendays_desc')}
                       {formData.frequency === 'fivedays' && t('signup.fivedays_desc')}
-                      {formData.frequency === 'tendays' && (language === 'am' ? 'በየቀኑ መዋጮ ይደረጋል፣ በየ10 ቀኑ እጣ ይወጣል' : 'Daily contributions, draw every 10 days.')}
                       {formData.frequency === 'weekly' && t('signup.weekly_desc')}
                       {formData.frequency === 'monthly' && t('signup.monthly_desc')}
                     </p>
@@ -1239,7 +1385,7 @@ export default function Signup() {
                     <div className="space-y-2">
                       <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{language === 'am' ? 'የእጣ ብዛት' : 'Slots'}</label>
                       <select value={formData.slots} onChange={(e) => setFormData({...formData, slots: Number(e.target.value)})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
-                        {[1, 2, 3, 4, 5].map(s => <option key={s} value={s}>{s} Slots</option>)}
+                        {[1, 2, 3, 4, 5].map(s => <option key={s} value={s}>{s} {language === 'am' ? 'እጣ' : 'Slots'}</option>)}
                       </select>
                     </div>
                   </div>
@@ -1260,30 +1406,72 @@ export default function Signup() {
                     </select>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{language === 'am' ? 'ምድብ ይምረጡ' : 'Select Group'}</label>
-                    <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                    <div className="max-h-64 overflow-y-auto space-y-3 pr-2">
                       {availableGroups.length > 0 ? availableGroups.map(g => {
                         const remaining = g.limit - g.memberCount;
+                        const percentage = Math.min(100, Math.round((g.memberCount / g.limit) * 100));
                         return (
                           <div 
                             key={g.id}
                             onClick={() => setSelectedGroup(g)}
-                            className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${selectedGroup?.id === g.id ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                              selectedGroup?.id === g.id 
+                                ? 'border-emerald-500 bg-emerald-50/70 shadow-sm' 
+                                : 'border-slate-100 bg-white hover:border-slate-200'
+                            }`}
                           >
-                            <div>
-                              <div className="font-bold text-slate-900 flex items-center gap-2">
-                                 {g.name}
-                                 {(g.currentRound || 1) > 1 && (
-                                    <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 mt-0.5">
-                                        {language === 'am' ? `ዙር ${g.currentRound}` : `Round ${g.currentRound}`}
+                            <div className="flex justify-between items-start">
+                              <div className="space-y-1">
+                                <div className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
+                                  {g.name}
+                                  {(g.currentRound || 1) > 1 && (
+                                    <span className="text-[9px] font-black uppercase text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                      {language === 'am' ? `ዙር ${g.currentRound}` : `Round ${g.currentRound}`}
                                     </span>
-                                 )}
+                                  )}
+                                </div>
+                                <div className="flex flex-col gap-1 text-[11px] text-slate-500 font-bold mt-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <Users size={12} className="text-emerald-500 shrink-0" />
+                                    <span>
+                                      {language === 'am' 
+                                        ? `በምድቡ የተመዘገቡ አባላት: ${g.memberCount} ከ ${g.limit}` 
+                                        : `Registered Members: ${g.memberCount} of ${g.limit}`}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-emerald-600">
+                                    <UserCheck size={12} className="shrink-0" />
+                                    <span>
+                                      {language === 'am' 
+                                        ? `የሚቀሩ ክፍት ቦታዎች: ${remaining} ሰው ብቻ` 
+                                        : `Remaining Slots: ${remaining} left`}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="text-[10px] text-slate-500 mt-1">{g.memberCount} {t('common.members')} • {remaining} left</div>
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                                selectedGroup?.id === g.id ? 'bg-emerald-500 text-white shadow-sm' : 'border-2 border-slate-200'
+                              }`}>
+                                {selectedGroup?.id === g.id && <CheckCircle size={14} />}
+                              </div>
                             </div>
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center ${selectedGroup?.id === g.id ? 'bg-emerald-500 text-white' : 'border-2 border-slate-200'}`}>
-                              {selectedGroup?.id === g.id && <CheckCircle size={14} />}
+                            
+                            {/* Capacity progress bar */}
+                            <div className="mt-3">
+                              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-500 ${
+                                    percentage >= 90 
+                                      ? 'bg-rose-500' 
+                                      : percentage >= 70 
+                                        ? 'bg-amber-500' 
+                                        : 'bg-emerald-500'
+                                  }`}
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
                             </div>
                           </div>
                         );
