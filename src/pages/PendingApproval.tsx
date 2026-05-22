@@ -20,6 +20,24 @@ export default function PendingApproval() {
     memberCode: authUserData.memberCode || ''
   } : null);
 
+  React.useEffect(() => {
+    if (user && authUserData) {
+      const isSuperAdmin = user?.email?.toLowerCase() === 'sefadinkedir@gmail.com' || 
+                           user?.email?.toLowerCase() === '0900000000@melikekub.com' || 
+                           user?.email?.toLowerCase() === '900000000@melikekub.com' || 
+                           user?.email?.toLowerCase() === '0986204981@melikekub.com' || 
+                           user?.email?.toLowerCase()?.startsWith('admin.') ||
+                           authUserData?.role === 'super_admin' || 
+                           authUserData?.role === 'admin';
+      
+      if (isSuperAdmin) {
+        navigate('/admin');
+      } else if (authUserData.status === 'active' || (authUserData.status !== 'pending' && authUserData.status !== 'rejected')) {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, authUserData, navigate]);
+
   const handleLogoutAndRedirect = async () => {
     try {
       await signOut(auth);
