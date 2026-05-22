@@ -12,6 +12,7 @@ import { useLanguage } from '../lib/LanguageContext';
 import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSnapshot, serverTimestamp, limit, setDoc, deleteDoc, orderBy, arrayUnion } from 'firebase/firestore';
 import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
+import { sendSMS } from '../lib/smsHelper';
 
 const Magnetic = ({ children, className }: { children: React.ReactNode, className?: string, key?: any }) => {
   const ref = React.useRef<HTMLDivElement>(null);
@@ -95,6 +96,8 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<string>('pending');
   const [smsMessage, setSmsMessage] = useState('');
   const [smsRecipients, setSmsRecipients] = useState<string[]>([]);
+  const [smsLogs, setSmsLogs] = useState<any[]>([]);
+  const [sendingSms, setSendingSms] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedRegionFilter, setSelectedRegionFilter] = useState<string>('All');
   const [paymentHistoryView, setPaymentHistoryView] = useState<'pending' | 'history'>('pending');
@@ -1233,6 +1236,15 @@ export default function AdminDashboard() {
     return () => unsubSupport();
   }, []);
 
+  useEffect(() => {
+    const unsubSMSLogs = onSnapshot(query(collection(db, 'sms_logs'), orderBy('sentAt', 'desc'), limit(150)), (snapshot) => {
+      setSmsLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("SMS snapshot error:", error);
+    });
+    return () => unsubSMSLogs();
+  }, []);
+
   const approvePayout = async (payoutId: string, userId: string) => {
     try {
       await updateDoc(doc(db, 'payouts', payoutId), {
@@ -1509,6 +1521,22 @@ export default function AdminDashboard() {
         isVerified: true,
         verifiedAt: serverTimestamp()
       });
+
+      // Fetch user data and send SMS notification
+      try {
+        const userSnap = await getDoc(doc(db, 'users', userId));
+        if (userSnap.exists()) {
+          const uData = userSnap.data();
+          if (uData.phone) {
+            const amMsg = `ሰላም ${uData.fullName || 'አቢሌ'}፣ የምዝገባ ጥያቄዎ በአድሚን ተቀብሏል። አሁን ገብተው መደበኛ አገልግሎቱን መጠቀም ይችላሉ። መልካም የእቁብ ቆይታ!`;
+            const enMsg = `Hello ${uData.fullName || 'Member'}, your registration request has been approved by the Admin. You can now log in and access all services. Enjoy your Equb experience!`;
+            const smsMsg = language === 'am' ? amMsg : enMsg;
+            await sendSMS(uData.phone, smsMsg, uData.fullName || 'Member', 'approval');
+          }
+        }
+      } catch (smsErr) {
+        console.warn("SMS sending failed, continuing anyway:", smsErr);
+      }
 
       // Send greeting notification
       await addDoc(collection(db, 'notifications'), {
@@ -6588,13 +6616,15 @@ export default function AdminDashboard() {
                   <div className="text-center md:text-left">
                      <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-emerald-500/20">
                         <MessageCircle size={14} />
-                        SMS Integration
+                        {language === 'am' ? 'የአጭር መልዕክት አስተዳዳሪ (SMS)' : 'SMS Integration & Gateway'}
                      </div>
                      <h2 className="text-4xl font-black text-white uppercase tracking-tighter mb-4 leading-none">
                         የአጭር መልዕክት <span className="text-emerald-500">.</span>
                      </h2>
                      <p className="text-slate-400 font-medium max-w-xl text-sm leading-relaxed">
-                        በስልክ ቁጥራቸው በቀጥታ አጭር መልዕክት (SMS) ለአባላት ይላኩ። ከስልክዎ ወይም ኮምፒውተርዎ ላይ አፕሊኬሽኑን በመጠቀም በቀላሉ ይላካል።
+                        {language === 'am' 
+                          ? 'በስልክ ቁጥራቸው በቀጥታ አጭር መልዕክት (SMS) ለአባላት ይላኩ። በቅጽበታዊ ኢንተርኔት ጌትዌይ መልዕክቱን ማስተላለፍ ወይም በስልክዎ መተግበሪያ መላክ ይችላሉ።' 
+                          : 'Send real-time SMS broadcasts directly to members. Deliver using our high-speed gateway or standard device messages.'}
                      </p>
                   </div>
                </div>
@@ -6619,32 +6649,76 @@ export default function AdminDashboard() {
                          className="w-full h-40 p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-sm font-bold text-slate-900 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 resize-none transition-all placeholder:text-slate-300"
                        />
                      </div>
-                     <button
-                       onClick={() => {
-                         if (!smsMessage.trim() || smsRecipients.length === 0) return;
-                         let normalizeSmsPhone = (phone: string) => {
-                           let clean = phone.trim().replace(/\D/g, '');
-                           if (clean.startsWith('251')) {
-                             clean = '0' + clean.substring(3);
-                           } else if (clean.length === 9 && (clean.startsWith('9') || clean.startsWith('7'))) {
-                             clean = '0' + clean;
+
+                     <div className="flex flex-col md:flex-row gap-4">
+                       <button
+                         onClick={async () => {
+                           if (!smsMessage.trim() || smsRecipients.length === 0) return;
+                           setSendingSms(true);
+                           try {
+                             let successCount = 0;
+                             const recipientsList = allUsers.filter(u => smsRecipients.includes(u.id));
+                             for (const recipient of recipientsList) {
+                               const ok = await sendSMS(recipient.phone, smsMessage.trim(), recipient.fullName, 'campaign');
+                               if (ok) successCount++;
+                             }
+                             alert(language === 'am'
+                               ? `በጌትዌይ መልዕክት መላክ ተጠናቋል! ${successCount}/${recipientsList.length} በተሳካ ሁኔታ ተላልፏል።`
+                               : `Gateway Broadcast completed! ${successCount}/${recipientsList.length} SMS successfully dispatched.`);
+                             setSmsMessage('');
+                             setSmsRecipients([]);
+                           } catch (err) {
+                             console.error("SMS Broadcast Error:", err);
+                             alert(language === 'am' ? 'በጌትዌይ ለመላክ ሲሞከር ስህተት አጋጥሟል' : 'Gateway dispatch failed.');
+                           } finally {
+                             setSendingSms(false);
                            }
-                           return clean;
-                         };
-                         const phones = allUsers.filter(u => smsRecipients.includes(u.id)).map(u => normalizeSmsPhone(u.phone)).join(',');
-                         const msg = encodeURIComponent(smsMessage.trim());
-                         window.open(`sms:${phones}?body=${msg}`);
-                         setSmsMessage('');
-                         setSmsRecipients([]);
-                       }}
-                       disabled={!smsMessage.trim() || smsRecipients.length === 0}
-                       className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-[12px] uppercase tracking-[0.15em] transition-all shadow-xl shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
-                     >
-                       <Send size={16} />
-                       {language === 'am' ? 'በስልክ (SMS App) ላክ' : 'Send via SMS App'}
-                     </button>
-                     <p className="text-xs font-bold text-slate-500 text-center uppercase tracking-wider mt-4">
-                       {language === 'am' ? `ማሳሰቢያ: ይህ በተንቀሳቃሽ ስልክዎ ወይም ኮምፒውተር ላይ ያለውን የ SMS መተግበሪያ ይከፍታል` : 'Opens your native SMS application'}
+                         }}
+                         disabled={sendingSms || !smsMessage.trim() || smsRecipients.length === 0}
+                         className="flex-1 py-5 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-[12px] uppercase tracking-[0.15em] transition-all shadow-xl shadow-slate-900/10 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+                       >
+                         {sendingSms ? (
+                           <>
+                             <RefreshCw className="animate-spin" size={16} />
+                             {language === 'am' ? 'እየተላከ ነው...' : 'Sending...'}
+                           </>
+                         ) : (
+                           <>
+                             <Zap size={16} className="text-amber-400" />
+                             {language === 'am' ? 'በጌትዌይ ላክ (Gateway Send)' : 'Send via Gateway API'}
+                           </>
+                         )}
+                       </button>
+
+                       <button
+                         onClick={() => {
+                           if (!smsMessage.trim() || smsRecipients.length === 0) return;
+                           let normalizeSmsPhone = (phone: string) => {
+                             let clean = phone.trim().replace(/\D/g, '');
+                             if (clean.startsWith('251')) {
+                               clean = '0' + clean.substring(3);
+                             } else if (clean.length === 9 && (clean.startsWith('9') || clean.startsWith('7'))) {
+                               clean = '0' + clean;
+                             }
+                             return clean;
+                           };
+                           const phones = allUsers.filter(u => smsRecipients.includes(u.id)).map(u => normalizeSmsPhone(u.phone)).join(',');
+                           const msg = encodeURIComponent(smsMessage.trim());
+                           window.open(`sms:${phones}?body=${msg}`);
+                           setSmsMessage('');
+                           setSmsRecipients([]);
+                         }}
+                         disabled={sendingSms || !smsMessage.trim() || smsRecipients.length === 0}
+                         className="flex-1 py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-[12px] uppercase tracking-[0.15em] transition-all shadow-xl shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+                       >
+                         <Send size={16} />
+                         {language === 'am' ? 'በስልክ (SMS App) ላክ' : 'Send via SMS App'}
+                       </button>
+                     </div>
+                     <p className="text-xs font-bold text-slate-400 text-center uppercase tracking-wider mt-2">
+                       {language === 'am' 
+                         ? 'ቅጽበታዊ ጌትዌይ አስተማማኝ መልዕክቶችን ወደ ስልኮች ያደርሳል እና በታሪክ መዝገብ ላይ ያስፍራል' 
+                         : 'Gateway broadcast dispatches secure SMS directly and records them into history logs.'}
                      </p>
                    </div>
                  </div>
@@ -6692,6 +6766,100 @@ export default function AdminDashboard() {
                    </div>
                  </div>
                </div>
+            </div>
+
+            {/* SMS Sent History Logs Section */}
+            <div className="bg-white p-8 rounded-[3rem] shadow-xl shadow-slate-200/40 border border-slate-100">
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                  <div>
+                     <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                        <History size={22} className="text-emerald-500" />
+                        {language === 'am' ? 'የአጭር መልዕክት መዝገብ ታሪክ' : 'SMS Broadcast History Logs'}
+                     </h3>
+                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">
+                        {language === 'am' ? 'ወደ አባላት የተላኩ የአጭር መልዕክቶች ታሪካዊ መዝገብ' : 'Historical audit trails of sent SMS notifications'}
+                     </p>
+                  </div>
+                  <div className="px-5 py-2.5 bg-slate-50 rounded-full border border-slate-100 text-[11px] font-black uppercase tracking-wider text-slate-600">
+                     {language === 'am' ? `ጠቅላላ መልዕክት: ${smsLogs.length}` : `Total Dispatched: ${smsLogs.length}`}
+                  </div>
+               </div>
+
+               {smsLogs.length === 0 ? (
+                  <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                     <Clock size={40} className="mx-auto text-slate-300 mb-4 animate-pulse" />
+                     <p className="text-sm font-bold text-slate-600">
+                        {language === 'am' ? 'ምንም የተላከ መልዕክት የለም።' : 'No SMS messages sent/logged yet.'}
+                     </p>
+                     <p className="text-xs font-medium text-slate-400 mt-1">
+                        {language === 'am' ? 'አባሎችን መርጠው የመጀመርያውን መልዕክት በጌትዌይ ይላኩ።' : 'Select users and type above to trigger your first gateway SMS.'}
+                     </p>
+                  </div>
+               ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                     <table className="w-full text-left border-collapse">
+                        <thead>
+                           <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-wider">{language === 'am' ? 'ተቀባይ' : 'Recipient'}</th>
+                              <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-wider">{language === 'am' ? 'ስልክ ቁጥር' : 'Phone Number'}</th>
+                              <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-wider">{language === 'am' ? 'የመልዕክት ይዘት' : 'Message Contents'}</th>
+                              <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-wider">{language === 'am' ? 'ሁኔታ' : 'Status'}</th>
+                              <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-wider">{language === 'am' ? 'መለያ አይነት' : 'Type'}</th>
+                              <th className="p-5 text-[10px] font-black text-slate-400 uppercase tracking-wider">{language === 'am' ? 'የተላከበት ቀን' : 'Sent At'}</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                           {smsLogs.map((log) => {
+                              const sentDate = log.sentAt ? (log.sentAt.toDate ? log.sentAt.toDate() : new Date(log.sentAt)) : new Date();
+                              return (
+                                 <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="p-5">
+                                       <div className="flex items-center gap-2">
+                                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700">
+                                             {log.recipientName ? log.recipientName.charAt(0) : 'M'}
+                                          </div>
+                                          <p className="text-xs font-black text-slate-800">{log.recipientName || 'Member'}</p>
+                                       </div>
+                                    </td>
+                                    <td className="p-5">
+                                       <span className="text-xs font-mono font-bold text-slate-600">{log.recipientPhone}</span>
+                                    </td>
+                                    <td className="p-5 max-w-sm truncate text-xs font-bold text-slate-500" title={log.message}>
+                                       {log.message}
+                                    </td>
+                                    <td className="p-5">
+                                       <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                          log.status === 'sent' 
+                                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                             : log.status === 'failed' 
+                                                ? 'bg-rose-50 text-rose-600 border border-rose-100' 
+                                                : 'bg-amber-50 text-amber-600 border border-amber-100'
+                                       }`}>
+                                          <div className={`w-1.5 h-1.5 rounded-full ${
+                                             log.status === 'sent' 
+                                                ? 'bg-emerald-400' 
+                                                : log.status === 'failed' 
+                                                   ? 'bg-rose-400' 
+                                                   : 'bg-amber-400 animate-pulse'
+                                          }`} />
+                                          {log.status}
+                                       </span>
+                                    </td>
+                                    <td className="p-5">
+                                       <span className={`text-[10px] font-black uppercase tracking-widest ${log.type === 'approval' ? 'text-blue-500' : 'text-slate-500'}`}>
+                                          {log.type === 'approval' ? (language === 'am' ? 'ማረጋገጫ' : 'Approval') : (language === 'am' ? 'ቅስቀሳ' : 'Campaign')}
+                                       </span>
+                                    </td>
+                                    <td className="p-5 text-xs font-medium text-slate-400">
+                                       {sentDate.toLocaleDateString()} {sentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </td>
+                                 </tr>
+                              );
+                           })}
+                        </tbody>
+                     </table>
+                  </div>
+               )}
             </div>
           </motion.div>
         ) : activeTab === 'support' ? (

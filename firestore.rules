@@ -186,6 +186,11 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow write: if isAdmin();
     }
+
+    // Collection: sms_logs
+    match /sms_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
     
     // Additional Collections for Admin Operations
     match /archived_members/{id} { allow read, write: if isAdmin(); }
