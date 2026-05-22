@@ -3,12 +3,31 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Clock, ShieldAlert, CheckCircle, ArrowRight, Phone, User, Calendar, CreditCard } from 'lucide-react';
 import { useLanguage } from '../lib/LanguageContext';
+import { useAuth } from '../components/FirebaseProvider';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 
 export default function PendingApproval() {
   const { language, t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
-  const userData = location.state?.registeredInfo;
+  const { user, userData: authUserData } = useAuth();
+
+  const userData = location.state?.registeredInfo || (authUserData ? {
+    name: authUserData.fullName,
+    phone: authUserData.phone,
+    group: authUserData.group || authUserData.groupId || '',
+    memberCode: authUserData.memberCode || ''
+  } : null);
+
+  const handleLogoutAndRedirect = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.warn("Error signing out user:", err);
+    }
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 font-sans relative overflow-hidden">
@@ -99,7 +118,7 @@ export default function PendingApproval() {
           </div>
 
           <button
-            onClick={() => navigate('/login')}
+            onClick={handleLogoutAndRedirect}
             className="w-full py-6 rounded-[2rem] bg-slate-900 text-white font-black text-[14px] uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-900/20 active:scale-95 flex items-center justify-center gap-3"
           >
             {language === 'am' ? 'ተረድቻለሁ (ወደ መግቢያ)' : 'I Understand (Go to Login)'}

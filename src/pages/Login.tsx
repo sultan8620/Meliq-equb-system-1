@@ -250,6 +250,26 @@ export default function Login() {
       if (isAdminPhone) {
         navigate('/admin');
       } else {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.status === 'pending' || data.status === 'rejected') {
+              navigate('/pending-approval', {
+                state: {
+                  registeredInfo: {
+                    name: data.fullName,
+                    phone: data.phone,
+                    group: data.group || data.groupId,
+                    memberCode: data.memberCode
+                  }
+                }
+              });
+              return;
+            }
+          }
+        }
         navigate('/dashboard');
       }
     } catch (err: any) {
@@ -311,6 +331,17 @@ export default function Login() {
       setTimeout(() => {
         if (isAdmin) {
           navigate('/admin');
+        } else if (existingData && (existingData.status === 'pending' || existingData.status === 'rejected')) {
+          navigate('/pending-approval', {
+            state: {
+              registeredInfo: {
+                name: existingData.fullName,
+                phone: existingData.phone,
+                group: existingData.group || existingData.groupId,
+                memberCode: existingData.memberCode
+              }
+            }
+          });
         } else {
           navigate('/dashboard');
         }
