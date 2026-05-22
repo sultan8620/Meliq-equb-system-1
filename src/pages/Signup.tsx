@@ -917,7 +917,15 @@ export default function Signup() {
       
     } catch (error: any) {
       console.error(error);
-      alert(t('signup.error.registration_failed') + ': ' + (error.message || ''));
+      const errMsg = error.message || '';
+      let errorText = t('signup.error.registration_failed') + ': ' + errMsg;
+      if (errMsg.includes('operation-not-allowed')) {
+        errorText += ' (Firebase Error: Email/Password Authentication provider is disabled. Please enable "Email/Password" in Firebase Console under Authentication -> Sign-in method.)';
+      } else if (errMsg.includes('permission-denied')) {
+        errorText += ' (Firebase Error: Firestore Rules denied write permissions. Please check your firestore.rules and deploy rules.)';
+      }
+      setStepError(errorText);
+      alert(errorText);
     } finally {
       setIsSubmitting(false);
     }
