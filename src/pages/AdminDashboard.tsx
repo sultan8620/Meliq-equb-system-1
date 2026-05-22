@@ -3011,7 +3011,11 @@ export default function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
                     {[
                       { label: language === 'am' ? 'ማረጋገጫ የሚጠብቁ' : 'Pending Review', value: pendingUsers.length, icon: Clock, color: 'text-amber-100' },
-                      { label: language === 'am' ? 'በቅርብ የገቡ' : 'New Today', value: pendingUsers.filter(u => new Date(u.createdAt).toDateString() === new Date().toDateString()).length, icon: Activity, color: 'text-rose-100' },
+                      { label: language === 'am' ? 'በቅርብ የገቡ' : 'New Today', value: pendingUsers.filter(u => {
+                        if (!u.createdAt) return false;
+                        const d = u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt);
+                        return d instanceof Date && !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
+                      }).length, icon: Activity, color: 'text-rose-100' },
                     ].map((m, i) => (
                       <div key={i} className="p-3.5 rounded-2xl bg-white/10 border border-white/20 flex flex-col items-center justify-center text-center backdrop-blur-md group/stat">
                         <m.icon size={18} className={`mb-2 opacity-80 group-hover/stat:scale-110 transition-transform ${m.color}`} />
@@ -3101,14 +3105,7 @@ export default function AdminDashboard() {
                               <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-1">
                                  <span className="text-[7px] font-black text-white uppercase tracking-widest">እይ</span>
                               </div>
-                              <div className="bg-white/10 rounded-xl p-2 border border-white/10 shadow-sm">
-                                 <span className="text-[7px] text-white/70 uppercase tracking-widest font-black inline-block mb-1">{language === 'am' ? 'የእቁብ አይነት' : 'Ekub Type'}</span>
-                                 <p className="font-black text-[9px] tracking-tighter text-white leading-none truncate drop-shadow-sm">{selectedIDUser.ekubType || '---'}</p>
-                              </div>
-                              <div className="bg-white/10 rounded-xl p-2 border border-white/10 shadow-sm">
-                                 <span className="text-[7px] text-white/70 uppercase tracking-widest font-black inline-block mb-1">{language === 'am' ? 'መዋጮ' : 'Amount'}</span>
-                                 <p className="font-black text-[9px] tracking-tighter text-blue-300 leading-none uppercase drop-shadow-sm">{selectedIDUser.amount ? `${selectedIDUser.amount.toLocaleString()} ETB` : '---'}</p>
-                              </div>
+
                            </div>
                            <div className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-amber-50 text-amber-500 rounded-lg shadow-lg border border-amber-100 flex items-center justify-center animate-bounce-slow">
                               <ShieldAlert size={12} />
