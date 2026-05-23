@@ -1692,7 +1692,28 @@ export default function AdminDashboard() {
     setAdmins(prev => prev.filter(a => a.id !== userId));
     
     try {
+      const userToBan = allUsers.find(u => u.id === userId) || admins.find(a => a.id === userId);
+      await setDoc(doc(db, 'banned_users', userId), {
+        uid: userId,
+        phone: userToBan?.phone || '',
+        email: userToBan?.email || '',
+        bannedAt: serverTimestamp(),
+        reason: 'Admin deleted',
+        byAdminId: auth.currentUser?.uid
+      });
       await deleteDoc(doc(db, 'users', userId));
+      
+      // Delete from Firebase Auth
+      try {
+        await fetch('/api/admin/delete-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminUid: userId, requesterUid: auth.currentUser?.uid })
+        });
+      } catch (e) {
+        console.error("Failed to delete user from Auth backend", e);
+      }
+
       triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'ተጠቃሚው/አድሚኑ በተሳካ ሁኔታ ተሰርዟል' : 'Deleted successfully');
       
       // 2. Clear rejected members if exists

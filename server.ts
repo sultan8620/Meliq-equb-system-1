@@ -153,9 +153,10 @@ async function startServer() {
       console.log("Delete admin request body:", req.body);
       const { adminUid, requesterUid } = req.body;
 
-      // Security Check: Verify requester is super-admin
+      // Security Check: Verify requester is admin or super-admin
       const requesterDoc = await getFirestoreDb().collection('users').doc(requesterUid).get();
       const isSuper = requesterDoc.exists && (
+        requesterDoc.data()?.role === 'admin' ||
         requesterDoc.data()?.isSuperAdmin === true || 
         requesterDoc.data()?.role === 'super_admin' || 
         requesterDoc.data()?.role === 'superadmin'
