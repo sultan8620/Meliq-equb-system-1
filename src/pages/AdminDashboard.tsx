@@ -2612,7 +2612,7 @@ export default function AdminDashboard() {
       pdf.text('Status', 100, 102);
       pdf.setFontSize(12);
       pdf.setTextColor(255, 255, 255);
-      pdf.text('Verified', 100, 115);
+      pdf.text(payment.status === 'active' ? 'Verified' : 'Pending', 100, 115);
       
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(9);
@@ -5094,7 +5094,7 @@ export default function AdminDashboard() {
                       </div>
 
                       <div className="flex items-center gap-2 pt-2">
-                        {payment.status === 'active' && (
+                        {(payment.status === 'active' || payment.status === 'pending') && (
                           <button 
                             onClick={() => handleDownloadReceipt(payment)}
                             className="flex-1 px-6 py-3 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"

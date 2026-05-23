@@ -1342,7 +1342,7 @@ export default function Dashboard() {
       pdf.text('Status', 100, 102);
       pdf.setFontSize(12);
       pdf.setTextColor(255, 255, 255);
-      pdf.text('Verified', 100, 115);
+      pdf.text(payment.status === 'active' ? 'Verified' : 'Pending', 100, 115);
       
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(9);
@@ -1641,6 +1641,9 @@ export default function Dashboard() {
 
     setIsSubmitting(true);
     try {
+      const now = new Date();
+      const generatedReceiptId = `REC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
       await addDoc(collection(db, 'payments'), {
         userId: user.uid,
         userName: userData.fullName,
@@ -1652,6 +1655,7 @@ export default function Dashboard() {
         type: 'contribution',
         receiptImage: receiptImage,
         transactionCode: paymentCode,
+        receiptId: generatedReceiptId,
         createdAt: serverTimestamp()
       });
       setShowContributeModal(false);
@@ -3141,29 +3145,29 @@ export default function Dashboard() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {(payment.receiptImage || (payment.receiptImages && payment.receiptImages.length > 0)) && (
-                            <button 
-                              onClick={() => {
-                                const images = payment.receiptImages || (payment.receiptImage ? [payment.receiptImage] : []);
-                                setSelectedReceiptImages(images);
-                                setShowReceiptImagesModal(true);
-                              }}
-                              className="p-2 bg-slate-50 text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-100 transition-all shadow-sm group-hover:bg-amber-50 group-hover:border-amber-200 group-hover:text-amber-700"
-                              title={language === 'am' ? 'የተከፈለበትን ደረሰኝ ማረጋገጫ (ፎቶ) እይ' : 'View Uploaded Receipt'}
-                            >
-                              <ImageIcon size={14} />
-                            </button>
-                          )}
-                          {payment.status === 'active' && (
-                            <button 
-                              onClick={() => handleDownloadReceipt(payment)}
-                              className="p-2 bg-slate-50 text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-100 transition-all shadow-sm"
-                              title="Download Receipt"
-                            >
-                              <FileText size={14} />
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {(payment.receiptImage || (payment.receiptImages && payment.receiptImages.length > 0)) && (
+                              <button 
+                                onClick={() => {
+                                  const images = payment.receiptImages || (payment.receiptImage ? [payment.receiptImage] : []);
+                                  setSelectedReceiptImages(images);
+                                  setShowReceiptImagesModal(true);
+                                }}
+                                className="p-2 bg-slate-50 text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-100 transition-all shadow-sm group-hover:bg-amber-50 group-hover:border-amber-200 group-hover:text-amber-700"
+                                title={language === 'am' ? 'የተከፈለበትን ደረሰኝ ማረጋገጫ (ፎቶ) እይ' : 'View Uploaded Receipt'}
+                              >
+                                <ImageIcon size={14} />
+                              </button>
+                            )}
+                            {(payment.status === 'active' || payment.status === 'pending') && (
+                              <button 
+                                onClick={() => handleDownloadReceipt(payment)}
+                                className="p-2 bg-slate-50 text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-100 transition-all shadow-sm"
+                                title="Download Receipt"
+                              >
+                                <FileText size={14} />
+                              </button>
+                            )}
                           {(payment.status === 'pending' || payment.status === 'rejected') && (
                             <button 
                               onClick={async () => {
