@@ -11,7 +11,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { useLanguage } from '../lib/LanguageContext';
 import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSnapshot, serverTimestamp, limit, setDoc, deleteDoc, orderBy, arrayUnion, or } from 'firebase/firestore';
-import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff } from 'lucide-react';
+import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff, UserMinus } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { sendSMS } from '../lib/smsHelper';
 
@@ -118,12 +118,33 @@ export default function AdminDashboard() {
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
   const [allSupportTickets, setAllSupportTickets] = useState<any[]>([]);
-  const [supportSubTab, setSupportSubTab] = useState<'tickets' | 'forms'>('tickets');
+  const [supportSubTab, setSupportSubTab] = useState<'tickets' | 'forms' | 'deletions'>('tickets');
   const [supportView, setSupportView] = useState<'open' | 'closed'>('open');
   const [supportSearch, setSupportSearch] = useState('');
   const [isUpdatingTicket, setIsUpdatingTicket] = useState(false);
   const [deletionRequests, setDeletionRequests] = useState<any[]>([]);
   const [showImagePreview, setShowImagePreview] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<{id: string, title: string, message: string}[]>([]);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalConfig, setSuccessModalConfig] = useState({ title: '', message: '', buttonText: '' });
+
+  const triggerError = (title: string, message: string) => {
+    setSuccessModalConfig({
+      title,
+      message,
+      buttonText: language === 'am' ? 'ተረዳሁ' : 'Understood'
+    });
+    setShowSuccessModal(true);
+  };
+
+  const triggerSuccess = (title: string, message: string) => {
+    setSuccessModalConfig({
+      title,
+      message,
+      buttonText: language === 'am' ? 'እሺ' : 'OK'
+    });
+    setShowSuccessModal(true);
+  };
 
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, 'deletion_requests'), orderBy('createdAt', 'desc')), (snapshot) => {
@@ -1587,8 +1608,12 @@ export default function AdminDashboard() {
         read: false
       });
       triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የጥያቄው ሁኔታ ተቀይሯል' : 'Request status updated');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `admin_forms/${form.id}`);
+    } catch (error: any) {
+      if (error.code === 'auth/requires-recent-login') {
+        triggerError(language === 'am' ? 'ዳግም መግባት ያስፈልጋል' : 'Re-authentication required', language === 'am' ? 'እባክዎ እንደገና ይግቡ።' : 'Please log out and log in again to perform this action.');
+      } else {
+        handleFirestoreError(error, OperationType.UPDATE, `admin_forms/${form.id}`);
+      }
     } finally {
       setIsUpdatingForm(false);
     }
@@ -1830,7 +1855,7 @@ export default function AdminDashboard() {
 
   const deleteUserAdmin = (userId: string) => {
     if (userId === auth.currentUser?.uid) {
-      triggerSuccess(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'ራስዎን መሰረዝ አይችሉም' : 'You cannot delete yourself', language === 'am' ? 'እሺ' : 'Got it');
+      triggerSuccess(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'ራስዎን መሰረዝ አይችሉም' : 'You cannot delete yourself');
       return;
     }
     setUserToDelete({ id: userId });
@@ -1988,19 +2013,6 @@ export default function AdminDashboard() {
   });
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [unsubMessages, setUnsubMessages] = useState<any>(null);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successModalConfig, setSuccessModalConfig] = useState({ title: '', message: '', buttonText: '' });
-
-  const triggerSuccess = (title: string, message: string, btnText?: string) => {
-    setSuccessModalConfig({
-      title,
-      message,
-      buttonText: btnText || (language === 'am' ? 'እሺ' : 'Got it')
-    });
-    setShowSuccessModal(true);
-  };
-
-
 
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [adminLayoutView, setAdminLayoutView] = useState<'grid' | 'table'>('grid');
@@ -7216,7 +7228,7 @@ export default function AdminDashboard() {
                           <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-full ${request.status === 'approved' ? 'bg-emerald-500/5' : request.status === 'rejected' ? 'bg-rose-500/5' : 'bg-amber-500/5'}`} />
                           <div className="flex items-center gap-4 mb-6 relative">
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${request.status === 'approved' ? 'bg-emerald-500' : request.status === 'rejected' ? 'bg-rose-500' : 'bg-slate-900 animate-pulse'}`}>
-                               {request.status === 'pending' ? <Clock size={20} /> : <UserX size={20} />}
+                               {request.status === 'pending' ? <Clock size={20} /> : <UserMinus size={20} />}
                             </div>
                             <div>
                               <h4 className="font-black text-slate-900 tracking-tight">{request.userName}</h4>

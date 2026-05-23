@@ -645,6 +645,10 @@ export default function Dashboard() {
   const [deletionReason, setDeletionReason] = useState('financial');
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [changePasswordForm, setChangePasswordForm] = useState({ newPassword: '', confirmPassword: '' });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadChat, setUnreadChat] = useState(false);
+  const [upcomingDraws, setUpcomingDraws] = useState<any[]>([]);
+  const [drawWinners, setDrawWinners] = useState<any[]>([]);
 
   const handleUpdatePassword = async () => {
     if (!auth.currentUser) return;
@@ -4815,7 +4819,7 @@ export default function Dashboard() {
                     
                     return (
                       <motion.div 
-                        key={msg.id || idx} 
+                        key={msg.id} 
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
