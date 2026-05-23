@@ -121,6 +121,38 @@ export default function AdminDashboard() {
   const [supportView, setSupportView] = useState<'open' | 'closed'>('open');
   const [supportSearch, setSupportSearch] = useState('');
   const [isUpdatingTicket, setIsUpdatingTicket] = useState(false);
+  const [toasts, setToasts] = useState<{id: string, title: string, message: string}[]>([]);
+
+  const addToast = (title: string, message: string) => {
+    const id = Math.random().toString();
+    setToasts(prev => [...prev, { id, title, message }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
+
+  const playNotificationSound = () => {
+    const audio = document.getElementById('notification-sound') as HTMLAudioElement;
+    if (audio) {
+      audio.play().catch(e => console.log('Audio play failed', e));
+    }
+  };
+
+  const prevAdminMessagesCountRef = React.useRef(0);
+
+  useEffect(() => {
+    // using a timeout or waiting for the below declaration
+  }, []);
+
+  const prevNotifsCountRef = React.useRef(0);
+  useEffect(() => {
+    const currentUnread = notifications.filter(n => !n.read).length;
+    if (currentUnread > prevNotifsCountRef.current && prevNotifsCountRef.current !== 0) {
+      playNotificationSound();
+      addToast(language === 'am' ? 'ማሳወቂያ' : 'Notification', language === 'am' ? 'አዲስ ማሳወቂያ ደርሶዎታል' : 'You have a new notification');
+    }
+    prevNotifsCountRef.current = currentUnread;
+  }, [notifications, language]);
   
   const [adminForms, setAdminForms] = useState<any[]>([]);
   const [allAdminForms, setAllAdminForms] = useState<any[]>([]);
@@ -710,12 +742,13 @@ export default function AdminDashboard() {
     if (!confirm(language === 'am' ? `${selectedUserIds.length} አባላትን ማረጋገጥ ይፈልጋሉ?` : `Are you sure you want to verify ${selectedUserIds.length} members?`)) return;
     
     try {
-      const promises = selectedUserIds.map(userId => 
-        updateDoc(doc(db, 'users', userId), { 
+      const promises = selectedUserIds.map(async (userId) => {
+        await updateDoc(doc(db, 'users', userId), { 
           isVerified: true,
           verifiedAt: serverTimestamp()
-        })
-      );
+        });
+        await notifyUserAdminChange(userId, 'አካውንትዎ ጸድቋል', 'Account Verified', 'አካውንትዎ በአድሚን ጸድቋል::', 'Your account has been verified by the admin.');
+      });
       await Promise.all(promises);
       setSelectedUserIds([]);
       alert(language === 'am' ? 'ሁሉም አባላት በተሳካ ሁኔታ ተረጋግጠዋል!' : 'All selected members verified successfully!');
@@ -804,6 +837,18 @@ export default function AdminDashboard() {
 
   const [deleteMsgConfig, setDeleteMsgConfig] = useState<{isOpen: boolean, messageId: string | null}>({isOpen: false, messageId: null});
   const [messages, setMessages] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (messages.length > prevAdminMessagesCountRef.current && prevAdminMessagesCountRef.current !== 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.senderRole !== 'admin' && lastMsg.senderRole !== 'super_admin') {
+         playNotificationSound();
+         addToast(language === 'am' ? 'አዲስ መልእክት' : 'New Message', lastMsg.senderName + ': ' + (lastMsg.text?.length > 30 ? lastMsg.text.substring(0, 30) + '...' : lastMsg.text));
+      }
+    }
+    prevAdminMessagesCountRef.current = messages.length;
+  }, [messages, language]);
+
   const [newMessage, setNewMessage] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const chatEndRef = React.useRef<HTMLDivElement>(null);
@@ -1255,6 +1300,7 @@ export default function AdminDashboard() {
       await updateDoc(doc(db, 'users', userId), {
         payoutStatus: 'completed'
       });
+      await notifyUserAdminChange(userId, 'የእጣ ክፍያ ተፈጽሟል', 'Payout Completed', 'የእጣ ክፍያዎ ወደ ሂሳብዎ ገብቷል::', 'Your ekub payout has been transferred to your account.');
       alert(language === 'am' ? 'ክፍያው በተሳካ ሁኔታ ተፈጽሟል!' : 'Payout completed successfully!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `payouts/${payoutId}`);
@@ -1272,6 +1318,7 @@ export default function AdminDashboard() {
         await updateDoc(doc(db, 'users', userId), {
           payoutStatus: 'cancelled'
         });
+        await notifyUserAdminChange(userId, 'የእጣ ክፍያ ተሰርዟል', 'Payout Cancelled', 'የእጣ ክፍያዎ ተሰርዟል::', 'Your ekub payout has been cancelled.');
       }
       alert(language === 'am' ? 'ክፍያው ተሰርዟል።' : 'Payout cancelled.');
     } catch (error) {
@@ -2274,6 +2321,20 @@ export default function AdminDashboard() {
     }
   };
 
+  const notifyUserAdminChange = async (userId: string, titleAm: string, titleEn: string, messageAm: string, messageEn: string) => {
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        recipientId: userId,
+        title: language === 'am' ? titleAm : titleEn,
+        message: language === 'am' ? messageAm : messageEn,
+        createdAt: new Date().toISOString(),
+        read: false
+      });
+    } catch (e) {
+      console.warn("Failed to send notification for user update", e);
+    }
+  };
+
   const handleEditUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editUserForm || !editUserForm.id) return;
@@ -2295,7 +2356,15 @@ export default function AdminDashboard() {
         status: editUserForm.status || 'pending'
       });
       setShowEditUserModal(false);
-      alert(t('admin.user_updated'));
+      
+      await notifyUserAdminChange(
+        editUserForm.id, 
+        'የመረጃ ማሻሻያ', 'Profile Updated',
+        'አድሚን የግል መረጃዎን አሻሽሏል። እባክዎ መረጃዎን ያረጋግጡ።', 
+        'Admin updated your personal profile. Please verify your details.'
+      );
+      
+      triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', t('admin.user_updated'));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${editUserForm.id}`);
     }
@@ -2308,7 +2377,11 @@ export default function AdminDashboard() {
         approvedAt: new Date(),
         reviewMessage: paymentReviewMessage || ''
       });
-      alert(t('admin.payment_approved'));
+      const pt = allPayments.find(p => p.id === paymentId);
+      if (pt?.userId) {
+        await notifyUserAdminChange(pt.userId, 'ክፍያ ጸድቋል', 'Payment Approved', 'ክፍያዎ በተሳካ ሁኔታ ጸድቋል።', 'Your payment has been successfully approved.');
+      }
+      triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', t('admin.payment_approved'));
       setPaymentReviewModal(null);
       setPaymentReviewMessage('');
     } catch (error) {
@@ -2323,7 +2396,11 @@ export default function AdminDashboard() {
         status: 'rejected',
         reviewMessage: paymentReviewMessage || ''
       });
-      alert(t('admin.payment_rejected'));
+      const pt = allPayments.find(p => p.id === paymentId);
+      if (pt?.userId) {
+        await notifyUserAdminChange(pt.userId, 'ክፍያ ውድቅ ተደርጓል', 'Payment Rejected', `ክፍያዎ ውድቅ ተደርጓል። ምክንያት: ${paymentReviewMessage}`, `Your payment has been rejected. Reason: ${paymentReviewMessage}`);
+      }
+      triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', t('admin.payment_rejected'));
       setPaymentReviewModal(null);
       setPaymentReviewMessage('');
     } catch (error) {
@@ -4636,6 +4713,7 @@ export default function AdminDashboard() {
                               onClick={async () => {
                                 if(window.confirm('ይህንን የዋስትና ሰነድ ማጽደቅ ይፈልጋሉ?')) {
                                   await updateDoc(doc(db, 'users', u.id), { guarantorsApproved: true });
+                                  await notifyUserAdminChange(u.id, "ዋስትና ጸድቋል", "Guarantors Approved", "የዋስትና ሰነድዎ በአድሚን ጸድቋል::", "Your guarantor documents have been approved by admin.");
                                   triggerSuccess('ተከናውኗል', 'የዋስትና ሰነዱ ጸድቋል።');
                                 }
                               }}
@@ -4647,6 +4725,7 @@ export default function AdminDashboard() {
                               onClick={async () => {
                                 if(window.confirm('ይህንን የዋስትና ሰነድ ውድቅ ማድረግ ይፈልጋሉ?')) {
                                   await updateDoc(doc(db, 'users', u.id), { guarantorsSubmitted: false });
+                                  await notifyUserAdminChange(u.id, "ዋስትና ውድቅ ተደርጓል", "Guarantors Rejected", "የዋስትና ሰነድዎ በአድሚን ውድቅ ተደርጓል። እባክዎ እንደገና ያስገቡ::", "Your guarantor documents were rejected. Please submit again.");
                                   triggerSuccess('ተከናውኗል', 'የዋስትና ሰነዱ ውድቅ ተደርጓል።');
                                 }
                               }}
@@ -13228,6 +13307,33 @@ export default function AdminDashboard() {
            </div>
         )}
       </AnimatePresence>
+      {/* Global Notifications UI */}
+      <audio id="notification-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+      <div className="fixed top-4 right-4 z-[999] flex flex-col gap-2">
+        <AnimatePresence>
+          {toasts.map(toast => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, x: 20 }}
+              className="bg-slate-900 p-4 rounded-2xl shadow-2xl border border-slate-800 flex items-start gap-3 max-w-xs"
+            >
+              <div className="w-10 h-10 bg-gold-500/10 text-gold-500 rounded-xl flex items-center justify-center shrink-0">
+                <Bell size={20} className="animate-bounce" />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black tracking-tight text-white uppercase leading-none">{toast.title}</h4>
+                <p className="text-[10px] text-slate-400 font-medium leading-tight mt-1">{toast.message}</p>
+              </div>
+              <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-500 hover:text-slate-300">
+                <X size={14} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
   </main>
 </div>
 );

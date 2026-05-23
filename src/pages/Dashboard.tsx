@@ -629,6 +629,45 @@ export default function Dashboard() {
   const [isSubmittingGuarantor, setIsSubmittingGuarantor] = useState(false);
   const [selectedMemberModal, setSelectedMemberModal] = useState<GroupMember | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [toasts, setToasts] = useState<{id: string, title: string, message: string}[]>([]);
+
+  const addToast = (title: string, message: string) => {
+    const id = Math.random().toString();
+    setToasts(prev => [...prev, { id, title, message }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
+
+  const playNotificationSound = () => {
+    const audio = document.getElementById('notification-sound') as HTMLAudioElement;
+    if (audio) {
+      audio.play().catch(e => console.log('Audio play failed', e));
+    }
+  };
+
+  const prevMessagesCountRef = useRef(0);
+  useEffect(() => {
+    if (messages.length > prevMessagesCountRef.current && prevMessagesCountRef.current !== 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.senderId !== user?.uid) {
+         playNotificationSound();
+         addToast(language === 'am' ? 'አዲስ መልእክት' : 'New Message', lastMsg.senderName + ': ' + (lastMsg.text?.length > 30 ? lastMsg.text.substring(0, 30) + '...' : lastMsg.text));
+      }
+    }
+    prevMessagesCountRef.current = messages.length;
+  }, [messages, user?.uid, language]);
+
+  const prevNotifsCountRef = useRef(0);
+  useEffect(() => {
+    const currentUnread = notifications.filter(n => !n.read).length;
+    if (currentUnread > prevNotifsCountRef.current && prevNotifsCountRef.current !== 0) {
+      playNotificationSound();
+      addToast(language === 'am' ? 'ማሳወቂያ' : 'Notification', language === 'am' ? 'አዲስ ማሳወቂያ ደርሶዎታል' : 'You have a new notification');
+    }
+    prevNotifsCountRef.current = currentUnread;
+  }, [notifications, language]);
+
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
@@ -5715,6 +5754,34 @@ export default function Dashboard() {
           </motion.div>
         </div>
       )}
+
+      {/* Global Notifications UI */}
+      <audio id="notification-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+      <div className="fixed top-4 right-4 z-[999] flex flex-col gap-2">
+        <AnimatePresence>
+          {toasts.map(toast => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, x: 20 }}
+              className="bg-white p-4 rounded-2xl shadow-xl border border-slate-100 flex items-start gap-3 max-w-xs"
+            >
+              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                <Bell size={20} className="animate-bounce" />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black tracking-tight text-slate-800 uppercase leading-none">{toast.title}</h4>
+                <p className="text-[10px] text-slate-500 font-medium leading-tight mt-1">{toast.message}</p>
+              </div>
+              <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="text-slate-300 hover:text-slate-500">
+                <X size={14} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
     </div>
     </div>
   );
