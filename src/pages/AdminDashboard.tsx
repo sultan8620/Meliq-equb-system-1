@@ -1652,6 +1652,34 @@ export default function AdminDashboard() {
       // Delete from users collection to allow re-registration
       await deleteDoc(doc(db, 'users', userId));
 
+      // Remove from local state
+      setAllUsers(prev => prev.filter(u => u.id !== userId));
+      setPendingUsers(prev => prev.filter(u => u.id !== userId));
+
+      // Cleanup associated data
+      const collections = [
+        { name: 'payments', field: 'userId' },
+        { name: 'penalties', field: 'userId' },
+        { name: 'notifications', field: 'recipientId' },
+        { name: 'payouts', field: 'userId' },
+        { name: 'support_tickets', field: 'userId' },
+        { name: 'loans', field: 'userId' },
+        { name: 'guarantors', field: 'userId' },
+        { name: 'admin_forms', field: 'userId' },
+        { name: 'messages', field: 'senderId' },
+        { name: 'messages', field: 'recipientId' }
+      ];
+
+      Promise.all(collections.map(async (col) => {
+        try {
+          const q = query(collection(db, col.name), where(col.field, '==', userId));
+          const snap = await getDocs(q);
+          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, col.name, d.id))));
+        } catch (e) {
+          console.warn(`Failed to clean up ${col.name} for user ${userId}:`, e);
+        }
+      }));
+
       triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'አባል ውድቅ ተደርጓል እና መረጃው ተሰርዟል' : 'User rejected and data cleared');
     } catch (error) {
       console.error("Rejection error:", error);
@@ -1742,6 +1770,32 @@ export default function AdminDashboard() {
       }
 
       setAdmins(prev => prev.filter(a => a.id !== adminId));
+      setAllUsers(prev => prev.filter(u => u.id !== adminId));
+
+      // Cleanup associated data
+      const collections = [
+        { name: 'payments', field: 'userId' },
+        { name: 'penalties', field: 'userId' },
+        { name: 'notifications', field: 'recipientId' },
+        { name: 'payouts', field: 'userId' },
+        { name: 'support_tickets', field: 'userId' },
+        { name: 'loans', field: 'userId' },
+        { name: 'guarantors', field: 'userId' },
+        { name: 'admin_forms', field: 'userId' },
+        { name: 'messages', field: 'senderId' },
+        { name: 'messages', field: 'recipientId' }
+      ];
+
+      Promise.all(collections.map(async (col) => {
+        try {
+          const q = query(collection(db, col.name), where(col.field, '==', adminId));
+          const snap = await getDocs(q);
+          await Promise.all(snap.docs.map(d => deleteDoc(doc(db, col.name, d.id))));
+        } catch (e) {
+          console.warn(`Failed to clean up ${col.name} for admin ${adminId}:`, e);
+        }
+      }));
+
       triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'አድሚኑ ከሲስተሙ ሙሉ በሙሉ ተወግዷል' : 'Admin permanently removed from system');
     } catch (error: any) {
       console.error('Error hard deleting admin:', error);
