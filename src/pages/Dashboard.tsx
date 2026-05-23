@@ -130,6 +130,8 @@ const DrawsView = ({ upcomingDraws, winners, group }: { upcomingDraws: any[], wi
   const [selectedDraw, setSelectedDraw] = useState<any>(null);
   const [countdown, setCountdown] = useState({ days: '00', hours: '00', mins: '00', secs: '00' });
 
+  const totalDistributed = winners.reduce((acc, curr) => acc + (parseInt(curr.amount) || 0), 0);
+
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -245,7 +247,41 @@ const DrawsView = ({ upcomingDraws, winners, group }: { upcomingDraws: any[], wi
         <div className="md:col-span-2">
           <div className="bg-slate-900 rounded-[2.5rem] sm:rounded-[3.5rem] p-8 sm:p-12 text-white relative overflow-hidden shadow-2xl group h-full">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gold-500/10 rounded-full blur-[120px] -mr-48 -mt-48 transition-all group-hover:bg-gold-500/20" />
-            <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-12 text-center md:text-left">
+            <div className="flex items-center gap-12 text-center md:text-left relative z-10">
+              <div className="flex-1">
+                <div className="inline-flex items-center gap-3 px-5 py-2 bg-white/10 rounded-full border border-white/10 mb-8 backdrop-blur-md">
+                   <div className="w-2 h-2 rounded-full bg-gold-400 animate-pulse" />
+                   <span className="text-[10px] font-black uppercase tracking-[0.3em] text-gold-400">{language === 'am' ? 'የእጣ አወጣጥ ሁኔታ' : 'LIVE DRAW STATUS'}</span>
+                </div>
+                <h3 className="text-4xl sm:text-5xl font-display font-black mb-6 tracking-tighter leading-tight drop-shadow-md">
+                  {language === 'am' ? 'ቀጣዩ የእጣ አወጣጥ' : 'Next Exclusive Draw Session'}
+                </h3>
+                <div className="flex flex-wrap gap-x-12 gap-y-6 justify-center md:justify-start mb-8">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">{language === 'am' ? 'ዓይነት' : 'Cycle Type'}</span>
+                    <span className="text-xl font-bold uppercase tracking-tight text-white">{group?.type || 'Vanguard'}</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">{language === 'am' ? 'ባለእጣ' : 'Total Potential'}</span>
+                    <span className="text-xl font-bold uppercase tracking-tight text-white">{group?.amount?.toLocaleString()} ETB</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">{language === 'am' ? 'ሳምንት' : 'Week'}</span>
+                    <span className="text-xl font-bold uppercase tracking-tight text-white">#{winners.length + 1}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="hidden lg:flex flex-col items-center gap-6">
+                <div className="p-8 bg-white/5 border border-white/10 rounded-[2.5rem] backdrop-blur-xl group hover:bg-white/10 transition-all">
+                  <Trophy size={64} className="text-gold-500 transform group-hover:rotate-12 transition-transform duration-500" />
+                </div>
+                <div className="text-center">
+                   <p className="text-[10px] font-black text-gold-500 uppercase tracking-widest mb-1">{language === 'am' ? 'አሸናፊዎች' : 'Winners to date'}</p>
+                   <p className="text-2xl font-black text-white">{winners.length}</p>
+                </div>
+              </div>
+            </div>
                <div>
                   <div className="flex items-center justify-center md:justify-start gap-5 mb-6">
                     <div className="w-20 h-20 bg-white/10 backdrop-blur-xl rounded-[2rem] flex items-center justify-center text-gold-400 border border-white/10 shadow-2xl relative">
@@ -307,9 +343,8 @@ const DrawsView = ({ upcomingDraws, winners, group }: { upcomingDraws: any[], wi
                </motion.div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-emerald-600 rounded-[3.5rem] p-10 text-white shadow-2xl flex flex-col justify-between group overflow-hidden relative cursor-default">
+          <div className="bg-emerald-600 rounded-[3.5rem] p-10 text-white shadow-2xl flex flex-col justify-between group overflow-hidden relative cursor-default">
            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl opacity-50" />
            <div>
               <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-6">
@@ -606,40 +641,48 @@ export default function Dashboard() {
   const [receiptImages, setReceiptImages] = useState<string[]>([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successModalConfig, setSuccessModalConfig] = useState({ title: '', message: '', buttonText: '' });
-  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
-  const [changePasswordForm, setChangePasswordForm] = useState({ oldPassword: '', newPassword: '' });
   const [showDeletionRequestModal, setShowDeletionRequestModal] = useState(false);
-  const [deletionReason, setDeletionReason] = useState('other');
-  
+  const [deletionReason, setDeletionReason] = useState('financial');
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [changePasswordForm, setChangePasswordForm] = useState({ newPassword: '', confirmPassword: '' });
+
   const handleUpdatePassword = async () => {
     if (!auth.currentUser) return;
+    if (changePasswordForm.newPassword !== changePasswordForm.confirmPassword) {
+      triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'የይለፍ ቃሎቹ አይመሳሰሉም' : 'Passwords do not match');
+      return;
+    }
+    if (changePasswordForm.newPassword.length < 6) {
+      triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'የይለፍ ቃል ቢያንስ 6 ፊደላት መሆን አለበት' : 'Password must be at least 6 characters');
+      return;
+    }
     try {
-        // Simple re-authentication for password update
-        await updatePassword(auth.currentUser, changePasswordForm.newPassword);
-        setShowChangePasswordModal(false);
-        triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የይለፍ ቃል መቀየር ተሳክቷል' : 'Password changed successfully');
-    } catch (error) {
-        console.error('Password change error:', error);
-        triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'የይለፍ ቃል መቀየር አልተሳካም' : 'Password change failed');
+      await updatePassword(auth.currentUser, changePasswordForm.newPassword);
+      triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የይለፍ ቃል ተቀይሯል። እባክዎ እንደገና ይግቡ' : 'Password updated. Please log in again.');
+      setTimeout(async () => {
+        await signOut(auth);
+        window.location.href = '/login';
+      }, 2000);
+    } catch (error: any) {
+      triggerError(language === 'am' ? 'ስህተት' : 'Error', error.message || (language === 'am' ? 'የይለፍ ቃል መቀየር አልተሳካም' : 'Failed to update password'));
     }
   };
 
   const handleRequestDeletion = async () => {
     if (!user) return;
     try {
-        await addDoc(collection(db, 'deletion_requests'), {
-            userId: user.uid,
-            userName: userData?.fullName || 'N/A',
-            userPhone: userData?.phone || 'N/A',
-            reason: deletionReason,
-            status: 'pending',
-            createdAt: serverTimestamp()
-        });
-        setShowDeletionRequestModal(false);
-        triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የመዝጊያ ጥያቄዎ ተልኳል' : 'Deletion request sent successfully');
-    } catch (error) {
-        console.error('Deletion request error:', error);
-        triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'የመዝጊያ ጥያቄ መላክ አልተሳካም' : 'Deletion request failed');
+      await addDoc(collection(db, 'deletion_requests'), {
+        userId: user.uid,
+        userName: userData?.fullName || 'N/A',
+        userPhone: userData?.phone || 'N/A',
+        reason: deletionReason,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      setShowDeletionRequestModal(false);
+      triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የመዝጊያ ጥያቄዎ ለአድሚን ተልኳል። አድሚን ሲፈቅድልዎ አካውንትዎ ይሰረዛል።' : 'Your deletion request has been sent to admin. Your account will be deleted once approved.');
+    } catch (error: any) {
+      triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'ጥያቄውን መላክ አልተሳካም' : 'Failed to send request');
     }
   };
 
@@ -735,10 +778,17 @@ export default function Dashboard() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [unreadChat, setUnreadChat] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [upcomingDraws, setUpcomingDraws] = useState<any[]>([]);
-  const [drawWinners, setDrawWinners] = useState<any[]>([]);
+  const [showImagePreview, setShowImagePreview] = useState<string | null>(null);
+
+  const verifiedPaymentsTotal = useMemo(() => {
+    return payments
+      .filter((p: any) => p.status === 'verified')
+      .reduce((acc: number, curr: any) => acc + (parseInt(curr.amount) || 0), 0);
+  }, [payments]);
+
+  const totalWinnersCount = useMemo(() => {
+    return drawWinners.length;
+  }, [drawWinners]);
 
   const activeMessages = useMemo(() => {
     if (chatSubTab === 'group') {
@@ -2175,6 +2225,128 @@ export default function Dashboard() {
 
       <div className="flex-1 max-h-screen overflow-y-auto custom-scrollbar p-3 sm:p-6 lg:p-8 space-y-6 pb-24 sm:pb-8">
       <AnimatePresence>
+        {/* Image Preview Lightbox */}
+        <AnimatePresence>
+          {showImagePreview && (
+            <motion.div 
+               initial={{ opacity: 0 }} 
+               animate={{ opacity: 1 }} 
+               exit={{ opacity: 0 }} 
+               className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-xl"
+               onClick={() => setShowImagePreview(null)}
+            >
+               <button className="absolute top-8 right-8 text-white/60 hover:text-white transition-colors">
+                  <XCircle size={40} />
+               </button>
+               <motion.img 
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  src={showImagePreview} 
+                  className="max-w-full max-h-[90vh] rounded-2xl shadow-2xl border border-white/10 object-contain"
+                  onClick={(e) => e.stopPropagation()}
+               />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Change Password Modal */}
+        <AnimatePresence>
+          {showChangePasswordModal && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="bg-white rounded-[2.5rem] p-10 shadow-2xl max-w-lg w-full border border-slate-100 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-bl-full" />
+                <div className="flex items-center gap-6 mb-8 relative z-10">
+                  <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                    <Edit size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900">{language === 'am' ? 'የይለፍ ቃል ቀይር' : 'Change Password'}</h3>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{language === 'am' ? 'አዲስ የልፍ ቃል ያስገቡ' : 'Enter a new secure password'}</p>
+                  </div>
+                </div>
+                <div className="space-y-6 mb-10">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">{language === 'am' ? 'አዲስ የይለፍ ቃል' : 'New Password'}</label>
+                    <input 
+                      type="password" 
+                      value={changePasswordForm.newPassword} 
+                      onChange={(e) => setChangePasswordForm({...changePasswordForm, newPassword: e.target.value})} 
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">{language === 'am' ? 'የይለፍ ቃል ያረጋግጡ' : 'Confirm Password'}</label>
+                    <input 
+                      type="password" 
+                      value={changePasswordForm.confirmPassword} 
+                      onChange={(e) => setChangePasswordForm({...changePasswordForm, confirmPassword: e.target.value})} 
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <button onClick={() => setShowChangePasswordModal(false)} className="flex-1 py-5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px]">
+                    {language === 'am' ? 'ተመለስ' : 'Cancel'}
+                  </button>
+                  <button onClick={handleUpdatePassword} className="flex-1 py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-600/20">
+                    {language === 'am' ? 'አስቀምጥ' : 'Save Update'}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Deletion Request Modal */}
+        <AnimatePresence>
+          {showDeletionRequestModal && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+              <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="bg-white rounded-[2.5rem] p-10 shadow-2xl max-w-lg w-full border border-slate-100 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 rounded-bl-full" />
+                <div className="flex items-center gap-6 mb-8 relative z-10">
+                  <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600">
+                    <AlertTriangle size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900">{language === 'am' ? 'አካውንት ሰርዝ' : 'Delete Account'}</h3>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{language === 'am' ? 'የመዝጊያ ጥያቄ ይላኩ' : 'Request account closure'}</p>
+                  </div>
+                </div>
+                <div className="space-y-6 mb-10">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">{language === 'am' ? 'ምክንያት ይምረጡ' : 'Select Reason'}</label>
+                    <select 
+                      value={deletionReason} 
+                      onChange={(e) => setDeletionReason(e.target.value)} 
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-rose-500/20"
+                    >
+                      <option value="financial">{language === 'am' ? 'የፋይናንስ ችግር' : 'Financial Issues'}</option>
+                      <option value="personal">{language === 'am' ? 'የግል ምክንያት' : 'Personal reasons'}</option>
+                      <option value="relocation">{language === 'am' ? 'ቦታ መቀየር' : 'Relocation'}</option>
+                      <option value="dissatisfied">{language === 'am' ? 'በአገልግሎቱ ደስተኛ አይደለሁም' : 'Dissatisfied with service'}</option>
+                      <option value="other">{language === 'am' ? 'ሌላ' : 'Other'}</option>
+                    </select>
+                  </div>
+                  <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl">
+                     <p className="text-xs text-rose-700 font-medium leading-relaxed">
+                        {language === 'am' ? 'አካውንትዎ እንዲሰረዝ ጥያቄዎ ለአድሚን ይላካል አድሚን ሲፈቅድልዎት ብቻ አካውንቶ ይሰረዛል።' : 'Your deletion request will be sent to admin. Your account will only be deleted once admin approves your request.'}
+                     </p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <button onClick={() => setShowDeletionRequestModal(false)} className="flex-1 py-5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px]">
+                    {language === 'am' ? 'ተመለስ' : 'Keep Account'}
+                  </button>
+                  <button onClick={handleRequestDeletion} className="flex-1 py-5 bg-rose-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-rose-600/20">
+                    {language === 'am' ? 'ጥያቄ ላክ' : 'Confirm & Request'}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {showSuccessModal && (
           <motion.div 
             initial={{ opacity: 0 }}
@@ -2862,28 +3034,33 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-2 bg-slate-50/50 rounded-[2rem] border border-slate-100/50">
-                    <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                       <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><DollarSign size={16} /></div>
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'መክፈያ መጠን' : 'Base Amount'}</p>
-                       <p className="text-xl font-display font-black text-slate-900 leading-none">{group?.amount?.toLocaleString() || '0'} <span className="text-xs text-slate-400">ETB</span></p>
-                    </div>
-                    <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                       <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><Clock size={16} /></div>
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'ቀጣይ እጣ' : 'Next Draw'}</p>
-                       <p className="text-xl font-display font-black text-slate-900 leading-none truncate">{drawInfo.date}</p>
-                    </div>
-                    <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                       <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><Users size={16} /></div>
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'አባላት' : 'Total Members'}</p>
-                       <p className="text-xl font-display font-black text-slate-900 leading-none">{group?.memberCount}</p>
-                    </div>
-                    <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                       <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><Trophy size={16} /></div>
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'አሸናፊዎች' : 'Winners'}</p>
-                       <p className="text-xl font-display font-black text-slate-900 leading-none">0</p>
-                    </div>
-                  </div>
+                   <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 p-2 bg-slate-50/50 rounded-[2rem] border border-slate-100/50">
+                     <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><DollarSign size={16} /></div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'መክፈያ መጠን' : 'Base Amount'}</p>
+                        <p className="text-xl font-display font-black text-slate-900 leading-none">{group?.amount?.toLocaleString() || '0'} <span className="text-xs text-slate-400">ETB</span></p>
+                     </div>
+                     <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><Clock size={16} /></div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'ቀጣይ እጣ' : 'Next Draw'}</p>
+                        <p className="text-xl font-display font-black text-slate-900 leading-none truncate">{drawInfo.date}</p>
+                     </div>
+                     <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><Users size={16} /></div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'አባላት' : 'Total Members'}</p>
+                        <p className="text-xl font-display font-black text-slate-900 leading-none">{group?.memberCount}</p>
+                     </div>
+                     <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><Trophy size={16} /></div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'አሸናፊዎች' : 'Winners'}</p>
+                        <p className="text-xl font-display font-black text-slate-900 leading-none">{totalWinnersCount}</p>
+                     </div>
+                     <div className="flex col-span-2 lg:col-span-1 flex-col gap-2 p-5 bg-emerald-50 rounded-[1.5rem] border border-emerald-100 shadow-sm hover:shadow-md transition-all group">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center mb-1 group-hover:scale-110 transition-transform"><CheckCircle size={16} /></div>
+                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{language === 'am' ? 'የተረጋገጠ ክፍያ' : 'Verified Payment'}</p>
+                        <p className="text-xl font-display font-black text-emerald-900 leading-none">{verifiedPaymentsTotal.toLocaleString()} <span className="text-[10px] text-emerald-600">ETB</span></p>
+                     </div>
+                   </div>
                 </div>
               </div>
               
@@ -4520,7 +4697,7 @@ export default function Dashboard() {
                     <h3 className="text-md font-black uppercase tracking-widest mb-6 text-gold-400">{language === 'am' ? 'የአካውንት አስተዳደር' : 'Account Hub'}</h3>
                     
                     <div className="space-y-4">
-                       <button className="w-full p-6 bg-white/5 border border-white/10 rounded-3xl flex flex-col gap-3 group hover:bg-white/10 transition-all text-left">
+                       <button onClick={() => setShowChangePasswordModal(true)} className="w-full p-6 bg-white/5 border border-white/10 rounded-3xl flex flex-col gap-3 group hover:bg-white/10 transition-all text-left">
                           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-white group-hover:scale-110 transition-transform">
                              <Edit size={20} />
                           </div>
@@ -4530,7 +4707,7 @@ export default function Dashboard() {
                           </div>
                        </button>
 
-                       <button className="w-full p-6 bg-white/5 border border-white/10 rounded-3xl flex flex-col gap-3 group hover:bg-white/10 transition-all text-left">
+                       <button onClick={() => signOut(auth).then(() => window.location.href = '/login')} className="w-full p-6 bg-white/5 border border-white/10 rounded-3xl flex flex-col gap-3 group hover:bg-white/10 transition-all text-left">
                           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-white group-hover:scale-110 transition-transform">
                              <LogOut size={20} />
                           </div>
@@ -4541,7 +4718,7 @@ export default function Dashboard() {
                        </button>
 
                        <div className="pt-6">
-                          <button className="w-full py-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all">
+                          <button onClick={() => setShowDeletionRequestModal(true)} className="w-full py-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all">
                              {language === 'am' ? 'አካውንት ሰርዝ' : 'Delete Account'}
                           </button>
                        </div>
@@ -4716,7 +4893,7 @@ export default function Dashboard() {
                             </div>
                           ) : msg.imageUrl ? (
                             <div className="flex flex-col gap-2">
-                               <img src={msg.imageUrl} alt="Attachment" className="max-w-full h-auto rounded-xl max-h-48 object-cover border-2 border-white/10 cursor-pointer" onClick={() => window.open(msg.imageUrl, '_blank')} />
+                               <img src={msg.imageUrl} alt="Attachment" className="max-w-full h-auto rounded-xl max-h-48 object-cover border-2 border-white/10 cursor-pointer" onClick={() => setShowImagePreview(msg.imageUrl)} />
                                <a href={msg.imageUrl} download={msg.fileName || 'image'} className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${isMe ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700'}`}>
                                   <FileDown size={14} />
                                   {language === 'am' ? 'አውርድ' : 'Download'}

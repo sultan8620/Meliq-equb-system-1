@@ -122,7 +122,32 @@ export default function AdminDashboard() {
   const [supportView, setSupportView] = useState<'open' | 'closed'>('open');
   const [supportSearch, setSupportSearch] = useState('');
   const [isUpdatingTicket, setIsUpdatingTicket] = useState(false);
-  const [toasts, setToasts] = useState<{id: string, title: string, message: string}[]>([]);
+  const [deletionRequests, setDeletionRequests] = useState<any[]>([]);
+  const [showImagePreview, setShowImagePreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db, 'deletion_requests'), orderBy('createdAt', 'desc')), (snapshot) => {
+      setDeletionRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const handleHandleDeletion = async (request: any, approved: boolean) => {
+    try {
+      if (approved) {
+        // In a real app, you might disable the user or flag them.
+        // For now, we update request status and mark user for deletion.
+        await updateDoc(doc(db, 'deletion_requests', request.id), { status: 'approved', processedAt: serverTimestamp() });
+        await updateDoc(doc(db, 'users', request.userId), { accountStatus: 'flagged_for_deletion', deletedAt: serverTimestamp() });
+        triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የመዝጊያ ጥያቄው ጸድቋል' : 'Deletion request approved');
+      } else {
+        await updateDoc(doc(db, 'deletion_requests', request.id), { status: 'rejected', processedAt: serverTimestamp() });
+        triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የመዝጊያ ጥያቄው ውድቅ ተደርጓል' : 'Deletion request rejected');
+      }
+    } catch (error) {
+      triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'ተግባሩ አልተሳካም' : 'Operation failed');
+    }
+  };
 
   const addToast = (title: string, message: string) => {
     const id = Math.random().toString();
@@ -7116,6 +7141,12 @@ export default function AdminDashboard() {
                  >
                    Profile Requests
                  </button>
+                 <button 
+                   onClick={() => setSupportSubTab('deletions' as any)}
+                   className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${supportSubTab === 'deletions' as any ? 'bg-rose-600 text-white shadow-xl shadow-rose-500/20' : 'text-slate-400 hover:bg-white/50'}`}
+                 >
+                   Deletion Requests
+                 </button>
                </div>
                
                {supportSubTab === 'tickets' && (
@@ -7132,6 +7163,12 @@ export default function AdminDashboard() {
                    >
                      የተዘጉ (Resolved)
                    </button>
+                 </div>
+               )}
+
+               {supportSubTab === 'deletions' as any && (
+                 <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl w-full md:w-auto invisible">
+                   {/* Placeholder to maintain layout if needed, or just let it be empty */}
                  </div>
                )}
 
@@ -7166,7 +7203,50 @@ export default function AdminDashboard() {
 
             {/* Ticket List */}
             <div className="grid grid-cols-1 gap-6">
-              {supportSubTab === 'tickets' ? (
+              {supportSubTab === 'deletions' as any ? (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
+                    {deletionRequests.length === 0 ? (
+                      <div className="col-span-full py-20 text-center bg-white rounded-[3rem] border border-slate-100 shadow-sm">
+                        <Trash2 size={48} className="mx-auto text-slate-200 mb-4" />
+                        <p className="text-slate-400 font-black uppercase tracking-widest text-[10px]">No deletion requests found</p>
+                      </div>
+                    ) : (
+                      deletionRequests.map((request) => (
+                        <div key={request.id} className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-xl transition-all">
+                          <div className={`absolute top-0 right-0 w-24 h-24 rounded-bl-full ${request.status === 'approved' ? 'bg-emerald-500/5' : request.status === 'rejected' ? 'bg-rose-500/5' : 'bg-amber-500/5'}`} />
+                          <div className="flex items-center gap-4 mb-6 relative">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${request.status === 'approved' ? 'bg-emerald-500' : request.status === 'rejected' ? 'bg-rose-500' : 'bg-slate-900 animate-pulse'}`}>
+                               {request.status === 'pending' ? <Clock size={20} /> : <UserX size={20} />}
+                            </div>
+                            <div>
+                              <h4 className="font-black text-slate-900 tracking-tight">{request.userName}</h4>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{request.userPhone}</p>
+                            </div>
+                          </div>
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mb-6">
+                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Reason for closing</p>
+                             <p className="text-sm font-bold text-slate-700 capitalize">{request.reason.replace('_', ' ')}</p>
+                          </div>
+                          {request.status === 'pending' ? (
+                            <div className="flex gap-2">
+                               <button onClick={() => handleHandleDeletion(request, false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black uppercase tracking-widest text-[9px] hover:bg-rose-50 hover:text-rose-600 transition-colors">
+                                 Reject
+                               </button>
+                               <button onClick={() => handleHandleDeletion(request, true)} className="flex-2 py-3 bg-rose-600 text-white rounded-xl font-black uppercase tracking-widest text-[9px] shadow-lg shadow-rose-600/20 hover:scale-105 transition-transform">
+                                 Approve Closure
+                               </button>
+                            </div>
+                          ) : (
+                            <div className={`w-full py-3 rounded-xl font-black uppercase tracking-widest text-[9px] text-center ${request.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                               {request.status === 'approved' ? 'Account marked for deletion' : 'Request Rejected'}
+                            </div>
+                          )}
+                          <p className="mt-4 text-[8px] font-bold text-slate-300 uppercase text-center">Requested {request.createdAt?.toDate ? request.createdAt.toDate().toLocaleDateString() : 'recently'}</p>
+                        </div>
+                      ))
+                    )}
+                 </div>
+              ) : supportSubTab === 'tickets' ? (
                  (supportView === 'open' ? supportTickets : allSupportTickets.filter(t => t.status === 'closed'))
                   .filter(t => t.userName?.toLowerCase().includes(supportSearch.toLowerCase()) || t.message?.toLowerCase().includes(supportSearch.toLowerCase()) || t.subject?.toLowerCase().includes(supportSearch.toLowerCase()))
                   .length === 0 ? (
@@ -13412,6 +13492,31 @@ export default function AdminDashboard() {
       </AnimatePresence>
       {/* Global Notifications UI */}
       <audio id="notification-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+      {/* Image Preview Overlay */}
+      <AnimatePresence>
+        {showImagePreview && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl"
+            onClick={() => setShowImagePreview(null)}
+          >
+            <motion.img 
+              initial={{ scale: 0.9, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.9, opacity: 0 }}
+              src={showImagePreview} 
+              className="max-w-full max-h-[90vh] rounded-2xl shadow-2xl border border-white/10" 
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button className="absolute top-8 right-8 text-white/60 hover:text-white transition-colors">
+              <XCircle size={40} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="fixed top-4 right-4 z-[999] flex flex-col gap-2">
         <AnimatePresence>
           {toasts.map(toast => (
