@@ -4429,8 +4429,14 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="flex bg-slate-100 p-1 rounded-xl">
-                           <button className="px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-white text-slate-900 shadow-sm">Light</button>
-                           <button className="px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-400">Dark</button>
+                           <button onClick={() => {
+                              document.documentElement.classList.remove('dark');
+                              localStorage.setItem('theme', 'light');
+                           }} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${localStorage.getItem('theme') !== 'dark' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>Light</button>
+                           <button onClick={() => {
+                              document.documentElement.classList.add('dark');
+                              localStorage.setItem('theme', 'dark');
+                           }} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${localStorage.getItem('theme') === 'dark' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>Dark</button>
                         </div>
                       </div>
                     </div>
