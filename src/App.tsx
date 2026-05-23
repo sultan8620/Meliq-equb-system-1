@@ -16,6 +16,7 @@ import { FirebaseProvider, useAuth } from './components/FirebaseProvider';
 import { LanguageProvider } from './lib/LanguageContext';
 import { auth, db } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { AlertTriangle } from 'lucide-react';
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -71,6 +72,21 @@ const MaintenanceGuard = ({ children }: { children: React.ReactNode }) => {
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, userData, loading, isAdmin } = useAuth();
+  const [showTimeoutError, setShowTimeoutError] = React.useState(false);
+
+  React.useEffect(() => {
+    let timer: any;
+    if (user && !userData && !loading) {
+      // If authenticated but no document has loaded, wait 5 seconds then show error card
+      timer = setTimeout(() => {
+        setShowTimeoutError(true);
+      }, 5000);
+    } else {
+      setShowTimeoutError(false);
+    }
+    return () => clearTimeout(timer);
+  }, [user, userData, loading]);
+
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
       <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
@@ -80,6 +96,46 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (!user) return <Navigate to="/login" />;
   
   if (!userData) {
+    if (showTimeoutError) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+          <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-100 transition-all duration-300">
+            <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 mx-auto mb-4 animate-bounce">
+              <AlertTriangle size={32} />
+            </div>
+            <h2 className="text-xl font-black text-slate-900 mb-2 font-sans">የአባል መለያ አልተገኘም</h2>
+            <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+              ይህ መለያ በሲስተሙ ውስጥ አልተመዘገበም። እባክዎ መጀመሪያ በትክክል ይመዝገቡ! (This account is not registered. Please sign up to create an account first!)
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={async () => {
+                  const { signOut } = await import('firebase/auth');
+                  const { auth } = await import('./firebase');
+                  await signOut(auth);
+                  window.location.href = '/signup';
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs tracking-widest py-3 px-4 rounded-xl transition-all shadow-lg shadow-emerald-600/10 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                ወደ ምዝገባ ሒድ (Go to Registration)
+              </button>
+              <button
+                onClick={async () => {
+                  const { signOut } = await import('firebase/auth');
+                  const { auth } = await import('./firebase');
+                  await signOut(auth);
+                  window.location.href = '/login';
+                }}
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold uppercase text-xs tracking-widest py-3 px-4 rounded-xl transition-all cursor-pointer"
+              >
+                ውጣ (Logout)
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
@@ -97,6 +153,20 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, userData, isAdmin, loading } = useAuth();
+  const [showTimeoutError, setShowTimeoutError] = React.useState(false);
+
+  React.useEffect(() => {
+    let timer: any;
+    if (user && !userData && !loading) {
+      timer = setTimeout(() => {
+        setShowTimeoutError(true);
+      }, 5000);
+    } else {
+      setShowTimeoutError(false);
+    }
+    return () => clearTimeout(timer);
+  }, [user, userData, loading]);
+
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
       <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
@@ -106,6 +176,35 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   if (!user) return <Navigate to="/login" />;
 
   if (!userData) {
+    if (showTimeoutError) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+          <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-100 transition-all duration-300">
+            <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 mx-auto mb-4 animate-bounce">
+              <AlertTriangle size={32} />
+            </div>
+            <h2 className="text-xl font-black text-slate-900 mb-2 font-sans">የአድሚን መለያ አልተገኘም</h2>
+            <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+              ይህ መለያ የአድሚን መብት የለውም ወይም በሲስተሙ ውስጥ አልተመዘገበም። (This admin account profile was not found or has no admin permissions.)
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={async () => {
+                  const { signOut } = await import('firebase/auth');
+                  const { auth } = await import('./firebase');
+                  await signOut(auth);
+                  window.location.href = '/login';
+                }}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-black uppercase text-xs tracking-widest py-3 px-4 rounded-xl transition-all shadow-lg active:scale-95 cursor-pointer"
+              >
+                ውጣና በሌላ ግባ (Logout & Switch)
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
