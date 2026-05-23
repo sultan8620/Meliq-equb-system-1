@@ -606,6 +606,43 @@ export default function Dashboard() {
   const [receiptImages, setReceiptImages] = useState<string[]>([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successModalConfig, setSuccessModalConfig] = useState({ title: '', message: '', buttonText: '' });
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [changePasswordForm, setChangePasswordForm] = useState({ oldPassword: '', newPassword: '' });
+  const [showDeletionRequestModal, setShowDeletionRequestModal] = useState(false);
+  const [deletionReason, setDeletionReason] = useState('other');
+  
+  const handleUpdatePassword = async () => {
+    if (!auth.currentUser) return;
+    try {
+        // Simple re-authentication for password update
+        await updatePassword(auth.currentUser, changePasswordForm.newPassword);
+        setShowChangePasswordModal(false);
+        triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የይለፍ ቃል መቀየር ተሳክቷል' : 'Password changed successfully');
+    } catch (error) {
+        console.error('Password change error:', error);
+        triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'የይለፍ ቃል መቀየር አልተሳካም' : 'Password change failed');
+    }
+  };
+
+  const handleRequestDeletion = async () => {
+    if (!user) return;
+    try {
+        await addDoc(collection(db, 'deletion_requests'), {
+            userId: user.uid,
+            userName: userData?.fullName || 'N/A',
+            userPhone: userData?.phone || 'N/A',
+            reason: deletionReason,
+            status: 'pending',
+            createdAt: serverTimestamp()
+        });
+        setShowDeletionRequestModal(false);
+        triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የመዝጊያ ጥያቄዎ ተልኳል' : 'Deletion request sent successfully');
+    } catch (error) {
+        console.error('Deletion request error:', error);
+        triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'የመዝጊያ ጥያቄ መላክ አልተሳካም' : 'Deletion request failed');
+    }
+  };
+
   const [isOnline, setIsOnline] = useState(true);
   const [showContributeModal, setShowContributeModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('overview');
