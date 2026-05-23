@@ -883,10 +883,10 @@ export default function Dashboard() {
 
   const handleSendPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentBank || !paymentCode) {
+    if (!paymentBank || !paymentCode || (receiptImages.length === 0)) {
       triggerError(
         language === 'am' ? 'ያልተሟላ መረጃ' : 'Incomplete Info',
-        language === 'am' ? 'ባንክ እና ኮድ መሞላት አለባቸው።' : 'Please select bank and enter transaction code.'
+        language === 'am' ? 'ባንክ፣ ኮድ እና የደረሳኝ ፎቶ መሞላት አለባቸው።' : 'Please select bank, enter transaction code, and upload receipt photo.'
       );
       return;
     }
@@ -1330,6 +1330,12 @@ export default function Dashboard() {
       pdf.setFontSize(18);
       pdf.setTextColor(255, 255, 255);
       pdf.text(`${amount} ETB`, 25, 115);
+
+      if (payment.transactionCode) {
+        pdf.setFontSize(8);
+        pdf.setTextColor(148, 163, 184);
+        pdf.text(`TXN: ${payment.transactionCode}`, 25, 125);
+      }
       
       pdf.setFontSize(9);
       pdf.setTextColor(52, 211, 153); 
@@ -1624,6 +1630,15 @@ export default function Dashboard() {
 
   const handleContribute = async () => {
     if (!user || !userData || !group) return;
+    
+    if (!receiptImage || !paymentCode) {
+      triggerError(
+        language === 'am' ? 'ያልተሟላ መረጃ' : 'Incomplete Info',
+        language === 'am' ? 'እባክዎ የክፍያ ፎቶ እና የትራንዛክሽን ኮድ ያስገቡ።' : 'Please upload a receipt photo and enter transaction code.'
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, 'payments'), {
@@ -1636,10 +1651,12 @@ export default function Dashboard() {
         status: systemSettings.autoApprove ? 'approved' : 'pending',
         type: 'contribution',
         receiptImage: receiptImage,
+        transactionCode: paymentCode,
         createdAt: serverTimestamp()
       });
       setShowContributeModal(false);
       setReceiptImage(null);
+      setPaymentCode('');
       triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('dashboard.payment_sent_success'));
     } catch (error) {
       console.error('Contribution error:', error);
@@ -2185,6 +2202,17 @@ export default function Dashboard() {
                      ? `${userData?.amount || 0} ብር * ${getDurationLabel()} * ${group?.limit || 10} አባላት` 
                      : `${userData?.amount || 0} ETB * ${getDurationLabel()} * ${group?.limit || 10} members`}
                 </p>
+              </div>
+
+              <div className="mb-6">
+                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{language === 'am' ? 'ትራንዛክሽን ኮድ' : 'Transaction Code'}</label>
+                 <input 
+                   type="text"
+                   value={paymentCode}
+                   onChange={(e) => setPaymentCode(e.target.value)}
+                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                   placeholder={language === 'am' ? 'ኮድ ያስገቡ...' : 'Enter code...'}
+                 />
               </div>
 
               <div className="mb-8">
@@ -3107,6 +3135,7 @@ export default function Dashboard() {
                               <Clock size={8} className="text-slate-300" />
                               <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
                                 {payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleDateString('am-ET') : new Date(payment.createdAt).toLocaleDateString('am-ET')}
+                                {payment.transactionCode && <span className="ml-2 font-mono text-indigo-600 font-black">TXN: {payment.transactionCode}</span>}
                                 {payment.receiptId && <span className="ml-2 font-mono opacity-50">#{payment.receiptId}</span>}
                               </p>
                             </div>

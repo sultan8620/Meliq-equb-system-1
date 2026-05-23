@@ -2600,6 +2600,12 @@ export default function AdminDashboard() {
       pdf.setFontSize(18);
       pdf.setTextColor(255, 255, 255);
       pdf.text(`${amount} ETB`, 25, 115);
+
+      if (payment.transactionCode) {
+        pdf.setFontSize(8);
+        pdf.setTextColor(148, 163, 184);
+        pdf.text(`TXN: ${payment.transactionCode}`, 25, 125);
+      }
       
       pdf.setFontSize(9);
       pdf.setTextColor(52, 211, 153); 
@@ -5077,13 +5083,13 @@ export default function AdminDashboard() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
-                          <p className="text-[9px] font-mono font-bold text-slate-700 truncate">#{payment.receiptId || 'N/A'}</p>
+                        <div className="p-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
+                          <p className="text-[7px] font-black text-indigo-600 uppercase tracking-widest mb-0.5">Transaction Code</p>
+                          <p className="text-[9px] font-mono font-black text-slate-700 truncate">{payment.transactionCode || 'N/A'}</p>
                         </div>
                         <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                           <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Reference</p>
-                           <p className="text-[9px] font-bold text-slate-700 truncate">{payment.reference || 'Mobile Banking'}</p>
+                           <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
+                           <p className="text-[9px] font-bold text-slate-700 truncate">#{payment.receiptId || 'N/A'}</p>
                         </div>
                       </div>
 
@@ -12920,9 +12926,29 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                     <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">{language === 'am' ? 'የትራንዛክሽን ኮድ' : 'Transaction Code'}</span>
+                     <span className="text-xs font-black text-indigo-600">{paymentReviewModal.transactionCode || 'N/A'}</span>
+                  </div>
+                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                     <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">{language === 'am' ? 'ቀን' : 'Date'}</span>
+                     <span className="text-[10px] font-bold text-slate-700">
+                        {paymentReviewModal.createdAt?.toDate ? paymentReviewModal.createdAt.toDate().toLocaleString() : new Date(paymentReviewModal.createdAt).toLocaleString()}
+                     </span>
+                  </div>
+                </div>
+
                 {paymentReviewModal.receiptUrl && (
-                  <div className="bg-white p-2 rounded-3xl border border-slate-100 shadow-sm">
-                    <img src={paymentReviewModal.receiptUrl} alt="Receipt" className="w-full h-auto max-h-80 object-contain rounded-2xl" />
+                  <div className="bg-white p-2 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center">
+                    <img src={paymentReviewModal.receiptUrl} alt="Receipt" className="w-full h-auto max-h-80 object-contain rounded-2xl mb-2" />
+                    <a 
+                      href={paymentReviewModal.receiptUrl}
+                      download="Receipt.jpg"
+                      className="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-100 mb-2"
+                    >
+                       <Download size={12} /> {language === 'am' ? 'ፎቶውን አውርድ' : 'Download Image'}
+                    </a>
                   </div>
                 )}
                 
@@ -12946,6 +12972,13 @@ export default function AdminDashboard() {
                  >
                    <XCircle size={16} className="inline mr-2" />
                    {language === 'am' ? 'ውድቅ አድርግ (Reject)' : 'Reject'}
+                 </button>
+                 <button 
+                   onClick={() => handleDownloadReceipt(paymentReviewModal)}
+                   className="w-14 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center hover:bg-blue-50 hover:text-blue-500 transition-colors border border-slate-100"
+                   title={language === 'am' ? 'ደረሰኝ አውርድ' : 'Download Receipt'}
+                 >
+                   <FileText size={18} />
                  </button>
                  <button 
                    onClick={() => approvePayment(paymentReviewModal.id)}
