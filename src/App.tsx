@@ -48,7 +48,7 @@ const MaintenanceGuard = ({ children }: { children: React.ReactNode }) => {
 
   if (!isReady || loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-      <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
+      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
       <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">በመጫን ላይ...</p>
     </div>
   );
@@ -89,7 +89,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-      <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
+      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
       <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">በመጫን ላይ...</p>
     </div>
   );
@@ -138,7 +138,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">የአባል መረጃ በመጫን ላይ...</p>
       </div>
     );
@@ -169,7 +169,7 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-      <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
+      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
       <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">በመጫን ላይ...</p>
     </div>
   );
@@ -207,7 +207,7 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
 
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">የአድሚን መረጃ በመጫን ላይ...</p>
       </div>
     );

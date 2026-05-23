@@ -8,9 +8,52 @@
     <meta property="og:title" content="meliqequb.com" />
     <meta property="og:description" content="Meliq Ekub Management System - መሊቅ እቁብ" />
     <meta property="og:type" content="website" />
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #f8fafc; /* bg-slate-50 */
+      }
+      #initial-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        background-color: #f8fafc;
+        font-family: sans-serif;
+      }
+      .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #6366f1; /* indigo-500 */
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 16px;
+      }
+      .loading-text {
+        color: #94a3b8; /* slate-400 */
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 10px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="initial-loader">
+      <div class="spinner"></div>
+      <div class="loading-text">መሊቅ እቁብ...</div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
