@@ -652,6 +652,7 @@ export default function Dashboard() {
   });
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [chatSubTab, setChatSubTab] = useState<'group' | 'admin'>('group');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -660,6 +661,14 @@ export default function Dashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [upcomingDraws, setUpcomingDraws] = useState<any[]>([]);
   const [drawWinners, setDrawWinners] = useState<any[]>([]);
+
+  const activeMessages = useMemo(() => {
+    if (chatSubTab === 'group') {
+      return messages.filter(m => m.groupId === userData?.groupId || m.targetType === 'all');
+    } else {
+      return messages.filter(m => m.targetType === 'private' && (m.targetUserId === user?.uid || m.senderId === user?.uid));
+    }
+  }, [messages, chatSubTab, userData?.groupId, user?.uid]);
 
   const [adminForms, setAdminForms] = useState<any[]>([]);
   const [userGuarantors, setUserGuarantors] = useState<any[]>([]);
@@ -897,7 +906,8 @@ export default function Dashboard() {
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!newMessage.trim() || !user || !userData?.groupId) return;
+    if (!newMessage.trim() || !user) return;
+    if (chatSubTab === 'group' && !userData?.groupId) return;
     
     try {
       if (editingMessageId) {
@@ -908,14 +918,26 @@ export default function Dashboard() {
         });
         setEditingMessageId(null);
       } else {
-        await addDoc(collection(db, 'messages'), {
-          groupId: userData.groupId,
-          senderId: user.uid,
-          senderName: userData.fullName,
-          senderRole: 'member',
-          text: newMessage,
-          createdAt: serverTimestamp()
-        });
+        if (chatSubTab === 'admin') {
+          await addDoc(collection(db, 'messages'), {
+            targetType: 'private',
+            targetUserId: 'admin',
+            senderId: user.uid,
+            senderName: userData?.fullName || 'Member',
+            senderRole: 'member',
+            text: newMessage,
+            createdAt: serverTimestamp()
+          });
+        } else {
+          await addDoc(collection(db, 'messages'), {
+            groupId: userData.groupId || '',
+            senderId: user.uid,
+            senderName: userData.fullName || 'Member',
+            senderRole: 'member',
+            text: newMessage,
+            createdAt: serverTimestamp()
+          });
+        }
       }
       setNewMessage('');
     } catch (error) {
@@ -1408,7 +1430,8 @@ export default function Dashboard() {
                 fullName: doc.data().fullName,
                 slots: doc.data().slots || 1,
                 status: doc.data().status,
-                faceScan: doc.data().faceScan
+                faceScan: doc.data().faceScan,
+                wonDraw: doc.data().wonDraw || false
               }));
               setMembers(memberData);
             });
@@ -1419,7 +1442,8 @@ export default function Dashboard() {
               or(
                 where('groupId', '==', data.groupId),
                 where('targetType', '==', 'all'),
-                where('targetUserId', '==', user.uid)
+                where('targetUserId', '==', user.uid),
+                where('senderId', '==', user.uid)
               )
             );
             unsubMessages = onSnapshot(qMessages, (snapshot) => {
@@ -4421,23 +4445,49 @@ export default function Dashboard() {
               className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[700px] relative max-w-4xl mx-auto"
             >
               {/* Header */}
-              <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50 relative overflow-hidden shrink-0">
+              <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-slate-50 relative overflow-hidden shrink-0 gap-4">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px] -translate-x-1/2 -translate-y-1/2" />
-                <div className="flex items-center gap-5 relative z-10">
-                  <div className="w-14 h-14 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center border border-indigo-100 shadow-inner">
-                    <MessageCircle size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-1">
-                      {language === 'am' ? 'የቡድን ውይይት' : 'Group Chat'}
-                    </h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      {language === 'am' ? 'ከአባላት ጋር ይነጋገሩ' : 'Communicate with members'}
-                    </p>
-                  </div>
+                <div className="flex items-center gap-5 relative z-10 w-full sm:w-auto overflow-x-auto no-scrollbar pb-2 sm:pb-0">
+                  <button 
+                    onClick={() => setChatSubTab('group')}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all whitespace-nowrap min-w-max ${
+                      chatSubTab === 'group' 
+                        ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 shadow-inner' 
+                        : 'bg-white hover:bg-slate-100 text-slate-500 border border-slate-200'
+                    }`}
+                  >
+                    <MessageSquare size={18} />
+                    <div>
+                      <h3 className={`text-base font-black tracking-tight leading-none mb-1 ${chatSubTab === 'group' ? 'text-white' : 'text-slate-700'}`}>
+                        {language === 'am' ? 'የቡድን ውይይት' : 'Group Chat'}
+                      </h3>
+                      <p className={`text-[9px] font-black uppercase tracking-widest ${chatSubTab === 'group' ? 'text-indigo-200' : 'text-slate-400'}`}>
+                        {userData?.groupId ? 'Group ' + userData.groupId : (language === 'am' ? 'ከአባላት ጋር' : 'With members')}
+                      </p>
+                    </div>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setChatSubTab('admin')}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all whitespace-nowrap min-w-max ${
+                      chatSubTab === 'admin' 
+                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20 shadow-inner' 
+                        : 'bg-white hover:bg-slate-100 text-slate-500 border border-slate-200'
+                    }`}
+                  >
+                    <ShieldCheck size={18} />
+                    <div>
+                      <h3 className={`text-base font-black tracking-tight leading-none mb-1 ${chatSubTab === 'admin' ? 'text-white' : 'text-slate-700'}`}>
+                        {language === 'am' ? 'ለአድሚን መልዕክት' : 'Admin Chat'}
+                      </h3>
+                      <p className={`text-[9px] font-black uppercase tracking-widest ${chatSubTab === 'admin' ? 'text-rose-200' : 'text-slate-400'}`}>
+                        {language === 'am' ? 'ከአድሚን ጋር የብቻ' : 'Direct Message'}
+                      </p>
+                    </div>
+                  </button>
                 </div>
-                <div className="relative z-10 flex items-center gap-2">
-                   <div className="px-3 py-1 bg-emerald-50 rounded-lg border border-emerald-100 flex items-center gap-2 shadow-sm">
+                <div className="relative z-10 flex items-center gap-2 self-end sm:self-auto shrink-0 mt-[-20px] sm:mt-0">
+                   <div className="px-3 py-2 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-2 shadow-sm">
                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                      <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{language === 'am' ? 'በመስመር ላይ' : 'Online'}</span>
                    </div>
@@ -4445,8 +4495,8 @@ export default function Dashboard() {
               </div>
 
               {/* Chat Area */}
-              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar bg-slate-50/50">
-                {messages.length === 0 ? (
+              <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar bg-slate-50/50">
+                {activeMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center opacity-40">
                     <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
                       <MessageCircle size={32} className="text-slate-400" />
@@ -4459,7 +4509,7 @@ export default function Dashboard() {
                     </p>
                   </div>
                 ) : (
-                  messages.map((msg, idx) => {
+                  activeMessages.map((msg, idx) => {
                     const isMe = msg.senderId === user?.uid;
                     const isAdmin = msg.senderRole === 'admin' || msg.senderRole === 'super_admin';
                     

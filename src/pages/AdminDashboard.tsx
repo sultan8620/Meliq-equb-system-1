@@ -9,7 +9,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { initializeApp, deleteApp } from 'firebase/app';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { useLanguage } from '../lib/LanguageContext';
-import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSnapshot, serverTimestamp, limit, setDoc, deleteDoc, orderBy, arrayUnion } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSnapshot, serverTimestamp, limit, setDoc, deleteDoc, orderBy, arrayUnion, or } from 'firebase/firestore';
 import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { sendSMS } from '../lib/smsHelper';
@@ -967,11 +967,12 @@ export default function AdminDashboard() {
 
     let q;
     if (adminChatTarget.type === 'private') {
-      // For private, we can either use targetUserId or a specific user logic
-      // In Dashboard.tsx we added targetUserId for private messages
-      // We will pull all messages sent by this user OR sent to this user
+      // Pull messages where admin targets the user, or user targets admin
       q = query(collection(db, 'messages'), 
-         where('targetUserId', '==', adminChatTarget.id)
+         or(
+           where('targetUserId', '==', adminChatTarget.id),
+           where('senderId', '==', adminChatTarget.id)
+         )
       );
     } else if (adminChatTarget.type === 'group') {
       q = query(collection(db, 'messages'), where('groupId', '==', adminChatTarget.id));
