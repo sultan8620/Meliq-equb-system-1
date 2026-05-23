@@ -90,7 +90,7 @@ export default function Login() {
       setGeneratedCode(code);
       setDetectedEmail(targetEmail);
       
-      alert(`${t('auth.verification_code_sms').replace('{code}', code)}`);
+      setError(`${t('auth.verification_code_sms').replace('{code}', code)}`); // Using setError as a message box
       setFlow('verify');
     } catch (err: any) {
       console.error(err);
@@ -130,7 +130,7 @@ export default function Login() {
       console.log('Password reset requested for:', targetEmail);
       
       // In a real app we'd use sendPasswordResetEmail, but here we simulate success by accepting a new local state password.
-      alert(t('auth.password_changed') + (language === 'am' ? '\n(ማስታወሻ፡ ይህ ዲሞ ነው፣ ትክክለኛ ፓስዎርድ አልተቀየረም። ግን በዚህ መግባት ይችላሉ!)' : '\n(Note: This is simulated. You can now use your new password to login in this session!)'));
+      setError(t('auth.password_changed') + (language === 'am' ? '\n(ማስታወሻ፡ ይህ ዲሞ ነው፣ ትክክለኛ ፓስዎርድ አልተቀየረም። ግን በዚህ መግባት ይችላሉ!)' : '\n(Note: This is simulated. You can now use your new password to login in this session!)'));
       setFlow('login');
       // Set the password field so they can just hit login
       setPassword(newPassword);

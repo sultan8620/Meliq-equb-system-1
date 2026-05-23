@@ -1,3 +1,4 @@
+import { confirmAction, promptAction } from '../utils/dialogs';
 import React, { useState, useEffect, useMemo } from 'react';
 import QRCode from 'react-qr-code';
 import Barcode from 'react-barcode';
@@ -248,7 +249,7 @@ export default function AdminDashboard() {
         ...landingSettings,
         updatedAt: new Date().toISOString()
       });
-      alert(language === 'am' ? 'ቅንብሮች ተቀምጠዋል!' : 'Landing page settings saved!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ቅንብሮች ተቀምጠዋል!' : 'Landing page settings saved!');
     } catch (error) {
       console.error('Error saving landing settings:', error);
     }
@@ -387,15 +388,15 @@ export default function AdminDashboard() {
       }
       
       setIsSettingsChanged(false);
-      alert(language === 'am' ? 'ቅንብሮች በተሳካ ሁኔታ ተቀምጠዋል!' : 'Settings saved successfully!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ቅንብሮች በተሳካ ሁኔታ ተቀምጠዋል!' : 'Settings saved successfully!');
     } catch (error: any) {
       console.error('Error saving settings:', error);
       if (error.message === 'CURRENT_PASSWORD_REQUIRED') {
-        alert(language === 'am' ? 'የአሁኑን የይለፍ ቃል ማስገባት ግድ ነው!' : 'Current password is required to save changes!');
+        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የአሁኑን የይለፍ ቃል ማስገባት ግድ ነው!' : 'Current password is required to save changes!');
       } else if (error.code === 'auth/requires-recent-login' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-         alert(language === 'am' ? 'የተሳሳተ የይለፍ ቃል ወይም ዳግመኛ መግባት ያስፈልጋል። እባክዎ የአሁኑን የይለፍ ቃል በትክክል ያስገቡ።' : 'Wrong password or session expired. Please re-enter your current password correctly.');
+         triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የተሳሳተ የይለፍ ቃል ወይም ዳግመኛ መግባት ያስፈልጋል። እባክዎ የአሁኑን የይለፍ ቃል በትክክል ያስገቡ።' : 'Wrong password or session expired. Please re-enter your current password correctly.');
       } else {
-         alert(language === 'am' ? 'ቅንብሮችን ማሳወቅ አልተቻለም። ድጋሚ ይሞክሩ።' : 'Failed to save settings. Please try again.');
+         triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ቅንብሮችን ማሳወቅ አልተቻለም። ድጋሚ ይሞክሩ።' : 'Failed to save settings. Please try again.');
       }
     } finally {
       setIsSavingSettings(false);
@@ -733,13 +734,13 @@ export default function AdminDashboard() {
       document.body.removeChild(link);
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Export failed. Please try again.');
     }
   };
 
   const handleBulkVerify = async () => {
     if (selectedUserIds.length === 0) return;
-    if (!confirm(language === 'am' ? `${selectedUserIds.length} አባላትን ማረጋገጥ ይፈልጋሉ?` : `Are you sure you want to verify ${selectedUserIds.length} members?`)) return;
+    if (!await confirmAction(language === 'am' ? `${selectedUserIds.length} አባላትን ማረጋገጥ ይፈልጋሉ?` : `Are you sure you want to verify ${selectedUserIds.length} members?`)) return;
     
     try {
       const promises = selectedUserIds.map(async (userId) => {
@@ -751,7 +752,7 @@ export default function AdminDashboard() {
       });
       await Promise.all(promises);
       setSelectedUserIds([]);
-      alert(language === 'am' ? 'ሁሉም አባላት በተሳካ ሁኔታ ተረጋግጠዋል!' : 'All selected members verified successfully!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ሁሉም አባላት በተሳካ ሁኔታ ተረጋግጠዋል!' : 'All selected members verified successfully!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/bulk`);
     }
@@ -874,14 +875,14 @@ export default function AdminDashboard() {
       });
       setShowAddUpcomingModal(false);
       setNewUpcomingDraw({ title: '', titleAm: '', description: '', descriptionAm: '', date: '', amount: '50,000' });
-      alert(language === 'am' ? 'እጣው በተሳካ ሁኔታ ተመዝግቧል!' : 'Upcoming draw added successfully!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'እጣው በተሳካ ሁኔታ ተመዝግቧል!' : 'Upcoming draw added successfully!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'upcoming_draws');
     }
   };
 
   const deleteUpcomingDraw = async (id: string) => {
-    if (!window.confirm(language === 'am' ? 'ይህንን እጣ መሰረዝዎን እርግጠኛ ነዎት?' : 'Are you sure you want to delete this upcoming draw?')) return;
+    if (!await confirmAction(language === 'am' ? 'ይህንን እጣ መሰረዝዎን እርግጠኛ ነዎት?' : 'Are you sure you want to delete this upcoming draw?')) return;
     try {
       await deleteDoc(doc(db, 'upcoming_draws', id));
     } catch (error) {
@@ -936,7 +937,7 @@ export default function AdminDashboard() {
       setIsRecording(true);
     } catch (err) {
       console.error(err);
-      alert("ማይክሮፎን መጠቀም አልተቻለም!");
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', "ማይክሮፎን መጠቀም አልተቻለም!");
     }
   };
 
@@ -953,7 +954,7 @@ export default function AdminDashboard() {
     
     // Higher limit for high-quality images, but still mindful of Firestore document size (1MB)
     if (file.size > 2 * 1024 * 1024) {
-      alert(language === 'am' ? 'የፋይሉ መጠን ከ 2MB መብለጥ የለበትም።' : 'File size must not exceed 2MB.');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የፋይሉ መጠን ከ 2MB መብለጥ የለበትም።' : 'File size must not exceed 2MB.');
       return;
     }
 
@@ -988,7 +989,7 @@ export default function AdminDashboard() {
         await addDoc(collection(db, 'messages'), payload);
       } catch (error) {
         console.error(error);
-        alert(language === 'am' ? 'ፋይል መላክ አልተቻለም!' : 'Failed to send file. File may be too large.');
+        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ፋይል መላክ አልተቻለም!' : 'Failed to send file. File may be too large.');
       }
     };
   };
@@ -1301,14 +1302,14 @@ export default function AdminDashboard() {
         payoutStatus: 'completed'
       });
       await notifyUserAdminChange(userId, 'የእጣ ክፍያ ተፈጽሟል', 'Payout Completed', 'የእጣ ክፍያዎ ወደ ሂሳብዎ ገብቷል::', 'Your ekub payout has been transferred to your account.');
-      alert(language === 'am' ? 'ክፍያው በተሳካ ሁኔታ ተፈጽሟል!' : 'Payout completed successfully!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ክፍያው በተሳካ ሁኔታ ተፈጽሟል!' : 'Payout completed successfully!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `payouts/${payoutId}`);
     }
   };
 
   const rejectPayout = async (payoutId: string, userId: string) => {
-    if (!window.confirm(language === 'am' ? 'ይህንን ክፍያ መሰረዝዎን እርግጠኛ ነዎት?' : 'Confirm cancel this payout?')) return;
+    if (!await confirmAction(language === 'am' ? 'ይህንን ክፍያ መሰረዝዎን እርግጠኛ ነዎት?' : 'Confirm cancel this payout?')) return;
     try {
       await updateDoc(doc(db, 'payouts', payoutId), {
         status: 'cancelled',
@@ -1320,7 +1321,7 @@ export default function AdminDashboard() {
         });
         await notifyUserAdminChange(userId, 'የእጣ ክፍያ ተሰርዟል', 'Payout Cancelled', 'የእጣ ክፍያዎ ተሰርዟል::', 'Your ekub payout has been cancelled.');
       }
-      alert(language === 'am' ? 'ክፍያው ተሰርዟል።' : 'Payout cancelled.');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ክፍያው ተሰርዟል።' : 'Payout cancelled.');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `payouts/${payoutId}`);
     }
@@ -1347,20 +1348,20 @@ export default function AdminDashboard() {
         status: 'settled',
         settledAt: serverTimestamp()
       });
-      alert(language === 'am' ? 'ቅጣቱ ተከፍሏል!' : 'Penalty settled successfully!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ቅጣቱ ተከፍሏል!' : 'Penalty settled successfully!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `penalties/${penaltyId}`);
     }
   };
 
   const waivePenalty = async (penaltyId: string) => {
-    if (!window.confirm(language === 'am' ? 'ይህንን ቅጣት ይቅር ማለት እርግጠኛ ነዎት?' : 'Are you sure you want to waive this penalty?')) return;
+    if (!await confirmAction(language === 'am' ? 'ይህንን ቅጣት ይቅር ማለት እርግጠኛ ነዎት?' : 'Are you sure you want to waive this penalty?')) return;
     try {
       await updateDoc(doc(db, 'penalties', penaltyId), {
         status: 'waived',
         waivedAt: serverTimestamp()
       });
-      alert(language === 'am' ? 'ቅጣቱ በይቅርታ ተሰርዟል።' : 'Penalty waived.');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ቅጣቱ በይቅርታ ተሰርዟል።' : 'Penalty waived.');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `penalties/${penaltyId}`);
     }
@@ -1369,7 +1370,7 @@ export default function AdminDashboard() {
   const handleIssuePenalty = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!issuePenaltyForm.userId || issuePenaltyForm.amount <= 0 || !issuePenaltyForm.reason) {
-      alert(language === 'am' ? 'እባክዎ ሁሉንም አስፈላጊ መረጃዎች ይሙሉ!' : 'Please fill all required fields!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'እባክዎ ሁሉንም አስፈላጊ መረጃዎች ይሙሉ!' : 'Please fill all required fields!');
       return;
     }
 
@@ -1399,7 +1400,7 @@ export default function AdminDashboard() {
 
       setShowIssuePenaltyModal(false);
       setIssuePenaltyForm({ userId: '', userName: '', amount: 0, reason: '', type: 'Late Payment' });
-      alert(language === 'am' ? 'ቅጣቱ በተሳካ ሁኔታ ተመዝግቧል!' : 'Penalty issued successfully!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ቅጣቱ በተሳካ ሁኔታ ተመዝግቧል!' : 'Penalty issued successfully!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'penalties');
     } finally {
@@ -1418,7 +1419,7 @@ export default function AdminDashboard() {
         createdAt: new Date().toISOString(),
         read: false
       });
-      alert(language === 'am' ? 'ማሳሰቢያው ተልኳል!' : 'Reminder sent!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ማሳሰቢያው ተልኳል!' : 'Reminder sent!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'notifications');
     }
@@ -1427,7 +1428,7 @@ export default function AdminDashboard() {
   const handleBroadcastNotification = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!notification.title || !notification.message) {
-      alert(language === 'am' ? 'እባክዎ ርዕስ እና መልእክት ያስገቡ!' : 'Please enter title and message!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'እባክዎ ርዕስ እና መልእክት ያስገቡ!' : 'Please enter title and message!');
       return;
     }
 
@@ -1449,7 +1450,7 @@ export default function AdminDashboard() {
       await Promise.all(batch);
       setShowNotifModal(false);
       setNotification({ title: '', message: '', recipientId: '' });
-      alert(language === 'am' ? 'ማሳወቅያው በተሳካ ሁኔታ ተልኳል!' : 'Broadcast successful!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ማሳወቅያው በተሳካ ሁኔታ ተልኳል!' : 'Broadcast successful!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'notifications');
     } finally {
@@ -1466,7 +1467,7 @@ export default function AdminDashboard() {
   };
 
   const deleteNotification = async (id: string) => {
-    if (!window.confirm(language === 'am' ? 'ይህንን ማሳወቂያ መሰረዝ እርግጠኛ ነዎት?' : 'Are you sure you want to delete this notification?')) return;
+    if (!await confirmAction(language === 'am' ? 'ይህንን ማሳወቂያ መሰረዝ እርግጠኛ ነዎት?' : 'Are you sure you want to delete this notification?')) return;
     try {
       await deleteDoc(doc(db, 'notifications', id));
     } catch (error) {
@@ -1479,7 +1480,7 @@ export default function AdminDashboard() {
     try {
       let adminNote = '';
       if (status === 'closed') {
-        adminNote = window.prompt(language === 'am' ? 'እባክዎ የመልስ ማስታወሻ ያስገቡ (አማራጭ):' : 'Enter resolution note (optional):') || '';
+        adminNote = await promptAction(language === 'am' ? 'እባክዎ የመልስ ማስታወሻ ያስገቡ (አማራጭ):' : 'Enter resolution note (optional):') || '';
       }
       
       const updateData: any = {
@@ -1491,7 +1492,7 @@ export default function AdminDashboard() {
       if (adminNote) updateData.adminNote = adminNote;
 
       await updateDoc(doc(db, 'support_tickets', id), updateData);
-      alert(language === 'am' ? 'የጥያቄው ሁኔታ ተቀይሯል' : 'Ticket status updated');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የጥያቄው ሁኔታ ተቀይሯል' : 'Ticket status updated');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `support_tickets/${id}`);
     } finally {
@@ -1500,7 +1501,7 @@ export default function AdminDashboard() {
   };
 
   const deleteTicket = async (id: string) => {
-    if (!window.confirm(language === 'am' ? 'ይህንን ጥያቄ መሰረዝ እርግጠኛ ነዎት?' : 'Confirm delete this ticket?')) return;
+    if (!await confirmAction(language === 'am' ? 'ይህንን ጥያቄ መሰረዝ እርግጠኛ ነዎት?' : 'Confirm delete this ticket?')) return;
     try {
       await deleteDoc(doc(db, 'support_tickets', id));
     } catch (error) {
@@ -1517,7 +1518,7 @@ export default function AdminDashboard() {
         resolvedBy: user?.uid
       };
       
-      let adminNote = window.prompt(language === 'am' ? 'ማስታወሻ (አማራጭ):' : 'Note (optional):') || '';
+      let adminNote = await promptAction(language === 'am' ? 'ማስታወሻ (አማራጭ):' : 'Note (optional):') || '';
       if (adminNote) updateData.adminNote = adminNote;
 
       if (newStatus === 'approved' && form.type === 'profile_update') {
@@ -1554,7 +1555,7 @@ export default function AdminDashboard() {
         createdAt: new Date().toISOString(),
         read: false
       });
-      alert(language === 'am' ? 'የጥያቄው ሁኔታ ተቀይሯል' : 'Request status updated');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የጥያቄው ሁኔታ ተቀይሯል' : 'Request status updated');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `admin_forms/${form.id}`);
     } finally {
@@ -1598,14 +1599,14 @@ export default function AdminDashboard() {
         type: 'approval'
       });
 
-      alert(language === 'am' ? 'አባል በመሳካ ሁኔታ ጸድቋል' : 'User approved successfully');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'አባል በመሳካ ሁኔታ ጸድቋል' : 'User approved successfully');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
     }
   };
 
   const rejectUser = async (userId: string) => {
-    const reason = window.prompt(language === 'am' ? 'ለምን ውድቅ ተደረገ? (አማራጭ)' : 'Reason for rejection? (Optional)');
+    const reason = await promptAction(language === 'am' ? 'ለምን ውድቅ ተደረገ? (አማራጭ)' : 'Reason for rejection? (Optional)');
     if (reason === null) return; // Cancelled
 
     try {
@@ -1645,7 +1646,7 @@ export default function AdminDashboard() {
       // Delete from users collection to allow re-registration
       await deleteDoc(doc(db, 'users', userId));
 
-      alert(language === 'am' ? 'አባል ውድቅ ተደርጓል እና መረጃው ተሰርዟል' : 'User rejected and data cleared');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'አባል ውድቅ ተደርጓል እና መረጃው ተሰርዟል' : 'User rejected and data cleared');
     } catch (error) {
       console.error("Rejection error:", error);
       handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
@@ -1684,7 +1685,7 @@ export default function AdminDashboard() {
           language === 'am' ? 'ፈቃድ ተቀይሯል' : 'Permission updated successfully'
         );
       } catch (backendErr) {
-        alert(language === 'am' ? 'ፈቃድ መቀየር አልተቻለም' : 'Failed to update permission');
+        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ፈቃድ መቀየር አልተቻለም' : 'Failed to update permission');
       }
     }
   };
@@ -1738,7 +1739,7 @@ export default function AdminDashboard() {
       triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'አድሚኑ ከሲስተሙ ሙሉ በሙሉ ተወግዷል' : 'Admin permanently removed from system');
     } catch (error: any) {
       console.error('Error hard deleting admin:', error);
-      alert(language === 'am' ? `ስህተት ተከስቷል: ${error.message}` : `Error: ${error.message}`);
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? `ስህተት ተከስቷል: ${error.message}` : `Error: ${error.message}`);
     }
   };
 
@@ -2102,11 +2103,11 @@ export default function AdminDashboard() {
           registerMembers: true
         }
       });
-      alert(language === 'am' ? 'አድሚን በተሳካ ሁኔታ ተጨምሯል! ጊዜያዊ የይለፍ ቃል: Admin123!' : 'Admin added successfully! Temporary Password: Admin123!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'አድሚን በተሳካ ሁኔታ ተጨምሯል! ጊዜያዊ የይለፍ ቃል: Admin123!' : 'Admin added successfully! Temporary Password: Admin123!');
     } catch (error: any) {
       console.error('Error adding admin:', error);
       if (error.code === 'auth/email-already-in-use') {
-        alert(language === 'am' ? 'ይህ ስልክ ቁጥር ቀድሞ ተመዝግቧል!' : 'This phone number is already registered!');
+        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ይህ ስልክ ቁጥር ቀድሞ ተመዝግቧል!' : 'This phone number is already registered!');
       } else {
         handleFirestoreError(error, OperationType.CREATE, 'users');
       }
@@ -2116,7 +2117,7 @@ export default function AdminDashboard() {
   const handleAddGroupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addGroupForm.name || addGroupForm.amount <= 0 || addGroupForm.memberCount <= 0) {
-      alert(t('admin.required_fields'));
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.required_fields'));
       return;
     }
     try {
@@ -2130,7 +2131,7 @@ export default function AdminDashboard() {
       });
       setShowAddGroupModal(false);
       setAddGroupForm({ name: '', amount: 1000, memberCount: 10, type: 'weekly' });
-      alert('Group added successfully');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Group added successfully');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'groups');
     }
@@ -2147,7 +2148,7 @@ export default function AdminDashboard() {
         role: editAdminForm.role
       });
       setShowEditAdminModal(false);
-      alert(t('admin.admin_permissions_updated'));
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.admin_permissions_updated'));
       setAdmins(prev => prev.map(a => a.id === editAdminForm.id ? { ...a, ...editAdminForm } : a));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${editAdminForm.id}`);
@@ -2157,7 +2158,7 @@ export default function AdminDashboard() {
   const handleAddUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addUserForm.fullName || !addUserForm.phone || !addUserForm.password) {
-      alert(t('admin.required_fields'));
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.required_fields'));
       return;
     }
     
@@ -2204,7 +2205,7 @@ export default function AdminDashboard() {
       const qPhone = query(collection(db, 'users'), where('phone', '==', cleanPhone));
       const phoneSnap = await getDocs(qPhone);
       if (!phoneSnap.empty) {
-        alert(t('admin.phone_registered') || 'Phone already registered');
+        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.phone_registered') || 'Phone already registered');
         setIsAddingUser(false);
         return;
       }
@@ -2221,15 +2222,15 @@ export default function AdminDashboard() {
         userCredential = await createUserWithEmailAndPassword(tempAuth, dummyEmail, addUserForm.password);
       } catch (authError: any) {
         if (authError.code === 'auth/email-already-in-use') {
-           alert(t('admin.phone_registered') || 'Phone already registered');
+           triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.phone_registered') || 'Phone already registered');
            setIsAddingUser(false);
            return;
         } else if (authError.code === 'auth/weak-password') {
-          alert(t('admin.weak_password') || 'Weak password');
+          triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.weak_password') || 'Weak password');
           setIsAddingUser(false);
           return;
         } else {
-          alert('Auth Error: ' + authError.message);
+          triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Auth Error: ' + authError.message);
           setIsAddingUser(false);
           return;
         }
@@ -2309,7 +2310,7 @@ export default function AdminDashboard() {
         nationalId: '', jobTitle: '', preferredItem: '',
         idFront: '', idBack: '', faceScan: ''
       });
-      alert(t('admin.user_registered_success'));
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.user_registered_success'));
       
     } catch (error: any) {
       handleFirestoreError(error, OperationType.CREATE, 'users');
@@ -2390,7 +2391,7 @@ export default function AdminDashboard() {
   };
 
   const rejectPayment = async (paymentId: string) => {
-    if (!window.confirm(t('admin.payment_reject_confirm'))) return;
+    if (!await confirmAction(t('admin.payment_reject_confirm'))) return;
     try {
       await updateDoc(doc(db, 'payments', paymentId), {
         status: 'rejected',
@@ -2417,7 +2418,7 @@ export default function AdminDashboard() {
     });
     setNotification({ title: '', message: '', recipientId: '' });
     setShowNotifModal(false);
-    alert(t('admin.notification_sent'));
+    triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.notification_sent'));
   };
 
   const [showManageGroupModal, setShowManageGroupModal] = useState(false);
@@ -2470,7 +2471,7 @@ export default function AdminDashboard() {
         }
       });
       
-      alert(t('admin.payment_registered_success')
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.payment_registered_success')
         .replace('{paymentCount}', paymentCount.toString())
         .replace('{receiptId}', receiptId));
       setShowManualPaymentModal(false);
@@ -2632,7 +2633,7 @@ export default function AdminDashboard() {
       setShowReceiptModal(false);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert(language === 'am' ? 'ደረሰኝ ማመንጨት አልተሳካም' : 'Failed to generate receipt');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ደረሰኝ ማመንጨት አልተሳካም' : 'Failed to generate receipt');
     }
   };
   const startGroup = async (groupId: string) => {
@@ -2642,11 +2643,11 @@ export default function AdminDashboard() {
         startDate: new Date(),
         updatedAt: new Date()
       });
-      alert(t('admin.group_started'));
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.group_started'));
       setShowManageGroupModal(false);
     } catch (error) {
       console.error(error);
-      alert(t('admin.group_start_failed'));
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('admin.group_start_failed'));
     }
   };
 
@@ -2675,7 +2676,7 @@ export default function AdminDashboard() {
     const eligibleMembers = selectedDrawGroup.members.filter((m: any) => !m.wonDraw && !currentIneligibleIds.has(m.id));
 
     if (eligibleMembers.length === 0) {
-      alert(language === 'am' ? 'ምንም የሚሳተፉ አባላት የሉም! (መዋጮ ያልከፈሉ ወይም ሁሉም የደረሳቸው)' : 'No eligible members available! (Unpaid or already won)');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ምንም የሚሳተፉ አባላት የሉም! (መዋጮ ያልከፈሉ ወይም ሁሉም የደረሳቸው)' : 'No eligible members available! (Unpaid or already won)');
       return;
     }
 
@@ -2713,7 +2714,7 @@ export default function AdminDashboard() {
 
   const handleScheduleDraw = async () => {
     if (!scheduledDrawGroup || !drawScheduleDate || !drawScheduleTime) {
-      alert(language === 'am' ? 'እባክዎን ቀን እና ሰዓት ይምረጡ!' : 'Please select both date and time!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'እባክዎን ቀን እና ሰዓት ይምረጡ!' : 'Please select both date and time!');
       return;
     }
 
@@ -2737,7 +2738,7 @@ export default function AdminDashboard() {
       };
       await addDoc(collection(db, 'messages'), payload);
 
-      alert(language === 'am' ? 'የእጣ ፕሮግራም በተሳካ ሁኔታ ተቆርጧል!' : 'Draw scheduled successfully!');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የእጣ ፕሮግራም በተሳካ ሁኔታ ተቆርጧል!' : 'Draw scheduled successfully!');
       setShowScheduleDrawModal(false);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'groups');
@@ -3304,7 +3305,7 @@ export default function AdminDashboard() {
                         <div className="flex gap-1.5">
                           <button 
                             onClick={async () => {
-                              if(window.confirm(language === 'am' ? 'ይህንን አባል ማጽደቅ ይፈልጋሉ?' : 'Are you sure you want to approve this member?')) {
+                              if(await confirmAction(language === 'am' ? 'ይህንን አባል ማጽደቅ ይፈልጋሉ?' : 'Are you sure you want to approve this member?')) {
                                 await approveUser(user.id);
                               }
                             }}
@@ -3314,7 +3315,7 @@ export default function AdminDashboard() {
                           </button>
                           <button
                             onClick={async () => {
-                              if(window.confirm(language === 'am' ? 'ይህንን ጥያቄ ውድቅ ማድረግ ይፈልጋሉ? ይህ እርምጃ አይቀለበስም።' : 'Are you sure you want to reject this request? This action cannot be undone.')) {
+                              if(await confirmAction(language === 'am' ? 'ይህንን ጥያቄ ውድቅ ማድረግ ይፈልጋሉ? ይህ እርምጃ አይቀለበስም።' : 'Are you sure you want to reject this request? This action cannot be undone.')) {
                                 await rejectUser(user.id);
                               }
                             }}
@@ -4038,10 +4039,10 @@ export default function AdminDashboard() {
                           </div>
                           <button 
                             onClick={async () => {
-                              if(window.confirm(language === 'am' ? 'ይህንን መረጃ በቋሚነት መሰረዝ ይፈልጋሉ?' : 'Permanent delete this record?')) {
+                              if(await confirmAction(language === 'am' ? 'ይህንን መረጃ በቋሚነት መሰረዝ ይፈልጋሉ?' : 'Permanent delete this record?')) {
                                 try {
                                   await deleteDoc(doc(db, 'rejected_members', u.id));
-                                  alert(language === 'am' ? 'መረጃው ተሰርዟል' : 'Record deleted');
+                                  triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'መረጃው ተሰርዟል' : 'Record deleted');
                                 } catch (error) {
                                   handleFirestoreError(error, OperationType.DELETE, `rejected_members/${u.id}`);
                                 }
@@ -4437,7 +4438,7 @@ export default function AdminDashboard() {
                 <button 
                   onClick={() => {
                     // Logic to download groups list
-                    alert('Groups report download initiated.');
+                    triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Groups report download initiated.');
                   }}
                   className="px-6 py-3.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
                 >
@@ -4711,7 +4712,7 @@ export default function AdminDashboard() {
                             </button>
                             <button 
                               onClick={async () => {
-                                if(window.confirm('ይህንን የዋስትና ሰነድ ማጽደቅ ይፈልጋሉ?')) {
+                                if(await confirmAction('ይህንን የዋስትና ሰነድ ማጽደቅ ይፈልጋሉ?')) {
                                   await updateDoc(doc(db, 'users', u.id), { guarantorsApproved: true });
                                   await notifyUserAdminChange(u.id, "ዋስትና ጸድቋል", "Guarantors Approved", "የዋስትና ሰነድዎ በአድሚን ጸድቋል::", "Your guarantor documents have been approved by admin.");
                                   triggerSuccess('ተከናውኗል', 'የዋስትና ሰነዱ ጸድቋል።');
@@ -4723,7 +4724,7 @@ export default function AdminDashboard() {
                             </button>
                             <button 
                               onClick={async () => {
-                                if(window.confirm('ይህንን የዋስትና ሰነድ ውድቅ ማድረግ ይፈልጋሉ?')) {
+                                if(await confirmAction('ይህንን የዋስትና ሰነድ ውድቅ ማድረግ ይፈልጋሉ?')) {
                                   await updateDoc(doc(db, 'users', u.id), { guarantorsSubmitted: false });
                                   await notifyUserAdminChange(u.id, "ዋስትና ውድቅ ተደርጓል", "Guarantors Rejected", "የዋስትና ሰነድዎ በአድሚን ውድቅ ተደርጓል። እባክዎ እንደገና ያስገቡ::", "Your guarantor documents were rejected. Please submit again.");
                                   triggerSuccess('ተከናውኗል', 'የዋስትና ሰነዱ ውድቅ ተደርጓል።');
@@ -4750,13 +4751,13 @@ export default function AdminDashboard() {
                                           <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500">ዋስ {idx + 1}</p>
                                           <button 
                                             onClick={async () => {
-                                              const newName = window.prompt("ሙሉ ስም:", g.name);
-                                              const newPhone = window.prompt("ስልክ ቁጥር:", g.phone);
-                                              const newJob = window.prompt("ስራ:", g.job);
-                                              const newRelation = window.prompt("ዝምድና:", g.relationship);
-                                              const newAddress = window.prompt("አድራሻ:", g.address);
-                                              const newFayda = window.prompt("የፋይዳ ቁጥር:", g.faydaNumber || "");
-                                              const newLicense = window.prompt("ንግድ ፍቃድ ቁጥር:", g.businessLicenseNumber || "");
+                                              const newName = await promptAction("ሙሉ ስም:", g.name);
+                                              const newPhone = await promptAction("ስልክ ቁጥር:", g.phone);
+                                              const newJob = await promptAction("ስራ:", g.job);
+                                              const newRelation = await promptAction("ዝምድና:", g.relationship);
+                                              const newAddress = await promptAction("አድራሻ:", g.address);
+                                              const newFayda = await promptAction("የፋይዳ ቁጥር:", g.faydaNumber || "");
+                                              const newLicense = await promptAction("ንግድ ፍቃድ ቁጥር:", g.businessLicenseNumber || "");
                                               if (newName) {
                                                 await updateDoc(doc(db, 'guarantors', g.id), {
                                                   name: newName, phone: newPhone || g.phone, job: newJob || g.job, 
@@ -6794,14 +6795,14 @@ export default function AdminDashboard() {
                                const ok = await sendSMS(recipient.phone, smsMessage.trim(), recipient.fullName, 'campaign');
                                if (ok) successCount++;
                              }
-                             alert(language === 'am'
+                             triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am'
                                ? `በጌትዌይ መልዕክት መላክ ተጠናቋል! ${successCount}/${recipientsList.length} በተሳካ ሁኔታ ተላልፏል።`
                                : `Gateway Broadcast completed! ${successCount}/${recipientsList.length} SMS successfully dispatched.`);
                              setSmsMessage('');
                              setSmsRecipients([]);
                            } catch (err) {
                              console.error("SMS Broadcast Error:", err);
-                             alert(language === 'am' ? 'በጌትዌይ ለመላክ ሲሞከር ስህተት አጋጥሟል' : 'Gateway dispatch failed.');
+                             triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'በጌትዌይ ለመላክ ሲሞከር ስህተት አጋጥሟል' : 'Gateway dispatch failed.');
                            } finally {
                              setSendingSms(false);
                            }
@@ -7413,7 +7414,7 @@ export default function AdminDashboard() {
                         </div>
                         <button 
                           onClick={async () => {
-                            if (window.confirm(language === 'am' ? 'የእጣ ፕሮግራሙን ለአባላት ለማሳወቅ ይፈልጋሉ?' : 'Notify members about this draw?')) {
+                            if (await confirmAction(language === 'am' ? 'የእጣ ፕሮግራሙን ለአባላት ለማሳወቅ ይፈልጋሉ?' : 'Notify members about this draw?')) {
                               try {
                                 const payload: any = {
                                    senderId: user?.uid,
@@ -7424,7 +7425,7 @@ export default function AdminDashboard() {
                                    targetType: 'all'
                                 };
                                 await addDoc(collection(db, 'messages'), payload);
-                                alert(language === 'am' ? 'ማሳወቂያው ለሁሉም አባላት ተልኳል!' : 'Notification sent to all members!');
+                                triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ማሳወቂያው ለሁሉም አባላት ተልኳል!' : 'Notification sent to all members!');
                               } catch (error) {
                                  handleFirestoreError(error, OperationType.CREATE, 'messages');
                               }
@@ -7693,7 +7694,7 @@ export default function AdminDashboard() {
                            <>
                            <button 
                              onClick={() => {
-                                alert('Generating Payout Voucher...');
+                                triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Generating Payout Voucher...');
                              }}
                              className="flex-1 px-6 py-4 bg-emerald-50/50 text-emerald-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 hover:bg-emerald-100 border border-emerald-100"
                            >
@@ -8492,7 +8493,7 @@ export default function AdminDashboard() {
                         </button>
                         <button 
                            onClick={async () => {
-                             if(confirm('Are you sure you want to delete this rule?')) {
+                             if(await confirmAction('Are you sure you want to delete this rule?')) {
                                try {
                                  await deleteDoc(doc(db, 'legal_rules', rule.id));
                                } catch (error) {
@@ -8591,7 +8592,7 @@ export default function AdminDashboard() {
                         </div>
                         <button 
                           onClick={async () => {
-                            if(!newRuleForm.title || !newRuleForm.amTitle) return alert('Titles are required');
+                            if(!newRuleForm.title || !newRuleForm.amTitle) return triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Titles are required');
                             try {
                               if (editingRuleId) {
                                 await updateDoc(doc(db, 'legal_rules', editingRuleId), {
@@ -9242,8 +9243,8 @@ export default function AdminDashboard() {
                       {(landingSettings.footerSections || []).map((section: any, sIdx: number) => (
                         <div key={section.id || sIdx} className="bg-slate-50 rounded-[2rem] p-8 border border-slate-100 relative">
                           <button 
-                            onClick={() => {
-                              if (!confirm('Are you sure you want to delete this section?')) return;
+                            onClick={async () => {
+                              if (!await confirmAction('Are you sure you want to delete this section?')) return;
                               const newSections = [...landingSettings.footerSections];
                               newSections.splice(sIdx, 1);
                               setLandingSettings({...landingSettings, footerSections: newSections});
@@ -9455,9 +9456,9 @@ export default function AdminDashboard() {
                         <FileSignature className="text-blue-500" /> Information Modal Contents
                       </h3>
                       <button 
-                        onClick={() => {
+                        onClick={async () => {
                           const newMap = {...(landingSettings.footerInfoMap || {})};
-                          const slug = prompt('Enter slug/key (e.g., About Us):');
+                          const slug = await promptAction('Enter slug/key (e.g., About Us):');
                           if (slug) {
                             newMap[slug] = { am: 'ርዕስ', content: 'English content', contentAm: 'የአማርኛ ይዘት' };
                             setLandingSettings({...landingSettings, footerInfoMap: newMap});
@@ -9474,8 +9475,8 @@ export default function AdminDashboard() {
                         <div key={slug} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm relative group overflow-hidden">
                           <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
                           <button 
-                            onClick={() => {
-                              if (!confirm('Delete this content?')) return;
+                            onClick={async () => {
+                              if (!await confirmAction('Delete this content?')) return;
                               const newMap = {...landingSettings.footerInfoMap};
                               delete newMap[slug];
                               setLandingSettings({...landingSettings, footerInfoMap: newMap});
@@ -10284,7 +10285,7 @@ export default function AdminDashboard() {
                         
                         <div className="pt-8 mt-8 border-t border-white/10 relative z-10">
                            <button 
-                             onClick={() => alert('Cache cleared successfully')}
+                             onClick={() => triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Cache cleared successfully')}
                              className="w-full py-4 bg-white/10 hover:bg-white/20 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2"
                            >
                              <RefreshCw size={14} /> Clear System Cache
@@ -10682,7 +10683,7 @@ export default function AdminDashboard() {
                              <button
                                onClick={() => {
                                  if (!manualWinnerId) {
-                                   alert('እባክዎትን አባል ይምረጡ! (Please select a member)');
+                                   triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'እባክዎትን አባል ይምረጡ! (Please select a member)');
                                    return;
                                  }
                                  startDrawAnimation(manualWinnerId);
@@ -11372,14 +11373,14 @@ export default function AdminDashboard() {
                 
                 <button 
                   onClick={async () => {
-                    if (confirm(`Are you sure you want to delete the group ${selectedGroup.name}?`)) {
+                    if (await confirmAction(`Are you sure you want to delete the group ${selectedGroup.name}?`)) {
                       try {
                         await deleteDoc(doc(db, 'groups', selectedGroup.id));
                         setShowManageGroupModal(false);
-                        alert('Group deleted successfully.');
+                        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Group deleted successfully.');
                       } catch (e) {
                         console.error("Error deleting group:", e);
-                        alert('Failed to delete group.');
+                        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Failed to delete group.');
                       }
                     }
                   }}
@@ -11442,7 +11443,7 @@ export default function AdminDashboard() {
                     key={u.id}
                     onClick={() => {
                       if (!uGroup && !u.amount) {
-                         alert(language === 'am' ? 'ይህ አባል ምንም አይነት እቁብ/ክፍያ አልተመደበለትም።' : 'This user is not assigned to any group or amount.');
+                         triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ይህ አባል ምንም አይነት እቁብ/ክፍያ አልተመደበለትም።' : 'This user is not assigned to any group or amount.');
                          return;
                       }
                       setSelectedMember(u);

@@ -217,9 +217,12 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+import { Toaster } from 'react-hot-toast';
+
 export default function App() {
   return (
     <LanguageProvider>
+      <Toaster position="top-right" />
       <FirebaseProvider>
         <BrowserRouter>
           <MaintenanceGuard>

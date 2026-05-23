@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../lib/LanguageContext';
@@ -39,10 +40,10 @@ export default function ShareApp() {
       }, { merge: true });
       setShareLink(editedLink.trim());
       setIsEditingLink(false);
-      alert(language === 'am' ? 'የማጋሪያ ሊንክ በተሳካ ሁኔታ ተቀይሯል!' : 'Sharing link updated successfully!');
+      toast(language === 'am' ? 'የማጋሪያ ሊንክ በተሳካ ሁኔታ ተቀይሯል!' : 'Sharing link updated successfully!');
     } catch (e) {
       console.error("Error saving sharing link:", e);
-      alert(language === 'am' ? 'ሊንኩን ለመቀየር አልተሳካም!' : 'Failed to update sharing link!');
+      toast(language === 'am' ? 'ሊንኩን ለመቀየር አልተሳካም!' : 'Failed to update sharing link!');
     } finally {
       setIsSavingLink(false);
     }

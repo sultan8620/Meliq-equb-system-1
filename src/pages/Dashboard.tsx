@@ -1,3 +1,4 @@
+import { confirmAction, promptAction } from '../utils/dialogs';
 import Inspiration from '../components/Inspiration';
 import ShareApp from '../components/ShareApp';
 import Marketplace from '../components/Marketplace';
@@ -646,18 +647,6 @@ export default function Dashboard() {
     }
   };
 
-  const prevMessagesCountRef = useRef(0);
-  useEffect(() => {
-    if (messages.length > prevMessagesCountRef.current && prevMessagesCountRef.current !== 0) {
-      const lastMsg = messages[messages.length - 1];
-      if (lastMsg && lastMsg.senderId !== user?.uid) {
-         playNotificationSound();
-         addToast(language === 'am' ? 'አዲስ መልእክት' : 'New Message', lastMsg.senderName + ': ' + (lastMsg.text?.length > 30 ? lastMsg.text.substring(0, 30) + '...' : lastMsg.text));
-      }
-    }
-    prevMessagesCountRef.current = messages.length;
-  }, [messages, user?.uid, language]);
-
   const prevNotifsCountRef = useRef(0);
   useEffect(() => {
     const currentUnread = notifications.filter(n => !n.read).length;
@@ -690,6 +679,19 @@ export default function Dashboard() {
     faceScan: '' 
   });
   const [messages, setMessages] = useState<any[]>([]);
+  
+  const prevMessagesCountRef = useRef(0);
+  useEffect(() => {
+    if (messages.length > prevMessagesCountRef.current && prevMessagesCountRef.current !== 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.senderId !== user?.uid) {
+         playNotificationSound();
+         addToast(language === 'am' ? 'አዲስ መልእክት' : 'New Message', lastMsg.senderName + ': ' + (lastMsg.text?.length > 30 ? lastMsg.text.substring(0, 30) + '...' : lastMsg.text));
+      }
+    }
+    prevMessagesCountRef.current = messages.length;
+  }, [messages, user?.uid, language]);
+
   const [newMessage, setNewMessage] = useState('');
   const [chatSubTab, setChatSubTab] = useState<'group' | 'admin'>('group');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -989,7 +991,7 @@ export default function Dashboard() {
   };
 
   const handleDeleteMessage = async (messageId: string) => {
-    if (!window.confirm(language === 'am' ? 'ይህንን መልእክት ማጥፋት ይፈልጋሉ?' : 'Are you sure you want to delete this message?')) return;
+    if (!await confirmAction(language === 'am' ? 'ይህንን መልእክት ማጥፋት ይፈልጋሉ?' : 'Are you sure you want to delete this message?')) return;
     try {
       console.log('Attempting to delete message:', messageId);
       await deleteDoc(doc(db, 'messages', messageId));
@@ -1036,7 +1038,7 @@ export default function Dashboard() {
       setIsRecording(true);
     } catch (err) {
       console.error('Microphone access error:', err);
-      alert(language === 'am' ? 'ማይክሮፎን መጠቀም አልተቻለም። እባክዎ የብሮውዘር ፈቃዶችን ያረጋግጡ።' : 'Could not use microphone. Please check browser permissions.');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ማይክሮፎን መጠቀም አልተቻለም። እባክዎ የብሮውዘር ፈቃዶችን ያረጋግጡ።' : 'Could not use microphone. Please check browser permissions.');
     }
   };
 
@@ -1053,7 +1055,7 @@ export default function Dashboard() {
     
     // Check file size (limit to 1MB because of Firestore limit, roughly ~750KB limit to be safe)
     if (file.size > 800 * 1024) {
-      alert(language === 'am' ? 'የፋይሉ መጠን ከ800KB መብለጥ የለበትም።' : 'File size must not exceed 800KB.');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የፋይሉ መጠን ከ800KB መብለጥ የለበትም።' : 'File size must not exceed 800KB.');
       return;
     }
 
@@ -1074,7 +1076,7 @@ export default function Dashboard() {
         });
       } catch (error) {
         console.error(error);
-        alert(language === 'am' ? 'ፋይል መላክ አልተቻለም!' : 'Failed to send file. File may be too large.');
+        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ፋይል መላክ አልተቻለም!' : 'Failed to send file. File may be too large.');
       }
     };
   };
@@ -1361,7 +1363,7 @@ export default function Dashboard() {
       setShowReceiptModal(false);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('ደረሰኝ ማመንጨት አልተሳካም: ' + (error instanceof Error ? error.message : String(error)));
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'ደረሰኝ ማመንጨት አልተሳካም: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -1516,7 +1518,7 @@ export default function Dashboard() {
       }
     }, (error) => {
       console.error("Dashboard onSnapshot Error: ", error);
-      alert("Error loading user data: " + error.message);
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', "Error loading user data: " + error.message);
       signOut(auth);
     });
 
@@ -1638,10 +1640,10 @@ export default function Dashboard() {
       });
       setShowContributeModal(false);
       setReceiptImage(null);
-      alert(t('dashboard.payment_sent_success'));
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('dashboard.payment_sent_success'));
     } catch (error) {
       console.error('Contribution error:', error);
-      alert(t('dashboard.payment_sent_error'));
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('dashboard.payment_sent_error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -3136,10 +3138,10 @@ export default function Dashboard() {
                           {(payment.status === 'pending' || payment.status === 'rejected') && (
                             <button 
                               onClick={async () => {
-                                if (window.confirm(language === 'am' ? 'ይህን ክፍያ ማጥፋት ይፈልጋሉ?' : 'Delete this payment?')) {
+                                if (await confirmAction(language === 'am' ? 'ይህን ክፍያ ማጥፋት ይፈልጋሉ?' : 'Delete this payment?')) {
                                   try {
                                     await deleteDoc(doc(db, 'payments', payment.id));
-                                    alert(language === 'am' ? 'ተሰርዟል' : 'Deleted successfully');
+                                    triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ተሰርዟል' : 'Deleted successfully');
                                   } catch (error) {
                                     handleFirestoreError(error, OperationType.DELETE, `payments/${payment.id}`);
                                   }
@@ -4078,10 +4080,10 @@ export default function Dashboard() {
                                 </span>
                                 <button 
                                   onClick={async () => {
-                                    if (window.confirm(language === 'am' ? 'ይህን መልእክት ማጥፋት ይፈልጋሉ?' : 'Delete this ticket?')) {
+                                    if (await confirmAction(language === 'am' ? 'ይህን መልእክት ማጥፋት ይፈልጋሉ?' : 'Delete this ticket?')) {
                                       try {
                                         await deleteDoc(doc(db, 'support_tickets', ticket.id));
-                                        alert(language === 'am' ? 'ተሰርዟል' : 'Deleted successfully');
+                                        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ተሰርዟል' : 'Deleted successfully');
                                       } catch (error) {
                                         handleFirestoreError(error, OperationType.DELETE, `support_tickets/${ticket.id}`);
                                       }
@@ -4244,7 +4246,7 @@ export default function Dashboard() {
                                    {(loan.status === 'pending' || loan.status === 'rejected') && (
                                       <button 
                                         onClick={async () => {
-                                          if (window.confirm(language === 'am' ? 'ይህን ጥያቄ ማጥፋት ይፈልጋሉ?' : 'Delete this loan request?')) {
+                                          if (await confirmAction(language === 'am' ? 'ይህን ጥያቄ ማጥፋት ይፈልጋሉ?' : 'Delete this loan request?')) {
                                             try {
                                               await deleteDoc(doc(db, 'loans', loan.id));
                                             } catch (error) {
@@ -4681,10 +4683,10 @@ export default function Dashboard() {
                        <Paperclip size={14} />
                      </button>
                    </div>
-                   <button type="button" onClick={() => alert(language === 'am' ? 'ይህ አገልግሎት በቅርቡ ይመጣል' : 'Feature coming soon')} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors ml-auto tooltip-trigger" title={language === 'am' ? 'ድምጽ ጥሪ' : 'Voice Call'}>
+                   <button type="button" onClick={() => triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ይህ አገልግሎት በቅርቡ ይመጣል' : 'Feature coming soon')} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors ml-auto tooltip-trigger" title={language === 'am' ? 'ድምጽ ጥሪ' : 'Voice Call'}>
                      <PhoneCall size={14} />
                    </button>
-                   <button type="button" onClick={() => alert(language === 'am' ? 'ይህ አገልግሎት በቅርቡ ይመጣል' : 'Feature coming soon')} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors tooltip-trigger" title={language === 'am' ? 'ቪዲዮ ጥሪ' : 'Video Call'}>
+                   <button type="button" onClick={() => triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ይህ አገልግሎት በቅርቡ ይመጣል' : 'Feature coming soon')} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors tooltip-trigger" title={language === 'am' ? 'ቪዲዮ ጥሪ' : 'Video Call'}>
                      <VideoCall size={14} />
                    </button>
                 </div>

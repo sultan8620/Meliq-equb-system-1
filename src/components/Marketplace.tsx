@@ -1,3 +1,5 @@
+import { confirmAction, promptAction } from '../utils/dialogs';
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingBag, Search, Plus, Tag, Clock, Send, DollarSign, Image as ImageIcon, XCircle, Package, Trash2, Edit, CheckCircle, ChevronRight, LayoutGrid, Car, Home, Smartphone, Coffee, Layers, Filter, Activity, BarChart3, ShieldCheck, Edit3, ShoppingCart, UploadCloud } from 'lucide-react';
@@ -168,9 +170,9 @@ export default function Marketplace() {
       }));
       await Promise.all(promises);
       setBroadcastMsg('');
-      alert('መልዕክቱ ለሁሉም ተሳታፊዎች ተልኳል (Message sent to all participants)');
+      toast('መልዕክቱ ለሁሉም ተሳታፊዎች ተልኳል (Message sent to all participants)');
     } catch (err) {
-      alert('መልዕክት መላክ አልተሳካም (Failed to send message)');
+      toast('መልዕክት መላክ አልተሳካም (Failed to send message)');
     } finally {
       setIsBroadcasting(false);
     }
@@ -207,14 +209,14 @@ export default function Marketplace() {
       reader.readAsDataURL(compressedFile);
     } catch (error) {
       console.error('Error compressing image:', error);
-      alert('Error processing image. Please try another.');
+      toast('Error processing image. Please try another.');
     }
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItem.title || !newItem.description || !newItem.price) {
-      alert('እባክዎ የተሟላ መረጃ ያስገቡ (Please fill all fields)');
+      toast('እባክዎ የተሟላ መረጃ ያስገቡ (Please fill all fields)');
       return;
     }
     
@@ -286,7 +288,7 @@ export default function Marketplace() {
         customCommission: '',
         selectedSeller: null
       });
-      alert(editingItem ? 'እቃው ተስተካክሏል (Item updated)' : (isAdmin ? 'እቃው በተሳካ ሁኔታ ተመዝግቧል' : 'እቃዎ ተመዝግቧል! በአድሚን ከታየ በኋላ በገበያው ላይ ለሁሉም ይታያል። (Your item has been submitted for approval.)'));
+      toast(editingItem ? 'እቃው ተስተካክሏል (Item updated)' : (isAdmin ? 'እቃው በተሳካ ሁኔታ ተመዝግቧል' : 'እቃዎ ተመዝግቧል! በአድሚን ከታየ በኋላ በገበያው ላይ ለሁሉም ይታያል። (Your item has been submitted for approval.)'));
     } catch (err: any) {
       handleFirestoreError(err, editingItem ? OperationType.UPDATE : OperationType.CREATE, 'marketplace');
     } finally {
@@ -295,7 +297,7 @@ export default function Marketplace() {
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (!window.confirm('ይህንን እቃ መሰረዝ እርግጠኛ ነዎት? (Confirm delete)')) return;
+    if (!await confirmAction('ይህንን እቃ መሰረዝ እርግጠኛ ነዎት? (Confirm delete)')) return;
     try {
       await deleteDoc(doc(db, 'marketplace', id));
       if (selectedItem?.id === id) setSelectedItem(null);
@@ -677,7 +679,7 @@ export default function Marketplace() {
                                  {item.status !== 'sold' && item.status !== 'rejected' && (
                                     <button 
                                        onClick={async () => {
-                                          if (confirm('Mark this item as sold?')) {
+                                          if (await confirmAction('Mark this item as sold?')) {
                                              await updateDoc(doc(db, 'marketplace', item.id), { status: 'sold' });
                                           }
                                        }}

@@ -270,7 +270,6 @@ export default function Signup() {
     if (stepId === 'confirmation') {
       if (!agreedToTerms) { 
         setStepError(t('signup.error.terms_agree')); 
-        alert(t('signup.error.terms_agree'));
         return false; 
       }
     }
@@ -600,7 +599,7 @@ export default function Signup() {
           }
         } catch (err) {
           console.error("Camera access error:", err);
-          alert(t('signup.alert.camera_denied'));
+          setStepError(t('signup.alert.camera_denied'));
           setIsScanning(false);
           setCameraMode(null);
         }
@@ -667,7 +666,7 @@ export default function Signup() {
         setCameraMode(null);
       }
     } else {
-      alert(t('signup.alert.camera_not_ready'));
+      setStepError(t('signup.alert.camera_not_ready'));
     }
   };
 
@@ -733,9 +732,9 @@ export default function Signup() {
     } catch (error: any) {
       console.error('Google signup error:', error);
       if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
-        alert(language === 'am' ? 'በጎግል መመዝገብ አልተሳካም። ኮምፒውተሩ (Popup) ከለከለ ወይም እርስዎ ዘግተውታል።' : 'Google signup popup was blocked or closed.');
+        setStepError(language === 'am' ? 'በጎግል መመዝገብ አልተሳካም። ኮምፒውተሩ (Popup) ከለከለ ወይም እርስዎ ዘግተውታል።' : 'Google signup popup was blocked or closed.');
       } else {
-        alert(language === 'am' ? 'የጎግል ምዝገባ አልተሳካም። እባክዎ እንደገና ይሞክሩ።' : 'Google signup failed. Please try again.');
+        setStepError(language === 'am' ? 'የጎግል ምዝገባ አልተሳካም። እባክዎ እንደገና ይሞክሩ።' : 'Google signup failed. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
@@ -1062,7 +1061,6 @@ export default function Signup() {
         errorText += ' (Firebase Error: Firestore Rules denied write permissions. Please check your firestore.rules and deploy rules.)';
       }
       setStepError(errorText);
-      alert(errorText);
     } finally {
       setIsSubmitting(false);
     }
