@@ -1238,6 +1238,12 @@ export default function AdminDashboard() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setNotifications(data.filter((n: any) => !n.read));
       setAllNotifications(data);
+      
+      // Play sound only if it's a new added notification
+      if (snapshot.docChanges().some(change => change.type === 'added')) {
+        const audio = new Audio('https://actions.google.com/sounds/v1/notifications/beep_short.ogg');
+        audio.play().catch(e => console.error('Audio play failed', e));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'notifications');
     });
@@ -5059,7 +5065,7 @@ export default function AdminDashboard() {
                       <div className={`absolute top-0 left-0 w-1.5 h-full ${payment.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                       
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <div className={`w-12 h-12 ${payment.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'} rounded-2xl flex items-center justify-center border border-current/10 shrink-0 transform group-hover:rotate-12 transition-transform duration-500`}>
                             <CreditCard size={20} />
                           </div>
@@ -5081,8 +5087,17 @@ export default function AdminDashboard() {
                           </span>
                         </div>
                       </div>
+                    {payment.receiptUrl && (
+                      <div className="w-full">
+                        <img 
+                          src={payment.receiptUrl} 
+                          alt="Receipt" 
+                          className="w-full h-32 object-cover rounded-2xl border border-slate-100" 
+                        />
+                      </div>
+                    )}
 
-                      <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                         <div className="p-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
                           <p className="text-[7px] font-black text-indigo-600 uppercase tracking-widest mb-0.5">Transaction Code</p>
                           <p className="text-[9px] font-mono font-black text-slate-700 truncate">{payment.transactionCode || 'N/A'}</p>

@@ -1536,6 +1536,12 @@ export default function Dashboard() {
     const unsubNotifs = onSnapshot(qNotifs, (snapshot) => {
       const notifData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setNotifications(notifData.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      
+      // Play sound only if it's a new added notification
+      if (snapshot.docChanges().some(change => change.type === 'added')) {
+        const audio = new Audio('https://actions.google.com/sounds/v1/notifications/beep_short.ogg');
+        audio.play().catch(e => console.error('Audio play failed', e));
+      }
     }, error => handleFirestoreError(error, OperationType.LIST, 'notifications'));
 
     // Real-time payments
