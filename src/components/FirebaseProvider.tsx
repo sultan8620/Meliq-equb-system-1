@@ -41,20 +41,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (currentUser) {
-        // First check if user is banned
-        try {
-          const bannedDoc = await getDoc(doc(db, 'banned_users', currentUser.uid));
-          if (bannedDoc.exists()) {
-            await auth.signOut();
-            setUser(null);
-            setUserData(null);
-            setLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.error("Error checking ban status:", e);
-        }
-
         unsubData = onSnapshot(doc(db, 'users', currentUser.uid), async (snapshot) => {
           const data = snapshot.data();
           if (!snapshot.exists()) {
@@ -95,16 +81,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
               }
 
               if (foundData) {
-                const checkBannedOld = await getDoc(doc(db, 'banned_users', foundDocId!));
-                if (checkBannedOld.exists()) {
-                  await setDoc(doc(db, 'banned_users', currentUser.uid), { ...checkBannedOld.data(), newUid: currentUser.uid });
-                  await auth.signOut();
-                  setUser(null);
-                  setUserData(null);
-                  setLoading(false);
-                  return;
-                }
-
                 console.log("Self-healing triggered: Found user doc under ID:", foundDocId, "for uid:", currentUser.uid);
                 const healedData = {
                   ...foundData,

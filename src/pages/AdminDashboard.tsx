@@ -1692,15 +1692,6 @@ export default function AdminDashboard() {
     setAdmins(prev => prev.filter(a => a.id !== userId));
     
     try {
-      const userToBan = allUsers.find(u => u.id === userId) || admins.find(a => a.id === userId);
-      await setDoc(doc(db, 'banned_users', userId), {
-        uid: userId,
-        phone: userToBan?.phone || '',
-        email: userToBan?.email || '',
-        bannedAt: serverTimestamp(),
-        reason: 'Admin deleted',
-        byAdminId: auth.currentUser?.uid
-      });
       await deleteDoc(doc(db, 'users', userId));
       
       // Delete from Firebase Auth

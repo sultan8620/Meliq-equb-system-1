@@ -316,18 +316,6 @@ export default function Login() {
       if (!success) {
         throw lastError;
       }
-
-      // Check if banned
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const bannedDoc = await getDoc(doc(db, 'banned_users', currentUser.uid));
-        if (bannedDoc.exists()) {
-          await auth.signOut();
-          const errMessage = language === 'am' ? 'ይህ መለያ በአድሚን ታግዷል/ተሰርዟል። መግባት አይችሉም!' : 'This account has been banned/deleted by the admin. You cannot log in!';
-          setError(errMessage);
-          return;
-        }
-      }
       
       if (isAdminPhone) {
         navigate('/admin');
@@ -380,15 +368,6 @@ export default function Login() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       
-      // Check if banned
-      const bannedDoc = await getDoc(doc(db, 'banned_users', user.uid));
-      if (bannedDoc.exists()) {
-        await auth.signOut();
-        const errMessage = language === 'am' ? 'ይህ መለያ በአድሚን ታግዷል/ተሰርዟል። መግባት አይችሉም!' : 'This account has been banned/deleted by the admin. You cannot log in!';
-        setError(errMessage);
-        return;
-      }
-
       // Check if user document exists
       const userDocRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userDocRef).catch(e => {
