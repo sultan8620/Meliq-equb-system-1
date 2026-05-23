@@ -1644,8 +1644,29 @@ export default function AdminDashboard() {
 
   const hardDeleteAdmin = async (adminId: string) => {
     try {
+      const adminToDel = admins.find(a => a.id === adminId) || allUsers.find(u => u.id === adminId);
+      
       // 1. Delete Firestore user document from client (logged-in Admin is fully permitted)
       await deleteDoc(doc(db, 'users', adminId));
+      
+      // Decrement member count from group if user belongs to one
+      if (adminToDel?.groupId) {
+        try {
+          const groupRef = doc(db, 'groups', adminToDel.groupId);
+          const groupSnap = await getDoc(groupRef);
+          if (groupSnap.exists()) {
+            const currentCount = groupSnap.data().memberCount || 0;
+            const slots = adminToDel.slots || 1;
+            const newCount = Math.max(0, currentCount - slots);
+            await updateDoc(groupRef, {
+              memberCount: newCount,
+              status: 'open'
+            });
+          }
+        } catch (groupError) {
+          console.error("Error reverting group member count", groupError);
+        }
+      }
 
       // 2. Try to clean up from Firebase Auth on backend
       try {
@@ -1685,6 +1706,9 @@ export default function AdminDashboard() {
   const confirmDeleteUserAdmin = async () => {
     if (!userToDelete) return;
     const userId = userToDelete.id;
+    
+    const userToDel = allUsers.find(u => u.id === userId) || admins.find(a => a.id === userId);
+    
     setUserToDelete(null);
 
     // Optimistic update
@@ -1693,6 +1717,25 @@ export default function AdminDashboard() {
     
     try {
       await deleteDoc(doc(db, 'users', userId));
+      
+      // Decrement member count from group if user belongs to one
+      if (userToDel?.groupId) {
+        try {
+          const groupRef = doc(db, 'groups', userToDel.groupId);
+          const groupSnap = await getDoc(groupRef);
+          if (groupSnap.exists()) {
+            const currentCount = groupSnap.data().memberCount || 0;
+            const slots = userToDel.slots || 1;
+            const newCount = Math.max(0, currentCount - slots);
+            await updateDoc(groupRef, {
+              memberCount: newCount,
+              status: 'open' // Group is explicitly open again when members are deleted
+            });
+          }
+        } catch (groupError) {
+          console.error("Error reverting group member count", groupError);
+        }
+      }
       
       // Delete from Firebase Auth
       try {
