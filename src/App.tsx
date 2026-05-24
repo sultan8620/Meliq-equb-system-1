@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -23,6 +23,23 @@ const ScrollToTop = () => {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
+  return null;
+};
+
+const SavedPathRestorer = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    try {
+      const savedPath = localStorage.getItem('spa_redirect_path');
+      if (savedPath) {
+        localStorage.removeItem('spa_redirect_path');
+        console.log("Restoring saved SPA redirect path:", savedPath);
+        navigate(savedPath, { replace: true });
+      }
+    } catch (e) {
+      console.warn("Could not restore saved path:", e);
+    }
+  }, [navigate]);
   return null;
 };
 
@@ -227,6 +244,7 @@ export default function App() {
         <BrowserRouter>
           <MaintenanceGuard>
             <ScrollToTop />
+            <SavedPathRestorer />
             <Layout>
               <Routes>
                 <Route path="/" element={<Landing />} />

@@ -1673,8 +1673,24 @@ export default function Dashboard() {
       
       // Play sound only if it's a new added notification
       if (snapshot.docChanges().some(change => change.type === 'added')) {
-        const audio = new Audio('https://actions.google.com/sounds/v1/notifications/beep_short.ogg');
-        audio.play().catch(e => console.error('Audio play failed', e));
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            const ctx = new AudioContextClass();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note (crystal clear chirp)
+            gain.gain.setValueAtTime(0.08, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.26);
+          }
+        } catch (e) {
+          console.error('Synthetic sound play failed', e);
+        }
       }
     }, error => handleFirestoreError(error, OperationType.LIST, 'notifications'));
 
@@ -2074,20 +2090,34 @@ export default function Dashboard() {
           <UserIcon size={32} />
         </motion.div>
         <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">{language === 'am' ? 'መለያዎን ማግኘት አልተቻለም' : 'Account Not Found'}</h3>
-        <p className="text-slate-500 font-bold mb-8 text-sm max-w-xs">{language === 'am' ? 'የአባልነት መረጃዎ አልተገኘም። ምናልባት ማመልከቻዎ ውድቅ ተደርጎ ሊሆን ይችላል።' : 'Your member profile could not be located. Your application might have been rejected.'}</p>
-        
-        <div className="flex flex-col gap-3 w-full max-w-xs">
+        <p className="text-slate-500 font-bold mb-8 text-sm max-w-xs leading-relaxed">
+          {language === 'am' 
+            ? 'የአባልነት መረጃዎ አልተገኘም ወይም ገና አልጸደቀም። እባክዎ ሰብሳቢዎን ያነጋግሩ።' 
+            : 'Your membership account is not found or is pending approval. Please contact coordinator.'}
+        </p>
+        <div className="flex flex-col gap-2 w-full max-w-xs">
+          {isAdmin && (
+            <button 
+              onClick={() => window.location.href = '/admin'}
+              className="w-full py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 text-[12px] font-black uppercase tracking-widest"
+            >
+              <ShieldCheck size={16} />
+              <span>ቁጥጥር (Admin)</span>
+            </button>
+          )}
           <button 
-            onClick={() => window.location.reload()}
-            className="py-3 px-6 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all"
+            onClick={() => { setLanguage(language === 'am' ? 'en' : 'am'); }}
+            className="w-full flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all"
           >
-            {language === 'am' ? 'እንደገና ሞክር' : 'Try Again'}
+            <span className="text-[12px] font-black uppercase tracking-widest text-slate-500">{language === 'am' ? 'ባህል/ቋንቋ' : 'Language'}</span>
+            <div className="flex gap-1">
+               <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-200 text-slate-600'}`}>አ</span>
+               <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-200 text-slate-600'}`}>A</span>
+            </div>
           </button>
-          <button 
-            onClick={async () => { await signOut(auth); window.location.href = '/login'; }}
-            className="py-3 px-6 bg-rose-50 text-rose-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all"
-          >
-            {language === 'am' ? 'ውጣ' : 'Logout / Exit'}
+          <button onClick={async () => { await signOut(auth); window.location.href = '/'; }} className="w-full py-3 bg-rose-50 text-rose-500 rounded-xl text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-100 transition-all">
+            <LogOut size={16} />
+            <span>{t('nav.logout')}</span>
           </button>
         </div>
       </div>
@@ -2129,7 +2159,7 @@ export default function Dashboard() {
                  <nav className="space-y-1">
                   {userMenuSections.map((section, sIndex) => (
                     <div key={sIndex} className={sIndex > 0 ? 'mt-6' : ''}>
-                      <p className="px-3 mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">{section.group}</p>
+                      <p className="px-3 mb-2 text-[14px] font-black uppercase tracking-[0.2em] text-slate-400">{section.group}</p>
                       <div className="space-y-1">
                         {section.items.map((tab) => {
                           const Icon = tab.icon;
@@ -2140,10 +2170,10 @@ export default function Dashboard() {
                                 onClick={() => { setActiveTab(tab.id as any); setIsMobileMenuOpen(false); }}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative group ${isActive ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
                               >
-                                <Icon size={16} className={isActive ? 'text-indigo-400' : 'text-slate-400'} />
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-left flex-1">{tab.label}</span>
+                                <Icon size={20} className={isActive ? 'text-indigo-400' : 'text-slate-400'} />
+                                <span className="text-[16px] font-bold uppercase tracking-wide text-left flex-1">{tab.label}</span>
                                 {tab.badge !== undefined && (
-                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md ${isActive ? 'bg-indigo-500 text-white' : 'bg-gold-500 text-white animate-pulse'}`}>
+                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${isActive ? 'bg-indigo-500 text-white' : 'bg-gold-500 text-white animate-pulse'}`}>
                                     {tab.badge}
                                   </span>
                                 )}
@@ -2161,24 +2191,24 @@ export default function Dashboard() {
                 {isAdmin && (
                   <button 
                     onClick={() => window.location.href = '/admin'}
-                    className="w-full py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 text-[9px] font-black uppercase tracking-widest"
+                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 text-[15px] font-black uppercase tracking-wide"
                   >
-                    <ShieldCheck size={16} />
+                    <ShieldCheck size={20} />
                     <span>ቁጥጥር (Admin)</span>
                   </button>
                 )}
                 <button 
                   onClick={() => { setLanguage(language === 'am' ? 'en' : 'am'); setIsMobileMenuOpen(false); }}
-                  className="w-full flex items-center justify-between p-3 bg-slate-50 rounded-xl"
+                  className="w-full flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl"
                 >
-                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{language === 'am' ? 'ባህል/ቋንቋ' : 'Language'}</span>
+                  <span className="text-[14px] font-black uppercase tracking-wide text-slate-500">{language === 'am' ? 'ባህል/ቋንቋ' : 'Language'}</span>
                   <div className="flex gap-1">
-                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>አ</span>
-                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>A</span>
+                     <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>አ</span>
+                     <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>A</span>
                   </div>
                 </button>
-                <button onClick={async () => { await signOut(auth); window.location.href = '/'; }} className="w-full py-3 bg-rose-50 text-rose-500 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                  <LogOut size={16} /> {t('nav.logout')}
+                <button onClick={async () => { await signOut(auth); window.location.href = '/'; }} className="w-full py-4 bg-rose-50 text-rose-500 rounded-2xl text-[15px] font-black uppercase tracking-wide flex items-center justify-center gap-2">
+                  <LogOut size={20} /> {t('nav.logout')}
                 </button>
               </div>
             </motion.div>
@@ -2193,7 +2223,7 @@ export default function Dashboard() {
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-gold-500 shadow-lg">
               <ShieldCheck size={18} />
             </div>
-            <span className="text-[10px] font-black text-slate-900 tracking-tighter uppercase hidden md:block">{t('common.appName')} Portal</span>
+            <span className="text-[13px] font-black text-slate-900 tracking-tighter uppercase hidden md:block">{t('common.appName')} Portal</span>
           </div>
           {/* Network Indicator */}
           <div className={`hidden md:block w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} title={isOnline ? 'Active Connection' : 'Offline'} />
@@ -2204,9 +2234,9 @@ export default function Dashboard() {
             onClick={() => setLanguage(language === 'am' ? 'en' : 'am')}
             className="w-full flex items-center justify-center gap-2 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all"
           >
-            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-200 text-slate-500'}`}>አ</div>
-            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-200 text-slate-500'}`}>A</div>
-            <span className="text-[7px] font-black uppercase tracking-widest hidden md:block">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-200 text-slate-500'}`}>አ</div>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-200 text-slate-500'}`}>A</div>
+            <span className="text-[11px] font-black uppercase tracking-widest hidden md:block">
               {language === 'am' ? 'English' : 'አማርኛ'}
             </span>
           </button>
@@ -2215,7 +2245,7 @@ export default function Dashboard() {
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto custom-scrollbar no-scrollbar">
           {userMenuSections.map((section, sIndex) => (
             <div key={sIndex} className={sIndex > 0 ? 'mt-4 pt-4 border-t border-slate-100/50' : ''}>
-              <p className="px-3 mb-2 text-[7px] font-black uppercase tracking-[0.2em] text-slate-400 hidden md:block">{section.group}</p>
+              <p className="px-3 mb-2 text-[13px] md:text-[14px] font-black uppercase tracking-[0.2em] text-slate-400 hidden md:block">{section.group}</p>
               <div className="space-y-0.5">
                 {section.items.map((tab) => {
                   const Icon = tab.icon;
@@ -2226,13 +2256,13 @@ export default function Dashboard() {
                         onClick={() => { setActiveTab(tab.id as any); if(tab.id === 'chat') setUnreadChat(false); }}
                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all relative group ${isActive ? 'bg-slate-900 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
                       >
-                        <Icon size={14} className={isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-indigo-500'} />
-                        <span className="text-[9px] font-black uppercase tracking-widest hidden md:block truncate flex-1 text-left">{tab.label}</span>
+                        <Icon size={18} className={isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-indigo-500'} />
+                        <span className="text-[15px] md:text-[16px] font-black uppercase tracking-wide hidden md:block truncate flex-1 text-left">{tab.label}</span>
                         {tab.id === 'chat' && unreadChat && !isActive && (
                           <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-rose-500 shadow-[0_0_8px_rgba(225,29,72,0.8)] rounded-full animate-pulse" />
                         )}
                         {tab.badge !== undefined && (
-                          <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-md hidden md:block ${isActive ? 'bg-indigo-500 text-white' : 'bg-gold-500 text-white animate-pulse'}`}>
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md hidden md:block ${isActive ? 'bg-indigo-500 text-white' : 'bg-gold-500 text-white animate-pulse'}`}>
                             {tab.badge}
                           </span>
                         )}
@@ -2255,8 +2285,8 @@ export default function Dashboard() {
                 onClick={() => window.location.href = '/admin'}
                 className="w-full py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95"
               >
-                <ShieldCheck size={14} />
-                <span className="text-[8px] font-black uppercase tracking-widest hidden md:block">ቁጥጥር (Admin)</span>
+                <ShieldCheck size={18} />
+                <span className="text-[14px] md:text-[15px] font-black uppercase tracking-wide hidden md:block">ቁጥጥር (Admin)</span>
               </button>
             </div>
           )}
@@ -2264,8 +2294,8 @@ export default function Dashboard() {
             onClick={async () => { await signOut(auth); window.location.href = '/'; }}
             className="w-full py-2 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-100 transition-all flex items-center justify-center gap-2"
           >
-            <LogOut size={14} />
-            <span className="text-[8px] font-black uppercase tracking-widest hidden md:block">{t('nav.logout')}</span>
+            <LogOut size={18} />
+            <span className="text-[14px] md:text-[15px] font-black uppercase tracking-wide hidden md:block">{t('nav.logout')}</span>
           </button>
         </div>
       </aside>
@@ -4126,8 +4156,26 @@ export default function Dashboard() {
                               onChange={(e) => {
                                  if (e.target.files) {
                                     const files = Array.from(e.target.files);
-                                    const newImages = files.map((f: File) => URL.createObjectURL(f));
-                                    setReceiptImages(prev => [...prev, ...newImages]);
+                                    const promises = files.map((file) => {
+                                       return new Promise<string>((resolve, reject) => {
+                                          const reader = new FileReader();
+                                          reader.onloadend = async () => {
+                                             try {
+                                                const compressed = await compressImage(reader.result as string);
+                                                resolve(compressed);
+                                             } catch (err) {
+                                                reject(err);
+                                             }
+                                          };
+                                          reader.onerror = (err) => reject(err);
+                                          reader.readAsDataURL(file);
+                                       });
+                                    });
+                                    Promise.all(promises)
+                                       .then((base64Images) => {
+                                          setReceiptImages(prev => [...prev, ...base64Images]);
+                                       })
+                                       .catch((err) => console.error("Error compressing receipt files: ", err));
                                  }
                               }}
                               className="hidden"
@@ -5924,14 +5972,15 @@ export default function Dashboard() {
             </div>
             
             <div className="flex-1 overflow-y-auto w-full bg-black/50 rounded-3xl border border-white/10 flex flex-col items-center p-4 gap-4">
-               {selectedReceiptImages.map((imgUrl, idx) => (
-                  <img 
-                    key={idx} 
-                    src={imgUrl} 
-                    alt={`Receipt ${idx + 1}`} 
-                    className="max-w-full rounded-xl object-contain shadow-2xl" 
-                  />
-               ))}
+              {selectedReceiptImages.map((imgUrl, idx) => (
+                 <img 
+                   key={idx} 
+                   src={imgUrl} 
+                   alt={`Receipt ${idx + 1}`} 
+                   referrerPolicy="no-referrer"
+                   className="max-w-full rounded-xl object-contain shadow-2xl" 
+                 />
+              ))}
             </div>
           </motion.div>
         </div>

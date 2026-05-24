@@ -697,6 +697,124 @@ export default function AdminDashboard() {
   const [drawWinner, setDrawWinner] = useState<any>(null);
   const [manualWinnerId, setManualWinnerId] = useState('');
 
+  const regions = ['All', 'አዲስ አበባ', 'አማራ', 'ኦሮሚያ', 'ትግራይ', 'ደቡብ ኢትዮጵያ', 'ደቡብ', 'ሶማሌ', 'አፋር', 'ቤንሻንጉል ጉሙዝ', 'ጋምቤላ', 'ሐረሪ', 'ሲዳማ', 'ድሬዳዋ'];
+
+  const openScheduleModal = (group: any) => {
+    setScheduledDrawGroup(group);
+    setShowScheduleDrawModal(true);
+  };
+
+  const handleScheduleDraw = async () => {
+    if (!scheduledDrawGroup || !drawScheduleDate) return;
+    try {
+      const combinedDateTime = `${drawScheduleDate}T${drawScheduleTime || '12:00'}`;
+      await updateDoc(doc(db, 'groups', scheduledDrawGroup.id), {
+        nextDrawDate: combinedDateTime,
+        updatedAt: new Date()
+      });
+      
+      const titleAm = '📢 የእጣ ፕሮግራም ተዘጋጅቷል';
+      const titleEn = '📢 Draw Scheduled';
+      const msgAm = `ቡድን "${scheduledDrawGroup.name}" የእጣ ቀን ለ ${new Date(combinedDateTime).toLocaleString('am-ET')} ተቆርጦለታል።`;
+      const msgEn = `Group "${scheduledDrawGroup.name}" has been scheduled for a draw on ${new Date(combinedDateTime).toLocaleString()}.`;
+      
+      const memberPromises = (scheduledDrawGroup.members || []).map(async (m: any) => {
+        await notifyUserAdminChange(m.id, titleAm, titleEn, msgAm, msgEn);
+      });
+      await Promise.all(memberPromises);
+
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የእጣ ቀጠሮ በተሳካ ሁኔታ ተመዝግቧል!' : 'Draw scheduled successfully!');
+      setShowScheduleDrawModal(false);
+    } catch (error) {
+      console.error(error);
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Failed to schedule draw');
+    }
+  };
+
+  const startDrawAnimation = async (winnerIdOrMode: string) => {
+    setDrawStage('animating');
+    setTimeout(async () => {
+      try {
+        let winner: any = null;
+        const eligible = selectedDrawGroup.members.filter(
+          (m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id)
+        );
+
+        if (winnerIdOrMode === 'auto') {
+          if (eligible.length === 0) {
+            triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'ያልደረሳቸውና ብቁ የሆኑ አባላት የሉም! (No eligible members found)');
+            setDrawStage('select');
+            return;
+          }
+          const randomIndex = Math.floor(Math.random() * eligible.length);
+          winner = eligible[randomIndex];
+        } else {
+          winner = selectedDrawGroup.members.find((m: any) => m.id === winnerIdOrMode);
+        }
+
+        if (!winner) {
+          triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'አሸናፊ ማግኘት አልተቻለም');
+          setDrawStage('select');
+          return;
+        }
+
+        const round = selectedDrawGroup.currentRound || 1;
+        const groupRef = doc(db, 'groups', selectedDrawGroup.id);
+        
+        const updatedMembers = selectedDrawGroup.members.map((m: any) => {
+          if (m.id === winner.id) {
+            return { ...m, wonDraw: true, wonRound: round, wonDate: new Date() };
+          }
+          return m;
+        });
+
+        const nextRound = round + 1;
+        const isCompleted = nextRound > selectedDrawGroup.totalParticipants;
+
+        await updateDoc(groupRef, {
+          members: updatedMembers,
+          currentRound: isCompleted ? round : nextRound,
+          status: isCompleted ? 'completed' : 'active',
+          updatedAt: new Date()
+        });
+
+        await addDoc(collection(db, 'draws'), {
+          groupId: selectedDrawGroup.id,
+          groupName: selectedDrawGroup.name,
+          winnerId: winner.id,
+          winnerName: winner.fullName,
+          winnerPhone: winner.phone,
+          round: round,
+          amount: selectedDrawGroup.payoutAmount || 0,
+          date: serverTimestamp()
+        });
+
+        const titleAm = '🎉 የዕጣ አሸናፊ ማሳወቂያ';
+        const titleEn = '🎉 Lucky Winner Notice';
+        const msgAm = `እንኳን ደስ አሎት! በቡድን "${selectedDrawGroup.name}" የዙር ${round} እጣ ደርሶዎታል።`;
+        const msgEn = `Congratulations! You have won the draw for round ${round} in group "${selectedDrawGroup.name}".`;
+
+        await notifyUserAdminChange(winner.id, titleAm, titleEn, msgAm, msgEn);
+
+        const groupAm = `🎉 በዙር ${round} እጣ ለ ${winner.fullName} ደርሷል። እንኳን ደስ አሎት!`;
+        const groupEn = `🎉 Round ${round} winner is ${winner.fullName}. Congratulations!`;
+        const groupNotifyPromises = selectedDrawGroup.members.map(async (m: any) => {
+          if (m.id !== winner.id) {
+            await notifyUserAdminChange(m.id, '🎉 የዕጣ አሸናፊ', '🎉 Draw Winner', groupAm, groupEn);
+          }
+        });
+        await Promise.all(groupNotifyPromises);
+
+        setDrawWinner(winner);
+        setDrawStage('result');
+      } catch (err) {
+        console.error(err);
+        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'እጣ ማውጣት አልተሳካም');
+        setDrawStage('select');
+      }
+    }, 3000);
+  };
+
   const getTimeSince = (date: any) => {
     if (!date) return t('time.unknown');
     const now = new Date();
@@ -881,6 +999,10 @@ export default function AdminDashboard() {
       return valA < valB ? 1 : -1;
     });
   }, [allUsers, searchTerm, selectedRegionFilter, insightFilter, userSortBy, userSortOrder]);
+
+  const filteredPending = useMemo(() => {
+    return filteredUsers.filter(u => !u.isVerified);
+  }, [filteredUsers]);
 
   const [deleteMsgConfig, setDeleteMsgConfig] = useState<{isOpen: boolean, messageId: string | null}>({isOpen: false, messageId: null});
   const [messages, setMessages] = useState<any[]>([]);
@@ -1329,8 +1451,24 @@ export default function AdminDashboard() {
       
       // Play sound only if it's a new added notification
       if (snapshot.docChanges().some(change => change.type === 'added')) {
-        const audio = new Audio('https://actions.google.com/sounds/v1/notifications/beep_short.ogg');
-        audio.play().catch(e => console.error('Audio play failed', e));
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            const ctx = new AudioContextClass();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
+            gain.gain.setValueAtTime(0.08, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.26);
+          }
+        } catch (e) {
+          console.error('Synthetic sound play failed', e);
+        }
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'notifications');
@@ -2805,160 +2943,13 @@ export default function AdminDashboard() {
     // For this implementation, we'll use pending penalties as the primary 'missing days' indicator
     const excluded = group.members.filter((m: any) => unpaidMemberIds.has(m.id) && !m.wonDraw);
     setIneligibleMembers(excluded);
-
-    setSelectedDrawGroup(group);
+    setSelectedGroup(group);
     setShowDrawModal(true);
-    setDrawStage('select');
-    setDrawWinner(null);
-    setManualWinnerId('');
   };
-
-  const startDrawAnimation = (winnerId: string | 'auto') => {
-    if (!selectedDrawGroup || !selectedDrawGroup.members || selectedDrawGroup.members.length === 0) return;
-
-    // Filter by wonDraw AND eligibility (not in ineligible list)
-    const currentIneligibleIds = new Set(ineligibleMembers.map(m => m.id));
-    const eligibleMembers = selectedDrawGroup.members.filter((m: any) => !m.wonDraw && !currentIneligibleIds.has(m.id));
-
-    if (eligibleMembers.length === 0) {
-      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ምንም የሚሳተፉ አባላት የሉም! (መዋጮ ያልከፈሉ ወይም ሁሉም የደረሳቸው)' : 'No eligible members available! (Unpaid or already won)');
-      return;
-    }
-
-    let finalWinner;
-    if (winnerId === 'auto') {
-      const randomIndex = Math.floor(Math.random() * eligibleMembers.length);
-      finalWinner = eligibleMembers[randomIndex];
-    } else {
-      finalWinner = selectedDrawGroup.members.find((m: any) => m.id === winnerId);
-    }
-
-    if (!finalWinner) return;
-
-    setDrawWinner(finalWinner);
-    setDrawStage('animating');
-
-    setTimeout(() => {
-      setDrawStage('result');
-      executeDrawUpdate(selectedDrawGroup, finalWinner);
-    }, 4000);
-  };
-
-  const openScheduleModal = (group: any) => {
-    setScheduledDrawGroup(group);
-    if (group.nextDrawDate) {
-      const dateObj = new Date(group.nextDrawDate);
-      setDrawScheduleDate(dateObj.toISOString().split('T')[0]);
-      setDrawScheduleTime(dateObj.toTimeString().slice(0, 5));
-    } else {
-      setDrawScheduleDate('');
-      setDrawScheduleTime('');
-    }
-    setShowScheduleDrawModal(true);
-  };
-
-  const handleScheduleDraw = async () => {
-    if (!scheduledDrawGroup || !drawScheduleDate || !drawScheduleTime) {
-      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'እባክዎን ቀን እና ሰዓት ይምረጡ!' : 'Please select both date and time!');
-      return;
-    }
-
-    try {
-      const combinedDateTime = new Date(`${drawScheduleDate}T${drawScheduleTime}`);
-      
-      await updateDoc(doc(db, 'groups', scheduledDrawGroup.id), {
-        nextDrawDate: combinedDateTime.toISOString(),
-        updatedAt: serverTimestamp()
-      });
-
-      // Notify members
-      const payload: any = {
-        senderId: user?.uid,
-        senderName: t('admin.admin_label') + ' (' + (user?.displayName || 'Admin') + ')',
-        senderRole: 'admin',
-        text: `📢 ቀጣይ እጣ ፕሮግራም ተቆርጧል/Next Draw Scheduled: ${scheduledDrawGroup.name} - ${combinedDateTime.toLocaleString('am-ET')}. ${language === 'am' ? 'እባክዎ መዋጮዎን በወቅቱ ይክፈሉ!' : 'Please pay your contribution on time!'}`,
-        createdAt: serverTimestamp(),
-        targetType: 'all',
-        groupId: scheduledDrawGroup.id
-      };
-      await addDoc(collection(db, 'messages'), payload);
-
-      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'የእጣ ፕሮግራም በተሳካ ሁኔታ ተቆርጧል!' : 'Draw scheduled successfully!');
-      setShowScheduleDrawModal(false);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'groups');
-    }
-  };
-
-  const executeDrawUpdate = async (group: any, winner: any) => {
-    try {
-      const drawDate = new Date().toISOString();
-      const nextDrawDate = new Date();
-      nextDrawDate.setDate(nextDrawDate.getDate() + (group.type === 'Weekly' ? 7 : 30));
-
-      const newDrawEvent = {
-        winnerId: winner.id,
-        winnerName: winner.fullName,
-        date: drawDate
-      };
-
-      const updatedHistory = [...(group.drawHistory || []), newDrawEvent];
-
-      // Update group
-      await updateDoc(doc(db, 'groups', group.id), {
-        lastWinner: winner.fullName,
-        lastDrawDate: drawDate,
-        nextDrawDate: nextDrawDate.toISOString(),
-        drawHistory: updatedHistory,
-        updatedAt: serverTimestamp()
-      });
-
-      // Update user
-      await updateDoc(doc(db, 'users', winner.id), {
-        wonDraw: true,
-        lastWonDate: drawDate,
-        payoutStatus: 'pending' // Track payout status
-      });
-
-      const multiplier = group.frequency === 'fivedays' ? 5 : (group.frequency === 'tendays' || group.frequency === 'daily') ? 10 : 1;
-      const payoutAmount = (group.amount || 0) * multiplier * (group.limit || 10);
-
-      // Create Payout Record
-      await addDoc(collection(db, 'payouts'), {
-        userId: winner.id,
-        userName: winner.fullName,
-        groupId: group.id,
-        groupName: group.name,
-        amount: payoutAmount,
-        status: 'pending',
-        drawDate: drawDate,
-        createdAt: serverTimestamp()
-      });
-
-      await addDoc(collection(db, 'notifications'), {
-        recipientId: winner.id,
-        title: language === 'am' ? 'እንኳን ደስ አለዎት! እጣ ደርሶዎታል!' : 'Congratulations! You won the draw!',
-        message: language === 'am' ? `የዚህ ዙር የእቁብ አሸናፊ ሆነዋል። እባክዎትን ዋሶችን ለማቅረብ ይዘጋጁ።` : `You have been selected as the winner. Please prepare to provide guarantors.`,
-        createdAt: new Date().toISOString(),
-        read: false
-      });
-    } catch (error) {
-      console.error("Error updating draw results: ", error);
-    }
-  };
-
-  const filteredPending = pendingUsers.filter(u => {
-    const matchesSearch = u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || u.phone.includes(searchTerm);
-    const matchesRegion = selectedRegionFilter === 'All' || u.addressRegion === selectedRegionFilter;
-    return matchesSearch && matchesRegion;
-  });
-
-  const rawRegions = ['All', 'Addis Ababa', 'Oromia', 'Amhara', 'Tigray', 'Sidama', 'Somali'];
-  const regions = rawRegions.map(r => r === 'All' ? t('admin.all_regions') : t(`admin.${r.toLowerCase().replace(' ', '_')}`));
 
   return (
     <div className="h-screen overflow-hidden bg-slate-50 flex font-sans">
-      {/* Mobile Drawer Overlay */}
+      {/* Mobile Menu Drawer Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -2967,82 +2958,95 @@ export default function AdminDashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[50] sm:hidden"
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 sm:hidden"
             />
             <motion.div 
               initial={{ x: -280 }}
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed left-0 top-0 bottom-0 w-[280px] bg-white z-[51] sm:hidden flex flex-col shadow-2xl p-4"
+              className="fixed left-0 top-0 bottom-0 w-[285px] bg-white z-[51] sm:hidden flex flex-col shadow-2xl p-5"
             >
               <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg">
-                    <ShieldCheck size={18} />
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-xl">
+                    <ShieldCheck size={22} />
                   </div>
-                  <span className="text-xs font-black text-slate-900 uppercase tracking-tighter">{t('nav.admin')}</span>
+                  <span className="text-[15px] font-black text-slate-900 uppercase tracking-wider">{t('nav.admin')}</span>
                 </div>
-                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-400"><XCircle size={20} /></button>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2.5 text-slate-400 hover:text-slate-600 transition-colors"><XCircle size={24} /></button>
               </div>
 
-               <div className="flex-1 overflow-y-auto space-y-6">
+              <div className="flex-1 overflow-y-auto space-y-6">
                 <nav className="space-y-1">
-                  {menuSections.map((section, sIndex) => (
-                    <div key={sIndex} className="mb-8">
-                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 px-2">{section.group}</h4>
+                  {menuSections.map((section, sIndex) => {
+                    const visibleItems = section.items.filter(tab => {
+                      if (['pending', 'users', 'rejected'].includes(tab.id) && !isSuperAdmin && !userData?.permissions?.manageUsers) return false;
+                      if (tab.id === 'groups' && !isSuperAdmin && !userData?.permissions?.manageGroups) return false;
+                      if (['payments', 'payouts', 'penalties'].includes(tab.id) && !isSuperAdmin && !userData?.permissions?.approvePayments) return false;
+                      if (tab.id === 'draws' && !isSuperAdmin && !userData?.permissions?.manageDraws) return false;
+                      if (['chat', 'notifications'].includes(tab.id) && !isSuperAdmin && !userData?.permissions?.manageMessages) return false;
+                      if (tab.id === 'admins' && !isSuperAdmin) return false;
+                      return true;
+                    });
+
+                    if (visibleItems.length === 0) return null;
+
+                    return (
+                      <div key={sIndex} className="mb-8">
+                        <h4 className="text-[13px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 px-2">{section.group}</h4>
                         <div className="space-y-2">
-                          {section.items.map((item) => {
-                            if (item.superOnly && !isSuperAdmin) return null;
+                          {visibleItems.map((item) => {
                             const isActive = activeTab === item.id;
                             return (
-                            <div key={item.id}>
-                              <button
-                                onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
-                                className={`w-full text-left p-4 rounded-3xl border transition-all duration-500 overflow-hidden relative group ${
-                                  isActive 
-                                  ? 'bg-slate-900 border-slate-900 shadow-2xl shadow-indigo-500/20 translate-x-1' 
-                                  : 'bg-white hover:bg-slate-50 border-transparent hover:border-slate-100'
-                                } ${item.className || ''}`}
-                              >
-                                {isActive && (
-                                  <motion.div 
-                                    layoutId="activeTabMobile"
-                                    className="absolute inset-0 bg-gradient-to-br from-indigo-600/20 to-transparent"
-                                    initial={false}
-                                  />
-                                )}
-                                <div className="flex items-center justify-between relative z-10">
-                                  <div className="flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 ${
-                                      isActive ? 'bg-indigo-500 text-white shadow-lg' : 'bg-slate-50 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'
-                                    }`}>
-                                      <item.icon size={18} />
-                                    </div>
-                                    <div>
-                                      <span className={`block text-[13px] font-black tracking-tight transition-colors ${isActive ? 'text-white' : 'text-slate-600 group-hover:text-slate-900'}`}>
-                                        {item.label}
-                                      </span>
-                                      {item.description && (
-                                        <span className={`block text-[10px] font-bold mt-0.5 leading-tight ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>
-                                          {item.description}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {item.badge && (
-                                    <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-rose-500/20">
-                                      {item.badge}
-                                    </span>
+                              <div key={item.id}>
+                                <button
+                                  onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
+                                  className={`w-full text-left p-4 rounded-3xl border transition-all duration-500 overflow-hidden relative group ${
+                                    isActive 
+                                    ? 'bg-slate-900 border-slate-900 shadow-2xl shadow-indigo-500/20 translate-x-1' 
+                                    : 'bg-white hover:bg-slate-50 border-transparent hover:border-slate-100'
+                                  } ${item.className || ''}`}
+                                >
+                                  {isActive && (
+                                    <motion.div 
+                                      layoutId="activeTabMobile"
+                                      className="absolute inset-0 bg-gradient-to-br from-indigo-600/20 to-transparent"
+                                      initial={false}
+                                    />
                                   )}
-                                </div>
-                              </button>
-                            </div>
+                                  <div className="flex items-center justify-between relative z-10">
+                                    <div className="flex items-center gap-4">
+                                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+                                        isActive ? 'bg-indigo-500 text-white shadow-lg' : 'bg-slate-50 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'
+                                      }`}>
+                                        <item.icon size={20} />
+                                      </div>
+                                      <div>
+                                        <span className={`block text-[15px] font-black tracking-tight transition-colors ${isActive ? 'text-white' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                                          {item.label}
+                                        </span>
+                                        {item.description && (
+                                          <span className={`block text-[12px] font-medium mt-0.5 leading-tight ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                            {item.description}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {item.badge && (
+                                      <span className="bg-rose-500 text-white text-[11px] font-black px-2.5 py-1 rounded-full shadow-lg shadow-rose-500/20">
+                                        {item.badge}
+                                      </span>
+                                    )}
+                                  </div>
+                                </button>
+                              </div>
                             );
                           })}
                         </div>
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </nav>
 
                 <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-2">
@@ -3050,14 +3054,14 @@ export default function AdminDashboard() {
                     onClick={() => { setLanguage(language === 'am' ? 'en' : 'am'); setIsMobileMenuOpen(false); }}
                     className="w-full flex items-center justify-between p-3 bg-slate-50 rounded-xl"
                   >
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{t('admin.language_label')}</span>
+                    <span className="text-[13px] font-black uppercase tracking-wide text-slate-500">{t('admin.language_label')}</span>
                     <div className="flex gap-1">
-                       <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>አ</span>
-                       <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>A</span>
+                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>አ</span>
+                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-200'}`}>A</span>
                     </div>
                   </button>
-                  <button onClick={async () => { await signOut(auth); window.location.href = '/'; }} className="w-full py-3 bg-rose-50 text-rose-500 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                    <LogOut size={16} /> {t('auth.exit_admin')}
+                  <button onClick={async () => { await signOut(auth); window.location.href = '/'; }} className="w-full py-4 bg-rose-50 text-rose-500 rounded-3xl text-[14px] font-black uppercase tracking-wide flex items-center justify-center gap-2">
+                    <LogOut size={18} /> {t('auth.exit_admin')}
                   </button>
                 </div>
               </div>
@@ -3069,10 +3073,10 @@ export default function AdminDashboard() {
       {/* Sidebar Navigation */}
       <aside className="w-16 md:w-56 bg-white border-r border-slate-100 flex flex-col h-screen sticky top-0 z-40 hidden sm:flex shrink-0">
         <div className="p-4 flex items-center gap-2 border-b border-slate-50 mb-2">
-          <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg">
-            <ShieldCheck size={14} />
+          <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg">
+            <ShieldCheck size={16} />
           </div>
-          <span className="text-[10px] font-black text-slate-900 tracking-tighter uppercase hidden md:block">{t('common.appName')} Admin</span>
+          <span className="text-[13px] font-black text-slate-900 tracking-tighter uppercase hidden md:block">{t('common.appName')} Admin</span>
         </div>
 
         <div className="p-2 border-b border-slate-50 mb-2">
@@ -3080,14 +3084,13 @@ export default function AdminDashboard() {
             onClick={() => setLanguage(language === 'am' ? 'en' : 'am')}
             className="w-full flex items-center justify-center gap-2 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all"
           >
-            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-300 text-slate-600'}`}>አ</div>
-            <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-300 text-slate-600'}`}>A</div>
+            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black ${language === 'am' ? 'bg-gold-500 text-white' : 'bg-slate-300 text-slate-600'}`}>አ</div>
+            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black ${language === 'en' ? 'bg-gold-500 text-white' : 'bg-slate-300 text-slate-600'}`}>A</div>
           </button>
         </div>
         
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto custom-scrollbar no-scrollbar scroll-smooth">
           {menuSections.map((section, sIndex) => {
-            // Filter section items based on permissions
             const visibleItems = section.items.filter(tab => {
               if (['pending', 'users', 'rejected'].includes(tab.id) && !isSuperAdmin && !userData?.permissions?.manageUsers) return false;
               if (tab.id === 'groups' && !isSuperAdmin && !userData?.permissions?.manageGroups) return false;
@@ -3102,7 +3105,7 @@ export default function AdminDashboard() {
 
             return (
               <div key={sIndex} className={sIndex > 0 ? 'mt-6 pt-6 border-t border-slate-100/50' : ''}>
-                <p className="px-3 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hidden md:block">{section.group}</p>
+                <p className="px-3 mb-3 text-[13px] md:text-[14px] font-black uppercase tracking-[0.2em] text-slate-400 hidden md:block">{section.group}</p>
                 <div className="space-y-1.5">
                   {visibleItems.map((item) => {
                     const isActive = activeTab === item.id;
@@ -3119,7 +3122,7 @@ export default function AdminDashboard() {
                                 item.id === 'settings' ? 'bg-slate-50 text-slate-800 border border-slate-200 hover:bg-slate-100/80 hover:border-slate-300' :
                                 'text-slate-500 hover:bg-slate-50 hover:text-slate-900')
                            }`}
-                         >
+                          >
                            {isActive && (
                              <motion.div 
                                layoutId="activeBarSidebar"
@@ -3131,7 +3134,7 @@ export default function AdminDashboard() {
                                initial={false}
                              />
                            )}
-                           <div className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all duration-500 shrink-0 ${
+                           <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 shrink-0 ${
                              isActive 
                              ? (item.id === 'audit' ? 'bg-indigo-400 text-white shadow-lg shadow-indigo-500/30 rotate-0' : 
                                 item.id === 'settings' ? 'bg-slate-700 text-white shadow-lg shadow-slate-900/40 rotate-0 border border-slate-600' :
@@ -3140,10 +3143,10 @@ export default function AdminDashboard() {
                                 item.id === 'settings' ? 'bg-white text-slate-600 border border-slate-200 group-hover:bg-slate-800 group-hover:text-white group-hover:scale-110' :
                                 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 group-hover:rotate-12')
                            }`}>
-                             <item.icon size={16} />
+                             <item.icon size={20} />
                            </div>
                            <div className="hidden md:block flex-1 text-left relative z-10">
-                             <span className={`block text-[12px] font-black tracking-tight leading-none ${
+                             <span className={`block text-[15px] font-black tracking-wide leading-none ${
                                isActive 
                                ? 'text-white' 
                                : (item.id === 'audit' ? 'text-indigo-900' : item.id === 'settings' ? 'text-slate-900' : 'text-slate-700')
@@ -3151,21 +3154,21 @@ export default function AdminDashboard() {
                                {item.label}
                              </span>
                              {item.id === 'audit' ? (
-                               <span className={`block text-[8px] font-bold mt-1 font-mono uppercase tracking-widest ${isActive ? 'text-indigo-200' : 'text-indigo-500/70'}`}>
+                               <span className={`block text-[11px] font-bold mt-1 font-mono uppercase tracking-widest ${isActive ? 'text-indigo-200' : 'text-indigo-500/70'}`}>
                                  Live Sync <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse ml-1" />
                                </span>
                              ) : item.id === 'settings' ? (
-                               <span className={`block text-[8px] font-bold mt-1 font-mono uppercase tracking-widest ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
-                                 System Config <Settings size={8} className="inline ml-1 animate-spin-slow pb-0.5" />
+                               <span className={`block text-[11px] font-bold mt-1 font-mono uppercase tracking-widest ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
+                                 System Config <Settings size={10} className="inline ml-1 animate-spin-slow pb-0.5" />
                                </span>
                              ) : item.description ? (
-                               <span className={`block text-[9px] font-bold mt-1 opacity-60 line-clamp-1 leading-tight ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>
+                               <span className={`block text-[12px] font-bold mt-1 opacity-60 line-clamp-1 leading-tight ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>
                                  {item.description}
                                </span>
                              ) : null}
                            </div>
                            {item.badge && (
-                             <span className={`absolute right-3 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-lg text-[8px] font-black text-white shadow-lg transition-all duration-500 ${
+                             <span className={`absolute right-3 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-lg text-[9px] font-black text-white shadow-lg transition-all duration-500 ${
                                isActive ? 'bg-indigo-600' : 'bg-rose-500 shadow-rose-500/20 group-hover:scale-110'
                              }`}>
                                {item.badge}
@@ -3177,7 +3180,7 @@ export default function AdminDashboard() {
                                className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-indigo-500 rounded-r-full"
                              />
                            )}
-                         </button>
+                          </button>
                         </div>
                     );
                   })}
@@ -5220,16 +5223,33 @@ export default function AdminDashboard() {
                           </span>
                         </div>
                       </div>
-                    {payment.receiptUrl || payment.receiptImage || (payment.receiptImages && payment.receiptImages.length > 0) ? (
-                      <div className="w-full">
-                        <img 
-                          src={payment.receiptUrl || payment.receiptImage || (payment.receiptImages && payment.receiptImages[0])} 
-                          alt="Receipt" 
-                          className="w-full h-32 object-cover rounded-2xl border border-slate-100 cursor-pointer" 
-                          onClick={() => setShowImagePreview(payment.receiptUrl || payment.receiptImage || (payment.receiptImages && payment.receiptImages[0]))}
-                        />
-                      </div>
-                    ) : null}
+                    {(() => {
+                      const listImages = payment.receiptImages && payment.receiptImages.length > 0
+                        ? payment.receiptImages
+                        : (payment.receiptUrl || payment.receiptImage ? [payment.receiptUrl || payment.receiptImage] : []);
+                      
+                      if (listImages.length === 0) return null;
+                      
+                      return (
+                        <div className="w-full flex flex-col gap-1.5">
+                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                            {language === 'am' ? 'ደረሰኝ ፎቶ(ዎች)' : 'Uploaded Receipt(s)'} ({listImages.length})
+                          </p>
+                          <div className={`grid ${listImages.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                            {listImages.map((imgUrl: string, idx: number) => (
+                              <img 
+                                key={idx}
+                                src={imgUrl} 
+                                alt={`Receipt ${idx + 1}`} 
+                                referrerPolicy="no-referrer"
+                                className="w-full h-32 object-cover rounded-2xl border border-slate-100 cursor-pointer hover:opacity-90 transition-opacity" 
+                                onClick={() => setShowImagePreview(imgUrl)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="p-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
@@ -13143,25 +13163,41 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {(paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage || (paymentReviewModal.receiptImages && paymentReviewModal.receiptImages.length > 0)) && (
-                  <div className="bg-white p-2 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center">
-                    <img 
-                      src={paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage || (paymentReviewModal.receiptImages && paymentReviewModal.receiptImages[0])} 
-                      alt="Receipt" 
-                      className="w-full h-auto max-h-80 object-contain rounded-2xl mb-2 cursor-pointer" 
-                      onClick={() => setShowImagePreview(paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage || (paymentReviewModal.receiptImages && paymentReviewModal.receiptImages[0]))}
-                    />
-                    <a 
-                      href={paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage || (paymentReviewModal.receiptImages && paymentReviewModal.receiptImages[0])}
-                      download="Receipt.jpg"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-100 mb-2"
-                    >
-                       <Download size={12} /> {language === 'am' ? 'ፎቶውን አውርድ' : 'Download Image'}
-                    </a>
-                  </div>
-                )}
+                {(() => {
+                  const reviewImages = paymentReviewModal.receiptImages && paymentReviewModal.receiptImages.length > 0
+                    ? paymentReviewModal.receiptImages
+                    : (paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage ? [paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage] : []);
+                  
+                  return reviewImages.length > 0 ? (
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block ml-1">
+                        {language === 'am' ? 'የተላኩ ደረሰኝ ፎቶዎች' : 'Uploaded Receipt Photos'} ({reviewImages.length})
+                      </label>
+                      <div className="grid grid-cols-1 gap-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+                        {reviewImages.map((imgUrl: string, idx: number) => (
+                          <div key={idx} className="bg-white p-2 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center">
+                            <img 
+                              src={imgUrl} 
+                              alt={`Receipt ${idx + 1}`} 
+                              referrerPolicy="no-referrer"
+                              className="w-full h-auto max-h-80 object-contain rounded-2xl mb-2 cursor-pointer transition-all hover:scale-[1.01]" 
+                              onClick={() => setShowImagePreview(imgUrl)}
+                            />
+                            <a 
+                              href={imgUrl}
+                              download={`Receipt-${idx + 1}.jpg`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 border border-slate-100"
+                            >
+                               <Download size={12} /> {language === 'am' ? 'ፎቶውን አውርድ' : 'Download Image'}
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
                 
                 <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>meliqequb.com - መሊቅ እቁብ</title>
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #f8fafc; /* bg-slate-50 */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: sans-serif;
+      }
+      .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #6366f1; /* indigo-500 */
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 16px;
+      }
+      .loading-text {
+        color: #94a3b8; /* slate-400 */
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 11px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+    <script>
+      (function() {
+        try {
+          var pathname = window.location.pathname;
+          var search = window.location.search || "";
+          var hash = window.location.hash || "";
+          
+          if (pathname && pathname !== "/" && pathname !== "/404.html") {
+            localStorage.setItem("spa_redirect_path", pathname + search + hash);
+          }
+        } catch (e) {
+          console.warn("Error archiving redirect path:", e);
+        }
+        window.location.replace("/");
+      })();
+    </script>
+</head>
+<body>
+    <div class="spinner"></div>
+    <div class="loading-text">እባክዎ ይጠብቁ... (Loading...)</div>
+</body>
+</html>

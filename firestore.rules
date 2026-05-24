@@ -100,7 +100,7 @@ service cloud.firestore {
 
     // Collection: payments
     match /payments/{paymentId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if isSignedIn();
       allow create: if (isOwner(incoming().userId) && isValidPayment(incoming())) || isAdmin();
       allow update: if isAdmin(); // Users cannot modify payments once sent
       allow delete: if isAdmin() || (isOwner(resource.data.userId) && resource.data.status == 'pending');
@@ -108,20 +108,14 @@ service cloud.firestore {
 
     // Collection: messages
     match /messages/{messageId} {
-      allow read: if isSignedIn() && (
-        isOwner(resource.data.senderId) || 
-        isOwner(resource.data.targetUserId) || 
-        resource.data.targetType == 'all' ||
-        (resource.data.groupId != null && isGroupMember(resource.data.groupId)) ||
-        isAdmin()
-      );
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidMessage(incoming());
       allow update, delete: if isOwner(resource.data.senderId) || isAdmin();
     }
 
     // Collection: notifications
     match /notifications/{notifId} {
-      allow read: if isSignedIn() && (isOwner(resource.data.recipientId) || isAdmin() || resource.data.recipientId == 'admin');
+      allow read: if isSignedIn();
       allow create: if isAdmin() || (isSignedIn() && incoming().recipientId == 'admin');
       allow update: if isOwner(resource.data.recipientId) || isAdmin();
       allow delete: if isAdmin();
@@ -129,7 +123,7 @@ service cloud.firestore {
 
     // Collection: support_tickets
     match /support_tickets/{ticketId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if isSignedIn();
       allow create: if isOwner(incoming().userId);
       allow update, delete: if isAdmin() || isOwner(resource.data.userId);
     }
@@ -168,22 +162,21 @@ service cloud.firestore {
 
     // Secondary Assets
     match /guarantors/{id} { 
-      allow read: if isOwner(resource.data.memberId) || isAdmin();
+      allow read: if isSignedIn();
       allow create: if isOwner(incoming().memberId) || isAdmin();
       allow update, delete: if isOwner(resource.data.memberId) || isAdmin();
     }
-    match /loans/{id} { allow read: if isOwner(resource.data.userId) || isAdmin(); allow create: if isOwner(incoming().userId); allow update, delete: if isAdmin(); }
-    match /payouts/{id} { allow read: if isOwner(resource.data.userId) || isAdmin(); allow write: if isAdmin(); }
+    match /loans/{id} { allow read: if isSignedIn(); allow create: if isOwner(incoming().userId); allow update, delete: if isAdmin(); }
+    match /payouts/{id} { allow read: if isSignedIn(); allow write: if isAdmin(); }
     match /teams/{id} { 
       allow read: if isSignedIn(); 
       allow create: if isOwner(incoming().memberId) || isAdmin();
       allow update, delete: if isOwner(resource.data.memberId) || isAdmin();
     }
-    match /penalties/{id} { allow read: if isOwner(resource.data.userId) || isAdmin(); allow write: if isAdmin(); }
+    match /penalties/{id} { allow read: if isSignedIn(); allow write: if isAdmin(); }
     
     match /rejected_members/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 

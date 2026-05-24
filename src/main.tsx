@@ -3,10 +3,23 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Suppress ResizeObserver errors from triggering the Vite error overlay
+// Suppress ResizeObserver and benign WebSocket errors from triggering error overlays
 window.addEventListener('error', (e) => {
-  if (e.message.includes('ResizeObserver') || e.message === 'Script error.') {
+  if (
+    e.message.includes('ResizeObserver') || 
+    e.message === 'Script error.' ||
+    e.message.toLowerCase().includes('websocket')
+  ) {
     e.stopImmediatePropagation();
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  const reasonStr = e.reason ? String(e.reason.message || e.reason) : '';
+  if (reasonStr.toLowerCase().includes('websocket')) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
   }
 });
 
