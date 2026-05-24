@@ -972,6 +972,7 @@ export default function AdminDashboard() {
             }
 
             await addDoc(collection(db, 'messages'), payload);
+            await sendAdminNotificationForMessage('🎤 ' + t('chat.voice_message'), adminChatTarget.type, adminChatTarget.id);
           } catch (error) {
             console.error(error);
           }
@@ -1033,6 +1034,8 @@ export default function AdminDashboard() {
         }
 
         await addDoc(collection(db, 'messages'), payload);
+        const fileMsgText = type === 'image' ? '📸 ፎቶ (Image)' : `📄 ፋይል (File: ${file.name})`;
+        await sendAdminNotificationForMessage(fileMsgText, adminChatTarget.type, adminChatTarget.id);
       } catch (error) {
         console.error(error);
         triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ፋይል መላክ አልተቻለም!' : 'Failed to send file. File may be too large.');
@@ -1105,6 +1108,43 @@ export default function AdminDashboard() {
     setAdminChatTarget({ type: 'group', id: group.id, name: group.name });
   };
 
+  const sendAdminNotificationForMessage = async (msgText: string, targetType: string, targetId: string) => {
+    try {
+      if (targetType === 'private') {
+        await addDoc(collection(db, 'notifications'), {
+          recipientId: targetId,
+          title: language === 'am' ? 'አዲስ መልእክት ከአድሚን' : 'New Message from Admin',
+          message: msgText.length > 80 ? msgText.substring(0, 80) + '...' : msgText,
+          createdAt: new Date().toISOString(),
+          read: false
+        });
+      } else if (targetType === 'group') {
+        const groupMembers = allUsers.filter(u => u.groupId === targetId);
+        for (const member of groupMembers) {
+          await addDoc(collection(db, 'notifications'), {
+            recipientId: member.id,
+            title: language === 'am' ? `አዲስ የቡድን መልእክት ከአድሚን` : `New Group Message from Admin`,
+            message: msgText.length > 80 ? msgText.substring(0, 80) + '...' : msgText,
+            createdAt: new Date().toISOString(),
+            read: false
+          });
+        }
+      } else if (targetType === 'all') {
+        for (const member of allUsers) {
+          await addDoc(collection(db, 'notifications'), {
+            recipientId: member.id,
+            title: language === 'am' ? 'አዲስ ጠቅላላ መልእክት (Broadcast)' : 'New Broadcast Message from Admin',
+            message: msgText.length > 80 ? msgText.substring(0, 80) + '...' : msgText,
+            createdAt: new Date().toISOString(),
+            read: false
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to send admin notification for message", e);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !user) return;
@@ -1117,11 +1157,12 @@ export default function AdminDashboard() {
         });
         setEditingMessageId(null);
       } else {
+        const textToSend = newMessage;
         const payload: any = {
           senderId: user.uid,
           senderName: t('admin.admin_label') + ' (' + (user.displayName || 'Admin') + ')',
           senderRole: 'admin',
-          text: newMessage,
+          text: textToSend,
           createdAt: serverTimestamp(),
           targetType: adminChatTarget.type
         };
@@ -1133,6 +1174,7 @@ export default function AdminDashboard() {
         }
 
         await addDoc(collection(db, 'messages'), payload);
+        await sendAdminNotificationForMessage(textToSend, adminChatTarget.type, adminChatTarget.id);
       }
       setNewMessage('');
     } catch (error) {
@@ -4411,15 +4453,15 @@ export default function AdminDashboard() {
                                     <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
                                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1 px-1">{msg.senderName}</span>
                                        <div className={`px-4 py-3 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white text-slate-800 border border-slate-100 rounded-bl-sm'}`}>
-                                          <p className="leading-snug">{msg.text}</p>
+                                          {msg.text && <p className="leading-snug">{msg.text}</p>}
                                           {msg.imageUrl && (
                                             <div className="mt-3">
-                                              <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block relative group/img overflow-hidden rounded-xl border border-slate-200">
+                                              <div className="block relative group/img overflow-hidden rounded-xl border border-slate-200 cursor-pointer" onClick={() => setShowImagePreview(msg.imageUrl)}>
                                                  <img src={msg.imageUrl} alt="attachment" className="w-full object-cover group-hover:scale-105 transition-transform duration-500 max-h-[300px]" />
-                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                     <Eye size={20} className="text-white" />
                                                  </div>
-                                              </a>
+                                              </div>
                                             </div>
                                           )}
                                           {msg.audioUrl && (
@@ -5178,15 +5220,16 @@ export default function AdminDashboard() {
                           </span>
                         </div>
                       </div>
-                    {payment.receiptUrl && (
+                    {payment.receiptUrl || payment.receiptImage || (payment.receiptImages && payment.receiptImages.length > 0) ? (
                       <div className="w-full">
                         <img 
-                          src={payment.receiptUrl} 
+                          src={payment.receiptUrl || payment.receiptImage || (payment.receiptImages && payment.receiptImages[0])} 
                           alt="Receipt" 
-                          className="w-full h-32 object-cover rounded-2xl border border-slate-100" 
+                          className="w-full h-32 object-cover rounded-2xl border border-slate-100 cursor-pointer" 
+                          onClick={() => setShowImagePreview(payment.receiptUrl || payment.receiptImage || (payment.receiptImages && payment.receiptImages[0]))}
                         />
                       </div>
-                    )}
+                    ) : null}
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="p-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
@@ -6492,7 +6535,7 @@ export default function AdminDashboard() {
                                      </div>
                                   ) : msg.imageUrl ? (
                                      <div className="space-y-2">
-                                        <img src={msg.imageUrl} alt="attachment" className="max-w-[240px] rounded-2xl cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.imageUrl, '_blank')} />
+                                        <img src={msg.imageUrl} alt="attachment" className="max-w-[240px] rounded-2xl cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setShowImagePreview(msg.imageUrl)} />
                                         {msg.text !== '📸 ፎቶ (Image)' && <p className="text-sm font-medium leading-relaxed">{msg.text}</p>}
                                      </div>
                                   ) : msg.fileUrl ? (
@@ -13100,12 +13143,19 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {paymentReviewModal.receiptUrl && (
+                {(paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage || (paymentReviewModal.receiptImages && paymentReviewModal.receiptImages.length > 0)) && (
                   <div className="bg-white p-2 rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center">
-                    <img src={paymentReviewModal.receiptUrl} alt="Receipt" className="w-full h-auto max-h-80 object-contain rounded-2xl mb-2" />
+                    <img 
+                      src={paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage || (paymentReviewModal.receiptImages && paymentReviewModal.receiptImages[0])} 
+                      alt="Receipt" 
+                      className="w-full h-auto max-h-80 object-contain rounded-2xl mb-2 cursor-pointer" 
+                      onClick={() => setShowImagePreview(paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage || (paymentReviewModal.receiptImages && paymentReviewModal.receiptImages[0]))}
+                    />
                     <a 
-                      href={paymentReviewModal.receiptUrl}
+                      href={paymentReviewModal.receiptUrl || paymentReviewModal.receiptImage || (paymentReviewModal.receiptImages && paymentReviewModal.receiptImages[0])}
                       download="Receipt.jpg"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-100 mb-2"
                     >
                        <Download size={12} /> {language === 'am' ? 'ፎቶውን አውርድ' : 'Download Image'}

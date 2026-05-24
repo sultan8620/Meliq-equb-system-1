@@ -1036,6 +1036,43 @@ export default function Dashboard() {
     }
   }, [messages, activeTab]);
 
+  const sendNotificationForMessage = async (msgText: string, targetType: string, targetId: string) => {
+    try {
+      if (targetType === 'private' && targetId === 'admin') {
+        await addDoc(collection(db, 'notifications'), {
+          recipientId: 'admin',
+          title: language === 'am' ? `አዲስ መልእክት ከ ${userData?.fullName || 'አባል'}` : `New Message from ${userData?.fullName || 'Member'}`,
+          message: msgText.length > 80 ? msgText.substring(0, 80) + '...' : msgText,
+          createdAt: new Date().toISOString(),
+          read: false
+        });
+      } else if (targetType === 'group' || targetId) {
+        const grpId = targetId || userData?.groupId;
+        if (grpId) {
+          const otherMembers = members.filter(m => m.uid !== user?.uid);
+          for (const member of otherMembers) {
+            await addDoc(collection(db, 'notifications'), {
+              recipientId: member.uid,
+              title: language === 'am' ? `አዲስ መልእክት በ ${group?.name || 'ቡድን'}` : `New message in ${group?.name || 'Group'}`,
+              message: msgText.length > 80 ? msgText.substring(0, 80) + '...' : msgText,
+              createdAt: new Date().toISOString(),
+              read: false
+            });
+          }
+          await addDoc(collection(db, 'notifications'), {
+            recipientId: 'admin',
+            title: language === 'am' ? `የቡድን ውይይት መልእክት - ${group?.name || 'ቡድን'}` : `Group Chat Message - ${group?.name || 'Group'}`,
+            message: `${userData?.fullName || 'Member'}: ${msgText.length > 80 ? msgText.substring(0, 80) + '...' : msgText}`,
+            createdAt: new Date().toISOString(),
+            read: false
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to send notification for message", e);
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newMessage.trim() || !user) return;
@@ -1050,6 +1087,7 @@ export default function Dashboard() {
         });
         setEditingMessageId(null);
       } else {
+        const textToSend = newMessage;
         if (chatSubTab === 'admin') {
           await addDoc(collection(db, 'messages'), {
             targetType: 'private',
@@ -1057,18 +1095,20 @@ export default function Dashboard() {
             senderId: user.uid,
             senderName: userData?.fullName || 'Member',
             senderRole: 'member',
-            text: newMessage,
+            text: textToSend,
             createdAt: serverTimestamp()
           });
+          await sendNotificationForMessage(textToSend, 'private', 'admin');
         } else {
           await addDoc(collection(db, 'messages'), {
             groupId: userData.groupId || '',
             senderId: user.uid,
             senderName: userData.fullName || 'Member',
             senderRole: 'member',
-            text: newMessage,
+            text: textToSend,
             createdAt: serverTimestamp()
           });
+          await sendNotificationForMessage(textToSend, 'group', userData.groupId || '');
         }
       }
       setNewMessage('');
@@ -1118,6 +1158,7 @@ export default function Dashboard() {
               audioUrl: base64Audio,
               createdAt: serverTimestamp()
             });
+            await sendNotificationForMessage('🎤 የድምፅ መልዕክት', 'group', userData.groupId);
           } catch (error) {
             console.error(error);
           }
@@ -1155,16 +1196,18 @@ export default function Dashboard() {
     reader.onloadend = async () => {
       const base64Data = reader.result as string;
       try {
+        const msgText = type === 'image' ? '📸 ፎቶ (Image)' : `📄 ፋይል (File: ${file.name})`;
         await addDoc(collection(db, 'messages'), {
           groupId: userData.groupId,
           senderId: user.uid,
           senderName: userData.fullName,
           senderRole: 'member',
-          text: type === 'image' ? '📸 ፎቶ (Image)' : `📄 ፋይል (File: ${file.name})`,
+          text: msgText,
           [type === 'image' ? 'imageUrl' : 'fileUrl']: base64Data,
           fileName: file.name,
           createdAt: serverTimestamp()
         });
+        await sendNotificationForMessage(msgText, 'group', userData.groupId);
       } catch (error) {
         console.error(error);
         triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ፋይል መላክ አልተቻለም!' : 'Failed to send file. File may be too large.');
