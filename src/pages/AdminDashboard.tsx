@@ -2763,6 +2763,18 @@ export default function AdminDashboard() {
     setShowReceiptModal(true);
   };
 
+  const deletePaymentReceipt = async (paymentId: string) => {
+    if (!await confirmAction(language === 'am' ? 'ይህንን ደረሰኝ/ትራንዛክሽን በቋሚነት ለመሰረዝ እርግጠኛ ነዎት?' : 'Are you sure you want to permanently delete this receipt/transaction?')) return;
+    try {
+      await deleteDoc(doc(db, 'payments', paymentId));
+      triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'ደረሰኙ በተሳካ ሁኔታ ተሰርዟል' : 'Receipt deleted successfully.');
+      setShowReceiptModal(false);
+    } catch (error) {
+      console.error("Error deleting payment receipt:", error);
+      handleFirestoreError(error, OperationType.DELETE, `payments/${paymentId}`);
+    }
+  };
+
   const generateReportPDF = async (id: string, name: string) => {
     const element = document.getElementById(id);
     if (!element) return;
@@ -5316,6 +5328,14 @@ export default function AdminDashboard() {
                             <Eye size={14} /> {language === 'am' ? 'ገምግም (Review)' : 'Review'}
                           </button>
                         )}
+
+                        <button 
+                          onClick={() => deletePaymentReceipt(payment.id)}
+                          className="px-4 py-3 bg-rose-50 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-100/50 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-2"
+                          title={language === 'am' ? 'ሰርዝ' : 'Delete'}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </motion.div>
                   ))}
@@ -11448,16 +11468,23 @@ export default function AdminDashboard() {
                <p className="text-[10px] font-bold text-slate-400 max-w-[200px] text-center sm:text-left">
                   {language === 'am' ? 'ይህ ሰነድ በዲጂታል መንገድ የተረጋገጠ እና በህግ ተቀባይነት ያለው ነው።' : 'This document is digitally verified and legally binding.'}
                </p>
-               <div className="flex items-center gap-3 w-full sm:w-auto">
+               <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                  <button 
+                    onClick={() => deletePaymentReceipt(selectedPayment.id)}
+                    className="flex-1 sm:flex-none px-6 py-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95 animate-pulse"
+                  >
+                    <Trash2 size={16} />
+                    {language === 'am' ? 'ደረሰኝ ሰርዝ' : 'Delete'}
+                  </button>
                   <button 
                     onClick={() => setShowReceiptModal(false)}
-                    className="flex-1 sm:flex-none px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+                    className="flex-1 sm:flex-none px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm active:scale-95"
                   >
                     {language === 'am' ? 'ተመለስ' : 'Go Back'}
                   </button>
                   <button 
                     onClick={() => generatePDF(selectedPayment)}
-                    className="flex-1 sm:flex-none px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-95"
+                    className="flex-1 sm:flex-none px-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-95"
                   >
                     <Download size={18} />
                     {language === 'am' ? 'ያውርዱ (PDF)' : 'Download PDF'}
