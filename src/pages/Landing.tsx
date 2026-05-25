@@ -60,6 +60,7 @@ const Landing = () => {
   }, []);
 
   const [activeInfo, setActiveInfo] = useState<null | { title: string, titleAm: string, content: string, contentAm: string }>(null);
+  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
 
   const footerInfoMap: Record<string, { am: string, content: string, contentAm: string }> = {
     'About Us': {
@@ -438,8 +439,6 @@ const Landing = () => {
           </div>
         </div>
       </section>
-
-      {/* Premium Equb Categories with Colorful Glow Shadows and Beautiful Imagery */}
       <section className="py-32 bg-[#FAF9F5] relative overflow-hidden">
         {/* Subtle decorative glowing background circles */}
         <div className="absolute top-20 left-20 w-96 h-96 bg-emerald-400/10 rounded-full blur-[120px] pointer-events-none" />
@@ -448,17 +447,17 @@ const Landing = () => {
         <div className="max-w-[90rem] mx-auto px-6 sm:px-12 relative z-10">
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-24 gap-8">
             <div className="max-w-2xl">
-              <span className="inline-block px-5 py-2 bg-amber-100 text-amber-800 rounded-full font-black uppercase tracking-[0.4em] text-[10px] mb-6 border border-amber-200/50">
+              <span className="inline-block px-5 py-2.5 bg-amber-100 text-amber-900 rounded-full font-black uppercase tracking-[0.4em] text-xs sm:text-sm mb-6 border border-amber-200/50 shadow-sm">
                 {language === 'am' ? 'የቁጠባ ዓይነቶች' : 'Vibrant Schemes'}
               </span>
-              <h2 className={`text-4xl md:text-5xl lg:text-6xl font-black text-emerald-950 tracking-tighter leading-none ${language === 'am' ? 'font-am' : ''}`}>
+              <h2 className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-emerald-950 tracking-tighter leading-none ${language === 'am' ? 'font-am' : ''}`}>
                 {language === 'am' ? 'የእቁብ ዓይነቶች እና የቁጠባ ዕቅዶች' : 'Our Specialized Equb Schemes'}
               </h2>
             </div>
-            <p className="max-w-md text-slate-500 font-medium text-lg border-l-4 border-amber-500 pl-6">
+            <p className="max-w-xl text-slate-700 font-semibold text-lg sm:text-xl lg:text-2xl border-l-4 border-amber-500 pl-6 leading-relaxed">
               {language === 'am' 
-                ? 'ለእያንዳንዱ የቁጠባ ዓላማ ከተለየ የቀለም-ብርሃን እና የሻዶው አጨራረስ ጋር የተዘጋጁ ማራኪ የእቁብ አማራጮችን እዚህ ያግኙ።'
-                : 'Discover unique tailored saving categories decorated with vibrant shadow borders, customized timers, and high-impact visual design.'}
+                ? 'ለእያንዳንዱ የቁጠባ ዓላማ ከተለየ የቀለም-ብርሃን እና የሻዶው አጨራረስ ጋር የተዘጋጁ ማራኪ የእቁብ አማራጮችን እዚህ በሰፊው ያግኙ። ካርዶቹን ጠቅ በማድረግ ሙሉውን ዝርዝር መግለጫ ይመልከቱ።'
+                : 'Discover unique tailored saving categories decorated with vibrant shadow borders, customized timers, and high-impact visual design. Click any card to explore full benefits.'}
             </p>
           </div>
 
@@ -471,18 +470,36 @@ const Landing = () => {
                 tagAm: "ሪል ስቴት",
                 desc: "Raise structured capital to build or purchase family real estate without exhausting loans.",
                 descAm: "ያለ ከፍተኛ የባንክ ወለድ የዕቅዶትን የመኖሪያ ቤት ለመገንባት ወይም ለመግዛት የሚያስችል አስተማማኝ እቁብ።",
+                details: "This premium circle brings together members aimed at raising structured, massive capital for home acquisitions, land purchases, construction, or high-value finishing packages. It entirely replaces the necessity of taking high-interest loans, leveraging community trust coupled with digital legal signatures.",
+                detailsAm: "ይህ ልዩ የእቁብ ዘርፍ የመኖሪያ ቤት ለመግዛት፣ ለመገንባት፣ የግንባታ ማጠናቀቂያዎችን ወይም ቦታዎችን ለመግዛት ከፍተኛ ገንዘብ ለማሰባሰብ ለሚፈልጉ አባላት የተዘጋጀ ነው። ከፍተኛ የባንክ ወለዶችን በማስቀረትና በማህበረሰብ እምነት ላይ በመመርኮዝ ታላቅ ህልምዎን እውን ያደርጋል።",
                 img: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800",
                 icon: <Home size={22} />,
-                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(16,185,129,0.3)]",
-                borderColor: "border-emerald-100/50 group-hover:border-emerald-500/40",
-                accentColor: "text-emerald-600",
-                badgeBg: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
-                iconBg: "bg-emerald-50 text-emerald-600",
+                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(16,185,129,0.35)]",
+                borderColor: "border-emerald-200/55 group-hover:border-emerald-500/60",
+                accentColor: "text-emerald-700",
+                badgeBg: "bg-emerald-500/10 text-emerald-800 border-emerald-500/20",
+                iconBg: "bg-emerald-50 text-emerald-700",
                 stats: [
                   { labelAm: "ክፍያ", labelEn: "Cycles", value: "Monthly" },
                   { labelAm: "ዓይነት", labelEn: "Category", value: "Property" }
                 ],
-                tagColor: "from-emerald-600 to-teal-500"
+                tagColor: "from-emerald-600 to-teal-500",
+                targetGroupEn: "Families, returning Diaspora, and real estate buyers",
+                targetGroupAm: "ቤተሰቦች፣ ዲያስፖራዎች እና የቤት ፈላጊዎች",
+                safetyEn: "Bank-locked escrow pool ensures zero capital flight with verified legal status.",
+                safetyAm: "በታማኝ የባንክ አካውንት የተቆለፈ ፈንድ የገንዘቡን ዋስትና በሕግ በተረጋገጠ ውል ሙሉ በሙሉ ያረጋግጣል።",
+                benefitsEn: [
+                  "Access to bulk capital packages up to 3,000,000 ETB seamlessly",
+                  "Secured with legal digital notary witnesses and bank escrows",
+                  "Special discounts from pre-vetted construction material suppliers",
+                  "Flexible guarantor backup parameters and priority drawing modes"
+                ],
+                benefitsAm: [
+                  "እስከ 3,000,000 ብር የሚደርስ ታላላቅ የካፒታል ጥቅሎችን ያለምንም ውጣውረድ ያገኛሉ",
+                  "በሕግ በተረጋገጡ የዲጂታል ውሎችና በታመኑ የባንክ አካውንቶች የተደገፈ ነው",
+                  "ቅድሚያ ከተረጋገጡ የግንባታ እቃዎች አቅራቢዎች ልዩ ቅናሾችን ያገኛሉ",
+                  "ተለዋዋጭ እና ምቹ የዋሶች (Guarantors) አከፋፈልና ማረጋገጫ አሰራር"
+                ]
               },
               {
                 title: "Business Growth",
@@ -491,18 +508,36 @@ const Landing = () => {
                 tagAm: "ጅማሬ ካፒታል",
                 desc: "Accelerate your restaurant, tech development, or import venture with seamless seed funds.",
                 descAm: "ለንግድ ስራ ማስፋፊያ፣ ጥሬ እቃ መግዣ ወይም ለአዲስ ስራዎች መጀመሪያ ፈጣን ካፒታል ማሰባሰቢያ እቁብ።",
+                details: "Accelerate your businesses, tech development, farm imports, or retail expansions with prompt equity-free capital pools. Designed specifically for ambitious Ethiopian business owners who need immediate liquid capital to purchase raw inventory, scale operational equipment, or hire key staff.",
+                detailsAm: "ለንግድዎ ስራ ማስፋፊያ፣ ጥሬ እቃ መግዣ ወይም ለአዳዲስ የንግድ ህልሞችዎ መጀመሪያ ፈጣን ካፒታል ማሰባሰቢያ እቁብ። ያለ ባንክ ወለድና ያለ ድርጅት የባለቤትነት ድርሻ ሽያጭ እምነት የሚጣልበት የፋይናንስ ምንጭ ያግኙ።",
                 img: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=800",
                 icon: <Briefcase size={22} />,
-                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(245,158,11,0.35)]",
-                borderColor: "border-amber-100/50 group-hover:border-amber-500/40",
-                accentColor: "text-amber-600",
-                badgeBg: "bg-amber-500/10 text-amber-700 border-amber-500/20",
-                iconBg: "bg-amber-50 text-amber-600",
+                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(245,158,11,0.4)]",
+                borderColor: "border-amber-200/55 group-hover:border-amber-500/60",
+                accentColor: "text-amber-700",
+                badgeBg: "bg-amber-500/10 text-amber-800 border-amber-500/20",
+                iconBg: "bg-amber-50 text-amber-700",
                 stats: [
                   { labelAm: "ክፍያ", labelEn: "Cycles", value: "Bi-weekly" },
                   { labelAm: "ዓይነት", labelEn: "Category", value: "Commercial" }
                 ],
-                tagColor: "from-amber-500 to-orange-400"
+                tagColor: "from-amber-500 to-orange-400",
+                targetGroupEn: "Shop owners, tech startups, agricultural traders, and logistics providers",
+                targetGroupAm: "የሱቅ ባለቤቶች፣ ጀማሪ ስራዎች፣ የግብርና ነጋዴዎች እና የትራንስፖርት አገልግሎት ሰጪዎች",
+                safetyEn: "Requires formal trade licenses or enterprise guarantee contracts.",
+                safetyAm: "የሚሰራ የንግድ ፈቃድ ወይም የተረጋገጠ የድርጅት ዋስትና ግዴታ አለበት።",
+                benefitsEn: [
+                  "Bi-weekly short-duration rapid payout rounds for fast inventory purchases",
+                  "Opportunity for zero-interest seed funding up to 1,500,000 ETB",
+                  "Integration with commercial business advisory groups",
+                  "Instant bank settlement directly to supplier bank accounts on winning"
+                ],
+                benefitsAm: [
+                  "ጥሬ እቃዎችን በአፋጣኝ ለመግዛት በየሁለት ሳምንቱ የሚካሄድ ፈጣን የእጣ ዙርያ",
+                  "እስከ 1,500,000 ብር የሚደርስ ከወለድ ነፃ የሆነ የጅማሬ ካፒታል ማግኛ ዕድል",
+                  "ከድርጅት አማካሪዎችና የህግ ባለሙያዎች ጋር የሚደረግ ነፃ የሙያ ትስስር",
+                  "እጣው ሲወጣ በቀጥታ ወደ እቃዎች አቅራቢዎች ባንክ የሚተላለፍ የክፍያ ስርዓት"
+                ]
               },
               {
                 title: "Automobile & Transit",
@@ -511,18 +546,36 @@ const Landing = () => {
                 tagAm: "ተሽከርካሪ",
                 desc: "Upgrade or acquire commercial vehicles or personal transport under certified escrow guidance.",
                 descAm: "የመኪና ባለቤት ለመሆን ወይም ለድርጅትዎ የትራንስፖርት አገልግሎት የሚሆኑ ተሽከርካሪዎችን ለመግዛት።",
+                details: "Designed specifically to help purchase personal transport automobiles, delivery vans, tractors, agricultural heavy vehicles, or ride-share transport cars. Payouts are safely wired directly to licensed dealerships, protecting members from fraud or intermediary markups.",
+                detailsAm: "የግል ወይም የድርጅት ተሽከርካሪዎችን፣ የጭነት መኪናዎችን፣ የግብርና ትራክተሮችን ወይም የትርፍ ሰዓት ስራ የትራንስፖርት መኪናዎችን ለመግዛት የተመቻቸ እቁብ። እጣው ሲወጣ ክፍያው በቀጥታ ወደ መኪና አስመጪዎች ወይም ሽያጭ ማዕከላት በባንክ ይተላለፋል።",
                 img: "https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&q=80&w=800",
                 icon: <Layers size={22} />,
-                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(59,130,246,0.3)]",
-                borderColor: "border-blue-100/50 group-hover:border-blue-500/40",
-                accentColor: "text-blue-600",
-                badgeBg: "bg-blue-500/10 text-blue-700 border-blue-500/20",
-                iconBg: "bg-blue-50 text-blue-600",
+                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(59,130,246,0.35)]",
+                borderColor: "border-blue-200/55 group-hover:border-blue-500/60",
+                accentColor: "text-blue-700",
+                badgeBg: "bg-blue-500/10 text-blue-800 border-blue-500/20",
+                iconBg: "bg-blue-50 text-blue-700",
                 stats: [
                   { labelAm: "ክፍያ", labelEn: "Cycles", value: "Monthly" },
                   { labelAm: "ዓይነት", labelEn: "Category", value: "Transit" }
                 ],
-                tagColor: "from-blue-600 to-cyan-500"
+                tagColor: "from-blue-600 to-cyan-500",
+                targetGroupEn: "Drivers, freight agencies, family planners, and logistics scale plans",
+                targetGroupAm: "አሽከርካሪዎች፣ የትራንስፖርት ድርጅቶች፣ ቤተሰቦች እና የሎጅስቲክስ ተቋማት",
+                safetyEn: "Direct wire to trusted dealership bank accounts only, with transparent refund options.",
+                safetyAm: "እጣው ሲወጣ ክፍያው በቀጥታ ወደ መኪና አቅራቢ ታማኝ የባንክ ሂሳብ ብቻ ይተላለፋል።",
+                benefitsEn: [
+                  "Pre-negotiated discounts with certified automobile dealerships in Addis Ababa",
+                  "Special discounts on vehicle insurance packages up to 25% for platform members",
+                  "Highly structured monthly circles optimized for medium-to-high caliber savings",
+                  "Flexible swap options if buying targets change during the ongoing saving cycles"
+                ],
+                benefitsAm: [
+                  "በአዲስ አበባ ካሉ ፈቃድ ካላቸው አስመጪዎች ጋር በተደረገ ስምምነት ልዩ ቅናሾች",
+                  "እስከ 25% የሚደርስ ልዩ የመኪና ኢንሹራንስ ቅናሽ ጥቅሎች",
+                  "ለመካከለኛና ከፍተኛ ቁጣቢዎች የተመቻቹ ወርሃዊ ግልጽ ዙሪያዎች",
+                  "የመግዣ ዕቅዶት ቢቀየር ገንዘቡን ለሌላ አገልግሎት የማዋል ተለዋዋጭነት"
+                ]
               },
               {
                 title: "Lifestyle & Safety",
@@ -531,34 +584,53 @@ const Landing = () => {
                 tagAm: "ፈጣን ቁጠባ",
                 desc: "Covers crucial event planning, school tuitions, wedding support, or micro emergency funds.",
                 descAm: "ለያንዴ ዝግጅቶች፣ ለልጆች የትምህርት ቤት ክፍያ፣ ለሰርግ ወይም ለአይነተኛ ፈጣን ጉዳዮች።",
+                details: "A micro-savings design focusing on immediate life priorities like school tuitions, wedding preparations, medical backups, festive holiday feasts, or quick personal emergency cushions. Offers highly elastic weekly drawing slots and seamless mobile wallet integrations for your daily peace of mind.",
+                detailsAm: "ለያንዴ ዝግጅቶች፣ ለልጆች የትምህርት ቤት ክፍያ፣ ለሰርግ ዝግጅት፣ ለበዓል መግዣ ወይም ለድንገተኛ ፈጣን የህክምና ጉዳዮች የተዘጋጀ እቁብ። በየሳምንቱ አነስተኛ ክፍያዎችን በሞባይል ገንዘብ (Telebirr, CBE Birr) በቀላሉ መቆጠብ የሚያስችል ምቹ መድረክ።",
                 img: "https://images.unsplash.com/photo-1512909006721-3d6018887383?auto=format&fit=crop&q=80&w=800",
                 icon: <Sparkles size={22} />,
-                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(168,85,247,0.3)]",
-                borderColor: "border-purple-100/50 group-hover:border-purple-500/40",
-                accentColor: "text-purple-600",
-                badgeBg: "bg-purple-500/10 text-purple-700 border-purple-500/20",
-                iconBg: "bg-purple-50 text-purple-600",
+                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(168,85,247,0.35)]",
+                borderColor: "border-purple-200/55 group-hover:border-purple-500/60",
+                accentColor: "text-purple-700",
+                badgeBg: "bg-purple-500/10 text-purple-800 border-purple-500/20",
+                iconBg: "bg-purple-50 text-purple-700",
                 stats: [
                   { labelAm: "ክፍያ", labelEn: "Cycles", value: "Weekly" },
                   { labelAm: "ዓይነት", labelEn: "Category", value: "Lifestyle" }
                 ],
-                tagColor: "from-purple-600 to-pink-500"
+                tagColor: "from-purple-600 to-pink-500",
+                targetGroupEn: "Students, young couples, homemakers, and quick savings focus groups",
+                targetGroupAm: "ተማሪዎች፣ አዲስ ተጋቢዎች፣ የቤት እመቤቶች እና ፈጣን ቆጣቢ ቡድኖች",
+                safetyEn: "Zero complex paperwork required, fully responsive online setup.",
+                safetyAm: "ምንም የተወሳሰበ የሰነድ ዝግጅት አያስፈልገውም፤ በደቂቃዎች ውስጥ የሚጠናቀቅ።",
+                benefitsEn: [
+                  "Ultra-low entry barriers with high-speed weekly payouts",
+                  "Direct integration with Telebirr, CBE Birr, and Chapa payment APIs",
+                  "Instant SMS and push alert notifications for contributions and winning drawings",
+                  "Emergency cash-out borrow capabilities if unforeseen life events occur"
+                ],
+                benefitsAm: [
+                  "በእጅጉ አነስተኛ መግቢያ እና በየሳምንቱ የሚወጣ ፈጣን የዕጣ እድል",
+                  "ከተሌብር (Telebirr) ፣ የሲቢኢ ብር እና ቻፓ ክፍያዎች ጋር ቀጥተኛ ትስስር",
+                  "ለቁጠባዎ እና ለእጣው ሒደት ፈጣን የኤስኤምኤስ (SMS) የጽሁፍ መልዕክቶች",
+                  "በድንገተኛ አደጋ ጊዜ ቀድሞ የመበደር ወይም ገንዘብ የማውጣት ልዩ ፈቃድ"
+                ]
               }
             ].map((plan: any, idx: number) => (
               <div 
                 key={idx}
+                onClick={() => setSelectedPlan(plan)}
                 className="group relative cursor-pointer"
               >
                 {/* Visual hover color backglow */}
                 <div className={`absolute inset-0 rounded-[2.5rem] opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-white z-0 ${plan.glowColor}`} />
 
                 {/* Main Card container */}
-                <div className={`h-full bg-white relative rounded-[2.5rem] border ${plan.borderColor} p-6 shadow-[0_15px_40px_rgba(0,0,0,0.02)] transition-all duration-500 hover:-translate-y-2 z-10 flex flex-col justify-between overflow-hidden`}>
+                <div className={`h-full bg-white relative rounded-[2.5rem] border-2 ${plan.borderColor} p-8 shadow-[0_15px_40px_rgba(0,0,0,0.02)] transition-all duration-500 hover:-translate-y-2.5 z-10 flex flex-col justify-between overflow-hidden`}>
                   
                   <div>
                     {/* Picture Header with Gradient Overlay */}
-                    <div className="relative h-48 w-full rounded-[1.8rem] overflow-hidden mb-6">
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10" />
+                    <div className="relative h-56 w-full rounded-[2rem] overflow-hidden mb-6 shadow-sm">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent z-10" />
                       <img 
                         src={plan.img} 
                         alt={plan.title} 
@@ -566,37 +638,37 @@ const Landing = () => {
                         referrerPolicy="no-referrer"
                       />
                       {/* Colorful Floating Badge Tag */}
-                      <span className={`absolute top-4 left-4 z-20 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white bg-gradient-to-r shadow-md ${plan.tagColor}`}>
+                      <span className={`absolute top-4 left-4 z-20 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest text-white bg-gradient-to-r shadow-md ${plan.tagColor}`}>
                         {language === 'am' ? plan.tagAm : plan.tag}
                       </span>
                     </div>
 
                     {/* Icon + Title Block */}
                     <div className="flex items-center gap-4 mb-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${plan.iconBg} font-bold shadow-sm`}>
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${plan.iconBg} font-black shadow-md`}>
                         {plan.icon}
                       </div>
-                      <h3 className={`text-xl font-black text-emerald-950 tracking-tight`}>
+                      <h3 className={`text-2xl font-black text-emerald-950 tracking-tight leading-tight`}>
                         {language === 'am' ? plan.titleAm : plan.title}
                       </h3>
                     </div>
 
                     {/* Description */}
-                    <p className="text-slate-500 text-[14px] leading-relaxed font-semibold mb-6">
+                    <p className="text-slate-600 text-base sm:text-[17px] font-bold leading-relaxed mb-6">
                       {language === 'am' ? plan.descAm : plan.desc}
                     </p>
                   </div>
 
                   {/* Divider */}
-                  <div className="border-t border-slate-100/80 pt-5 mt-auto">
+                  <div className="border-t-2 border-slate-100 pt-6 mt-auto">
                     {/* Stats Layout */}
-                    <div className="grid grid-cols-2 gap-4 mb-5">
+                    <div className="grid grid-cols-2 gap-4 mb-6">
                       {plan.stats.map((stat: any, sIdx: number) => (
-                        <div key={sIdx} className="bg-slate-50/50 rounded-xl p-3 border border-slate-100 flex flex-col justify-center">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">
+                        <div key={sIdx} className="bg-slate-50/70 rounded-2xl p-4 border border-slate-100 flex flex-col justify-center shadow-inner">
+                          <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
                             {language === 'am' ? stat.labelAm : stat.labelEn}
                           </span>
-                          <span className={`text-[12px] font-black ${plan.accentColor}`}>
+                          <span className={`text-[13px] sm:text-sm font-black ${plan.accentColor}`}>
                             {stat.value}
                           </span>
                         </div>
@@ -604,12 +676,12 @@ const Landing = () => {
                     </div>
 
                     {/* Highly interactive visual link indicating action */}
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-emerald-800 transition-colors">
+                    <div className="flex items-center justify-between mt-2 pt-2">
+                      <span className="text-[12px] sm:text-sm font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-amber-600 transition-colors">
                         {language === 'am' ? 'ዝርዝር እይ' : 'Explore Scheme'}
                       </span>
-                      <div className={`w-8 h-8 rounded-full ${plan.iconBg} flex items-center justify-center group-hover:scale-110 group-hover:translate-x-1 transition-all`}>
-                        <ArrowRight size={14} />
+                      <div className={`w-10 h-10 rounded-full ${plan.iconBg} flex items-center justify-center group-hover:scale-110 group-hover:translate-x-2 transition-all shadow-md`}>
+                        <ArrowRight size={16} />
                       </div>
                     </div>
                   </div>
@@ -631,7 +703,7 @@ const Landing = () => {
                    {language === 'am' ? 'ለምን መሊቅ እቁብን ይመርጣሉ?' : 'The Digital Ekub Advantage'}
                 </h2>
              </div>
-             <p className="max-w-md text-slate-500 font-medium text-lg border-l-4 border-emerald-500 pl-6">
+             <p className="max-w-lg text-slate-700 font-semibold text-lg sm:text-xl lg:text-2xl border-l-4 border-emerald-500 pl-6 leading-relaxed">
                 {language === 'am' 
                   ? 'ቴክኖሎጂን ከባህል ጋር አቀናጅተን ለሁላችሁም ተደራሽ እና እምነት የሚጣልበት የእቁብ አገልግሎት እናቀርባለን።'
                   : 'We blend deep-rooted tradition with cutting-edge technology to create a seamless saving experience for everyone.'}
@@ -655,7 +727,7 @@ const Landing = () => {
                      <h3 className={`text-2xl font-black text-emerald-950 mb-4 tracking-tight ${language === 'am' ? 'font-am' : ''}`}>
                         {language === 'am' ? (card.titleAm || card.am) : card.title}
                      </h3>
-                     <p className="text-slate-500 font-medium">The best digital tools to manage your Ekub cycles efficiently and securely.</p>
+                     <p className="text-slate-600 font-bold text-base sm:text-lg leading-relaxed">The best digital tools to manage your Ekub cycles efficiently and securely. (እቁብዎን በሰላም ለማስተዳደር ምርጡ የዲጂታል ቴክኖሎጂ መፍትሄ።)</p>
                   </div>
                </div>
              ))}
@@ -858,6 +930,165 @@ const Landing = () => {
             <button onClick={() => setActiveInfo(null)} className="w-full bg-emerald-800 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-emerald-900 transition-all">
               {language === 'am' ? 'ዝጋ' : 'Close Guide'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Detailed Equb Scheme Modal */}
+      {selectedPlan && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 sm:p-6 md:p-10">
+          <div className="absolute inset-0 bg-emerald-950/85 backdrop-blur-xl" onClick={() => setSelectedPlan(null)} />
+          <div className="relative bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] p-6 sm:p-10 md:p-12 shadow-2xl border border-emerald-900/15 animate-scale-in z-10 select-none">
+            <button 
+              onClick={() => setSelectedPlan(null)} 
+              className="absolute top-6 right-6 sm:top-8 sm:right-8 w-12 h-12 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 hover:text-emerald-900 hover:shadow-md hover:scale-105 transition-all"
+            >
+              <ArrowRight className="rotate-45" size={24} />
+            </button>
+
+            {/* Glowing background highlights */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-amber-400/5 rounded-full blur-[100px] pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/5 rounded-full blur-[100px] pointer-events-none" />
+
+            {/* Modal Body */}
+            <div>
+              {/* Top Meta info */}
+              <div className={`inline-flex items-center gap-3 px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest text-white bg-gradient-to-r shadow-md mb-6 relative z-10 ${selectedPlan.tagColor}`}>
+                {language === 'am' ? selectedPlan.tagAm : selectedPlan.tag}
+              </div>
+
+              {/* Header Title with Custom Icon */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-5 mb-8">
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${selectedPlan.iconBg} font-black shadow-md flex-shrink-0`}>
+                  {selectedPlan.icon}
+                </div>
+                <div>
+                  <h3 className={`text-2xl sm:text-3xl md:text-4xl font-extrabold text-emerald-950 tracking-tight`}>
+                    {language === 'am' ? selectedPlan.titleAm : selectedPlan.title}
+                  </h3>
+                  <p className="text-amber-600 font-extrabold text-xs sm:text-sm uppercase tracking-widest mt-1">
+                    {language === 'am' ? 'የእቅድ ዝርዝር ማብራሪያ' : 'Exquisite Savings Scheme'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Visual Split Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                {/* Left Side: Photo + Quick Stats */}
+                <div className="lg:col-span-5 space-y-6">
+                  <div className="relative h-64 rounded-3xl overflow-hidden shadow-lg border border-slate-100">
+                    <img 
+                      src={selectedPlan.img} 
+                      alt={selectedPlan.title} 
+                      className="w-full h-full object-cover" 
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+
+                  {/* High Contrast Key Info Grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-100 flex flex-col justify-center">
+                      <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">
+                        {language === 'am' ? 'ዑደት / ጊዜ' : 'Saving Cycle'}
+                      </span>
+                      <span className="text-base sm:text-lg font-extrabold text-emerald-950">
+                        {language === 'am' ? (selectedPlan.stats[0].value === 'Monthly' ? 'የወር ቆጣቢ' : selectedPlan.stats[0].value === 'Bi-weekly' ? 'የሁለት ሳምንት' : 'የሳምንት ቆጣቢ') : selectedPlan.stats[0].value}
+                      </span>
+                    </div>
+
+                    <div className="bg-amber-50/50 rounded-2xl p-4 border border-amber-100/60 flex flex-col justify-center">
+                      <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">
+                        {language === 'am' ? 'የእቅድ ዘርፍ' : 'Key Classification'}
+                      </span>
+                      <span className="text-base sm:text-lg font-extrabold text-emerald-950">
+                        {language === 'am' ? selectedPlan.tagAm : selectedPlan.stats[1].value}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Target Group */}
+                  <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                    <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
+                      {language === 'am' ? 'ለእነማን ተመራጭ ነው' : 'Target Audience'}
+                    </h5>
+                    <p className="text-slate-700 font-bold text-sm sm:text-base leading-relaxed">
+                      {language === 'am' ? selectedPlan.targetGroupAm : selectedPlan.targetGroupEn}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right Side: Elaborate Details and Checklist */}
+                <div className="lg:col-span-7 space-y-8">
+                  
+                  {/* Detailed Description Paragraph */}
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-emerald-800 tracking-[0.2em] mb-3">
+                      {language === 'am' ? 'ስለ እቅዱ' : 'Overview & Philosophy'}
+                    </h4>
+                    <p className="text-slate-600 font-bold text-base sm:text-lg leading-relaxed">
+                      {language === 'am' ? selectedPlan.detailsAm : selectedPlan.details}
+                    </p>
+                  </div>
+
+                  {/* Key Benefits Bulletpoints */}
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-amber-600 tracking-[0.2em] mb-4">
+                      {language === 'am' ? 'ዋና ዋና ጥቅሞችና ዋስትናዎች' : 'Core Value & Safeguards'}
+                    </h4>
+                    <ul className="space-y-3">
+                      {(language === 'am' ? selectedPlan.benefitsAm : selectedPlan.benefitsEn).map((benefit: string, idx: number) => (
+                        <li key={idx} className="flex items-start gap-3">
+                          <CheckCircle2 size={18} className="text-emerald-600 mt-1 flex-shrink-0" />
+                          <span className="text-slate-700 font-bold text-sm sm:text-base">
+                            {benefit}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Security Highlights */}
+                  <div className="p-4 bg-emerald-50/45 rounded-2xl border border-emerald-100 flex items-start gap-3">
+                    <ShieldCheck size={20} className="text-emerald-700 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-black uppercase text-emerald-800 tracking-wider mb-1">
+                        {language === 'am' ? 'የደህንነት እና የታማኝነት ዋስትና' : 'Secured Financial Guarantee'}
+                      </h4>
+                      <p className="text-slate-600 font-bold text-[13px] sm:text-sm leading-relaxed">
+                        {language === 'am' ? selectedPlan.safetyAm : selectedPlan.safetyEn}
+                      </p>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* Footer CTA Action Buttons */}
+              <div className="mt-10 pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+                <p className="text-slate-400 font-bold text-[13px] sm:text-sm text-center sm:text-left">
+                  {language === 'am' 
+                    ? 'ለመመዝገብ መታወቂያ እና ተያያዥ ማረጋገጫዎች በእጅዎ ሊኖር ይገባል' 
+                    : 'A valid National ID is required during registration setup.'}
+                </p>
+                <div className="flex flex-wrap gap-4 w-full sm:w-auto">
+                  <button 
+                    onClick={() => setSelectedPlan(null)} 
+                    className="flex-1 sm:flex-none px-6 py-4 rounded-xl font-black text-xs uppercase tracking-widest text-slate-500 hover:text-emerald-950 hover:bg-slate-50 transition-all text-center border border-slate-200"
+                  >
+                    {language === 'am' ? 'ዝጋ' : 'Close Details'}
+                  </button>
+                  <Link 
+                    to="/signup" 
+                    className="flex-1 sm:flex-none px-10 py-4 rounded-xl bg-emerald-800 text-amber-300 font-black text-xs uppercase tracking-widest hover:bg-emerald-900 transition-all text-center shadow-lg hover:shadow-emerald-900/20"
+                  >
+                    {language === 'am' ? 'ይህንን እቁብ ጀምር' : 'Join This Scheme'}
+                  </Link>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
       )}
