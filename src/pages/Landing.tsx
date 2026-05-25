@@ -36,7 +36,10 @@ import {
   Quote,
   FileText,
   LayoutGrid,
-  History
+  History,
+  Home,
+  Briefcase,
+  Sparkles
 } from 'lucide-react';
 import { useLanguage } from '../lib/LanguageContext';
 
@@ -432,6 +435,188 @@ const Landing = () => {
                   </div>
                )
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* Premium Equb Categories with Colorful Glow Shadows and Beautiful Imagery */}
+      <section className="py-32 bg-[#FAF9F5] relative overflow-hidden">
+        {/* Subtle decorative glowing background circles */}
+        <div className="absolute top-20 left-20 w-96 h-96 bg-emerald-400/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-amber-400/10 rounded-full blur-[120px] pointer-events-none" />
+
+        <div className="max-w-[90rem] mx-auto px-6 sm:px-12 relative z-10">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-24 gap-8">
+            <div className="max-w-2xl">
+              <span className="inline-block px-5 py-2 bg-amber-100 text-amber-800 rounded-full font-black uppercase tracking-[0.4em] text-[10px] mb-6 border border-amber-200/50">
+                {language === 'am' ? 'የቁጠባ ዓይነቶች' : 'Vibrant Schemes'}
+              </span>
+              <h2 className={`text-4xl md:text-5xl lg:text-6xl font-black text-emerald-950 tracking-tighter leading-none ${language === 'am' ? 'font-am' : ''}`}>
+                {language === 'am' ? 'የእቁብ ዓይነቶች እና የቁጠባ ዕቅዶች' : 'Our Specialized Equb Schemes'}
+              </h2>
+            </div>
+            <p className="max-w-md text-slate-500 font-medium text-lg border-l-4 border-amber-500 pl-6">
+              {language === 'am' 
+                ? 'ለእያንዳንዱ የቁጠባ ዓላማ ከተለየ የቀለም-ብርሃን እና የሻዶው አጨራረስ ጋር የተዘጋጁ ማራኪ የእቁብ አማራጮችን እዚህ ያግኙ።'
+                : 'Discover unique tailored saving categories decorated with vibrant shadow borders, customized timers, and high-impact visual design.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {[
+              {
+                title: "Dream Home Equb",
+                titleAm: "የቤት እቅድ እቁብ",
+                tag: "Real Estate",
+                tagAm: "ሪል ስቴት",
+                desc: "Raise structured capital to build or purchase family real estate without exhausting loans.",
+                descAm: "ያለ ከፍተኛ የባንክ ወለድ የዕቅዶትን የመኖሪያ ቤት ለመገንባት ወይም ለመግዛት የሚያስችል አስተማማኝ እቁብ።",
+                img: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800",
+                icon: <Home size={22} />,
+                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(16,185,129,0.3)]",
+                borderColor: "border-emerald-100/50 group-hover:border-emerald-500/40",
+                accentColor: "text-emerald-600",
+                badgeBg: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
+                iconBg: "bg-emerald-50 text-emerald-600",
+                stats: [
+                  { labelAm: "ክፍያ", labelEn: "Cycles", value: "Monthly" },
+                  { labelAm: "ዓይነት", labelEn: "Category", value: "Property" }
+                ],
+                tagColor: "from-emerald-600 to-teal-500"
+              },
+              {
+                title: "Business Growth",
+                titleAm: "የንግድና ስራ እቁብ",
+                tag: "Seed Capital",
+                tagAm: "ጅማሬ ካፒታል",
+                desc: "Accelerate your restaurant, tech development, or import venture with seamless seed funds.",
+                descAm: "ለንግድ ስራ ማስፋፊያ፣ ጥሬ እቃ መግዣ ወይም ለአዲስ ስራዎች መጀመሪያ ፈጣን ካፒታል ማሰባሰቢያ እቁብ።",
+                img: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=800",
+                icon: <Briefcase size={22} />,
+                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(245,158,11,0.35)]",
+                borderColor: "border-amber-100/50 group-hover:border-amber-500/40",
+                accentColor: "text-amber-600",
+                badgeBg: "bg-amber-500/10 text-amber-700 border-amber-500/20",
+                iconBg: "bg-amber-50 text-amber-600",
+                stats: [
+                  { labelAm: "ክፍያ", labelEn: "Cycles", value: "Bi-weekly" },
+                  { labelAm: "ዓይነት", labelEn: "Category", value: "Commercial" }
+                ],
+                tagColor: "from-amber-500 to-orange-400"
+              },
+              {
+                title: "Automobile & Transit",
+                titleAm: "የመኪና መግዣ እቁብ",
+                tag: "Transport",
+                tagAm: "ተሽከርካሪ",
+                desc: "Upgrade or acquire commercial vehicles or personal transport under certified escrow guidance.",
+                descAm: "የመኪና ባለቤት ለመሆን ወይም ለድርጅትዎ የትራንስፖርት አገልግሎት የሚሆኑ ተሽከርካሪዎችን ለመግዛት።",
+                img: "https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&q=80&w=800",
+                icon: <Layers size={22} />,
+                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(59,130,246,0.3)]",
+                borderColor: "border-blue-100/50 group-hover:border-blue-500/40",
+                accentColor: "text-blue-600",
+                badgeBg: "bg-blue-500/10 text-blue-700 border-blue-500/20",
+                iconBg: "bg-blue-50 text-blue-600",
+                stats: [
+                  { labelAm: "ክፍያ", labelEn: "Cycles", value: "Monthly" },
+                  { labelAm: "ዓይነት", labelEn: "Category", value: "Transit" }
+                ],
+                tagColor: "from-blue-600 to-cyan-500"
+              },
+              {
+                title: "Lifestyle & Safety",
+                titleAm: "የዕለት ኑሮ እቁብ",
+                tag: "Micro Savings",
+                tagAm: "ፈጣን ቁጠባ",
+                desc: "Covers crucial event planning, school tuitions, wedding support, or micro emergency funds.",
+                descAm: "ለያንዴ ዝግጅቶች፣ ለልጆች የትምህርት ቤት ክፍያ፣ ለሰርግ ወይም ለአይነተኛ ፈጣን ጉዳዮች።",
+                img: "https://images.unsplash.com/photo-1512909006721-3d6018887383?auto=format&fit=crop&q=80&w=800",
+                icon: <Sparkles size={22} />,
+                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(168,85,247,0.3)]",
+                borderColor: "border-purple-100/50 group-hover:border-purple-500/40",
+                accentColor: "text-purple-600",
+                badgeBg: "bg-purple-500/10 text-purple-700 border-purple-500/20",
+                iconBg: "bg-purple-50 text-purple-600",
+                stats: [
+                  { labelAm: "ክፍያ", labelEn: "Cycles", value: "Weekly" },
+                  { labelAm: "ዓይነት", labelEn: "Category", value: "Lifestyle" }
+                ],
+                tagColor: "from-purple-600 to-pink-500"
+              }
+            ].map((plan: any, idx: number) => (
+              <div 
+                key={idx}
+                className="group relative cursor-pointer"
+              >
+                {/* Visual hover color backglow */}
+                <div className={`absolute inset-0 rounded-[2.5rem] opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-white z-0 ${plan.glowColor}`} />
+
+                {/* Main Card container */}
+                <div className={`h-full bg-white relative rounded-[2.5rem] border ${plan.borderColor} p-6 shadow-[0_15px_40px_rgba(0,0,0,0.02)] transition-all duration-500 hover:-translate-y-2 z-10 flex flex-col justify-between overflow-hidden`}>
+                  
+                  <div>
+                    {/* Picture Header with Gradient Overlay */}
+                    <div className="relative h-48 w-full rounded-[1.8rem] overflow-hidden mb-6">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10" />
+                      <img 
+                        src={plan.img} 
+                        alt={plan.title} 
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                        referrerPolicy="no-referrer"
+                      />
+                      {/* Colorful Floating Badge Tag */}
+                      <span className={`absolute top-4 left-4 z-20 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white bg-gradient-to-r shadow-md ${plan.tagColor}`}>
+                        {language === 'am' ? plan.tagAm : plan.tag}
+                      </span>
+                    </div>
+
+                    {/* Icon + Title Block */}
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${plan.iconBg} font-bold shadow-sm`}>
+                        {plan.icon}
+                      </div>
+                      <h3 className={`text-xl font-black text-emerald-950 tracking-tight`}>
+                        {language === 'am' ? plan.titleAm : plan.title}
+                      </h3>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-slate-500 text-[14px] leading-relaxed font-semibold mb-6">
+                      {language === 'am' ? plan.descAm : plan.desc}
+                    </p>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-slate-100/80 pt-5 mt-auto">
+                    {/* Stats Layout */}
+                    <div className="grid grid-cols-2 gap-4 mb-5">
+                      {plan.stats.map((stat: any, sIdx: number) => (
+                        <div key={sIdx} className="bg-slate-50/50 rounded-xl p-3 border border-slate-100 flex flex-col justify-center">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">
+                            {language === 'am' ? stat.labelAm : stat.labelEn}
+                          </span>
+                          <span className={`text-[12px] font-black ${plan.accentColor}`}>
+                            {stat.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Highly interactive visual link indicating action */}
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-emerald-800 transition-colors">
+                        {language === 'am' ? 'ዝርዝር እይ' : 'Explore Scheme'}
+                      </span>
+                      <div className={`w-8 h-8 rounded-full ${plan.iconBg} flex items-center justify-center group-hover:scale-110 group-hover:translate-x-1 transition-all`}>
+                        <ArrowRight size={14} />
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
