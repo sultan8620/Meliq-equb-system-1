@@ -28,25 +28,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     let unsubData: (() => void) | null = null;
     
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        const hasActiveSession = sessionStorage.getItem('is_active_session') === 'true';
-        if (!hasActiveSession) {
-          console.log("No active tab session detected. Automatically signing out...");
-          const { signOut } = await import('firebase/auth');
-          await signOut(auth);
-          setUser(null);
-          setUserData(null);
-          setLoading(false);
-          if (unsubData) {
-            unsubData();
-            unsubData = null;
-          }
-          return;
-        }
-      } else {
-        sessionStorage.removeItem('is_active_session');
-      }
-
       // If user logs in or switches, show loading until we fetch their data
       if (currentUser && (!user || currentUser.uid !== user.uid)) {
         setLoading(true);
