@@ -705,6 +705,7 @@ export default function Signup() {
   const handleGoogleSignup = async () => {
     setIsSubmitting(true);
     setStepError('');
+    sessionStorage.setItem('is_active_session', 'true');
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
@@ -744,6 +745,7 @@ export default function Signup() {
   const handleSignup = async () => {
     if (!validateStep()) return;
     setIsSubmitting(true);
+    sessionStorage.setItem('is_active_session', 'true');
     try {
       const phoneInput = formData.phone.trim();
       let cleanPhone = phoneInput.replace(/\D/g, '');

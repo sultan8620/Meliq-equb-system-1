@@ -46,7 +46,6 @@ const SavedPathRestorer = () => {
 const MaintenanceGuard = ({ children }: { children: React.ReactNode }) => {
   const { isAdmin, loading } = useAuth();
   const [maintenanceMode, setMaintenanceMode] = React.useState(false);
-  const [isReady, setIsReady] = React.useState(false);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'system_settings', 'main'), (docSnap) => {
@@ -55,33 +54,35 @@ const MaintenanceGuard = ({ children }: { children: React.ReactNode }) => {
       } else {
         setMaintenanceMode(false);
       }
-      setIsReady(true);
     }, (error) => {
       console.warn("MaintenanceGuard settings listener error:", error);
-      setIsReady(true); // Still proceed but without maintenance mode knowledge
     });
-    return () => unsub();
+    return () => {
+      unsub();
+    };
   }, []);
 
-  if (!isReady || loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
-      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
-      <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">በመጫን ላይ...</p>
-    </div>
-  );
-
-  if (maintenanceMode && !isAdmin) {
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-white p-6 text-center">
-        <div className="w-24 h-24 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mb-6">
-           <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        </div>
-        <h1 className="text-4xl font-black mb-4 uppercase tracking-tighter">የጥገና ጊዜ <br/><span className="text-amber-500">Maintenance</span></h1>
-        <p className="text-slate-400 font-medium max-w-md text-sm leading-relaxed">
-          ሲስተሙ በአሁኑ ሰዓት በማሻሻያ ላይ ይገኛል። ማሻሻያውን አጠናቀን በቅርቡ እንመለሳለን። (The system is temporarily offline for software updates. We'll be back shortly.)
-        </p>
+  if (maintenanceMode) {
+    if (loading) return (
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">ማረጋገጫ በመጫን ላይ...</p>
       </div>
     );
+    
+    if (!isAdmin) {
+      return (
+        <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-white p-6 text-center">
+          <div className="w-24 h-24 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mb-6">
+             <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <h1 className="text-4xl font-black mb-4 uppercase tracking-tighter">የጥገና ጊዜ <br/><span className="text-amber-500">Maintenance</span></h1>
+          <p className="text-slate-400 font-medium max-w-md text-sm leading-relaxed">
+            ሲስተሙ በአሁኑ ሰዓት በማሻሻያ ላይ ይገኛል። ማሻሻያውን አጠናቀን በቅርቡ እንመለሳለን። (The system is temporarily offline for software updates. We'll be back shortly.)
+          </p>
+        </div>
+      );
+    }
   }
 
   return <>{children}</>;

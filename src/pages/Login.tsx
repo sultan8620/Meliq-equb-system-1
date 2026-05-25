@@ -265,6 +265,7 @@ export default function Login() {
 
     setIsLoading(true);
     setError(null);
+    sessionStorage.setItem('is_active_session', 'true');
 
     try {
       // 1. Check if the user exists in Firestore first
@@ -363,23 +364,44 @@ export default function Login() {
         }
       }
 
-      setPendingLoginData(pendingData);
+      // setPendingLoginData(pendingData);
 
-      // Generate and Send OTP
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedCode(code);
-      
-      try {
-        const smsMsg = language === 'am' ? `የእርስዎ ማረጋገጫ ኮድ፡ ${code}` : `Your verification code is: ${code}`;
-        await sendSMS(actualPhone, smsMsg, actualName, 'otp');
-        setError(language === 'am' ? 'የማረጋገጫ ኮድ በስልክዎ ተልኳል' : 'Verification code sent to your phone');
-      } catch (smsErr) {
-        console.warn("SMS sending failed, falling back to UI:", smsErr);
-        setError(`${t('auth.verification_code_sms').replace('{code}', code)}`); // Fallback
+      // // Generate and Send OTP
+      // const code = Math.floor(100000 + Math.random() * 900000).toString();
+      // setGeneratedCode(code);
+      // 
+      // try {
+      //   const smsMsg = language === 'am' ? `የእርስዎ ማረጋገጫ ኮድ፡ ${code}` : `Your verification code is: ${code}`;
+      //   await sendSMS(actualPhone, smsMsg, actualName, 'otp');
+      //   setError(language === 'am' ? 'የማረጋገጫ ኮድ በስልክዎ ተልኳል' : 'Verification code sent to your phone');
+      // } catch (smsErr) {
+      //   console.warn("SMS sending failed, falling back to UI:", smsErr);
+      //   setError(`${t('auth.verification_code_sms').replace('{code}', code)}`); // Fallback
+      // }
+
+      // setVerificationCode('');
+      // setFlow('login_verify');
+
+      // Immediate Navigation (OTP bypassed for now)
+      if (pendingData?.isAdminPhone) {
+        navigate('/admin');
+      } else {
+        const data = pendingData?.userData;
+        if (data && (data.status === 'pending' || data.status === 'rejected')) {
+          navigate('/pending-approval', {
+            state: {
+              registeredInfo: {
+                name: data.fullName,
+                phone: data.phone,
+                group: data.group || data.groupId,
+                memberCode: data.memberCode
+              }
+            }
+          });
+        } else {
+          navigate('/dashboard');
+        }
       }
-
-      setVerificationCode('');
-      setFlow('login_verify');
       
     } catch (err: any) {
       console.error('Login Error:', err);
@@ -402,6 +424,7 @@ export default function Login() {
     provider.setCustomParameters({ prompt: 'select_account' });
     setIsLoading(true);
     setError(null);
+    sessionStorage.setItem('is_active_session', 'true');
     try {
       // Re-signout is usually not needed here and can break user gesture chain in some browsers
       const result = await signInWithPopup(auth, provider);
