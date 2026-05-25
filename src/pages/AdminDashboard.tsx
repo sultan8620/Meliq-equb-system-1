@@ -456,11 +456,84 @@ export default function AdminDashboard() {
 
 
   const groupsWithMembers = useMemo(() => {
-    return groups.map(group => ({
+    let list = groups.map(group => ({
       ...group,
       members: allUsers.filter(u => u.groupId === group.id)
     }));
-  }, [groups, allUsers]);
+
+    if (!isSuperAdmin) {
+      const assignedTypes = userData?.permissions?.assignedGroupTypes || [];
+      const assignedIds = userData?.permissions?.assignedGroupIds || [];
+      const hasTypeRestriction = assignedTypes.length > 0;
+      const hasIdRestriction = assignedIds.length > 0;
+      
+      if (hasTypeRestriction || hasIdRestriction) {
+        list = list.filter(group => {
+          const matchesType = hasTypeRestriction ? assignedTypes.includes(group.type) : false;
+          const matchesId = hasIdRestriction ? assignedIds.includes(group.id) : false;
+          return matchesType || matchesId;
+        });
+      }
+    }
+    return list;
+  }, [groups, allUsers, isSuperAdmin, userData]);
+
+  const allowedUsers = useMemo(() => {
+    if (isSuperAdmin) return allUsers;
+    const assignedTypes = userData?.permissions?.assignedGroupTypes || [];
+    const assignedIds = userData?.permissions?.assignedGroupIds || [];
+    if (assignedTypes.length === 0 && assignedIds.length === 0) return allUsers;
+    const allowedGroupIds = groupsWithMembers.map(g => g.id);
+    return allUsers.filter(u => {
+      const matchesId = u.groupId && allowedGroupIds.includes(u.groupId);
+      const matchesType = u.ekubType && assignedTypes.includes(u.ekubType);
+      return matchesId || matchesType;
+    });
+  }, [allUsers, groupsWithMembers, isSuperAdmin, userData]);
+
+  const allowedPendingUsers = useMemo(() => {
+    if (isSuperAdmin) return pendingUsers;
+    const assignedTypes = userData?.permissions?.assignedGroupTypes || [];
+    const assignedIds = userData?.permissions?.assignedGroupIds || [];
+    if (assignedTypes.length === 0 && assignedIds.length === 0) return pendingUsers;
+    const allowedGroupIds = groupsWithMembers.map(g => g.id);
+    return pendingUsers.filter(u => {
+      const matchesId = u.groupId && allowedGroupIds.includes(u.groupId);
+      const matchesType = u.ekubType && assignedTypes.includes(u.ekubType);
+      return matchesId || matchesType;
+    });
+  }, [pendingUsers, groupsWithMembers, isSuperAdmin, userData]);
+
+  const allowedRejectedUsers = useMemo(() => {
+    if (isSuperAdmin) return rejectedUsers;
+    const assignedTypes = userData?.permissions?.assignedGroupTypes || [];
+    const assignedIds = userData?.permissions?.assignedGroupIds || [];
+    if (assignedTypes.length === 0 && assignedIds.length === 0) return rejectedUsers;
+    const allowedGroupIds = groupsWithMembers.map(g => g.id);
+    return rejectedUsers.filter(u => {
+      const matchesId = u.groupId && allowedGroupIds.includes(u.groupId);
+      const matchesType = u.ekubType && assignedTypes.includes(u.ekubType);
+      return matchesId || matchesType;
+    });
+  }, [rejectedUsers, groupsWithMembers, isSuperAdmin, userData]);
+
+  const allowedPayments = useMemo(() => {
+    if (isSuperAdmin) return payments;
+    const assignedTypes = userData?.permissions?.assignedGroupTypes || [];
+    const assignedIds = userData?.permissions?.assignedGroupIds || [];
+    if (assignedTypes.length === 0 && assignedIds.length === 0) return payments;
+    const allowedGroupIds = groupsWithMembers.map(g => g.id);
+    return payments.filter(p => p.groupId && allowedGroupIds.includes(p.groupId));
+  }, [payments, groupsWithMembers, isSuperAdmin, userData]);
+
+  const allowedAllPayments = useMemo(() => {
+    if (isSuperAdmin) return allPayments;
+    const assignedTypes = userData?.permissions?.assignedGroupTypes || [];
+    const assignedIds = userData?.permissions?.assignedGroupIds || [];
+    if (assignedTypes.length === 0 && assignedIds.length === 0) return allPayments;
+    const allowedGroupIds = groupsWithMembers.map(g => g.id);
+    return allPayments.filter(p => p.groupId && allowedGroupIds.includes(p.groupId));
+  }, [allPayments, groupsWithMembers, isSuperAdmin, userData]);
 
   const [chatSearch, setChatSearch] = useState('');
 
@@ -473,7 +546,7 @@ export default function AdminDashboard() {
           id: 'pending', 
           label: language === 'am' ? 'ማረጋገጫ የሚጠብቁ (KYC)' : t('menu.admin.pending'), 
           icon: ShieldCheck, 
-          badge: pendingUsers.length > 0 ? pendingUsers.length : null,
+          badge: allowedPendingUsers.length > 0 ? allowedPendingUsers.length : null,
           description: language === 'am' ? 'አዳዲስ የአባላት ምዝገባ ማረጋገጫ' : 'Review new member applications',
           className: "hover:bg-amber-50/50 border-amber-100"
         },
@@ -488,7 +561,7 @@ export default function AdminDashboard() {
           id: 'rejected', 
           label: language === 'am' ? 'ውድቅ የተደረጉ' : 'Rejected Members', 
           icon: XCircle,
-          badge: rejectedUsers.length > 0 ? rejectedUsers.length : null,
+          badge: allowedRejectedUsers.length > 0 ? allowedRejectedUsers.length : null,
           description: language === 'am' ? 'ውድቅ የተደረጉ አባላት ዝርዝር' : 'List of rejected member applications',
           className: "hover:bg-rose-50/50 border-rose-100" 
         },
@@ -537,7 +610,7 @@ export default function AdminDashboard() {
           id: 'payments', 
           label: language === 'am' ? 'መዋጮዎች' : t('menu.admin.payments'), 
           icon: DollarSign, 
-          badge: payments.length > 0 ? payments.length : null,
+          badge: allowedPayments.length > 0 ? allowedPayments.length : null,
           description: language === 'am' ? 'የአባላት ወርሃዊ መዋጮ ቁጥጥር' : 'Monitor member contributions',
           className: "hover:bg-blue-50/50 border-blue-100"
         },
@@ -655,7 +728,7 @@ export default function AdminDashboard() {
         },
       ]
     }
-  ], [t, pendingUsers.length, payments.length, payouts.length, penalties.length, itemsCount, language]);
+  ], [t, allowedPendingUsers.length, allowedRejectedUsers.length, allowedPayments.length, payouts.length, penalties.length, itemsCount, language]);
 
   const defaultGuarantorForm = `--------------------------------------------------
 መሊቅ እቁብ - የዋስ መረጃ መሙያ ፎርም
@@ -977,7 +1050,7 @@ export default function AdminDashboard() {
   const [adminChatTarget, setAdminChatTarget] = useState<{ type: 'private' | 'group' | 'all', id: string, name: string }>({ type: 'all', id: 'all', name: t('chat.all_members') });
 
   const filteredUsers = useMemo(() => {
-    return allUsers.filter(u => {
+    return allowedUsers.filter(u => {
       const matchesSearch = (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (u.phone || '').includes(searchTerm);
       const matchesRegionFilter = selectedRegionFilter === 'All' || u.addressRegion === selectedRegionFilter;
       
@@ -998,7 +1071,7 @@ export default function AdminDashboard() {
       if (userSortOrder === 'asc') return valA > valB ? 1 : -1;
       return valA < valB ? 1 : -1;
     });
-  }, [allUsers, searchTerm, selectedRegionFilter, insightFilter, userSortBy, userSortOrder]);
+  }, [allowedUsers, searchTerm, selectedRegionFilter, insightFilter, userSortBy, userSortOrder]);
 
   const filteredPending = useMemo(() => {
     return filteredUsers.filter(u => !u.isVerified);
@@ -1050,6 +1123,10 @@ export default function AdminDashboard() {
   };
 
   const deleteUpcomingDraw = async (id: string) => {
+    if (!isSuperAdmin) {
+      triggerSuccess(language === 'am' ? 'የመሰረዝ ስልጣን' : 'Unauthorized', language === 'am' ? 'የእጣ መደቦችን መደለት የሚችለው ዋና አድሚን ብቻ ነው። እባክዎ ለዋና አድሚን ያሳውቁ።' : 'Only the Super Admin can delete upcoming draws. Please contact the Super Admin.');
+      return;
+    }
     if (!await confirmAction(language === 'am' ? 'ይህንን እጣ መሰረዝዎን እርግጠኛ ነዎት?' : 'Are you sure you want to delete this upcoming draw?')) return;
     try {
       await deleteDoc(doc(db, 'upcoming_draws', id));
@@ -1314,6 +1391,10 @@ export default function AdminDashboard() {
 
   const confirmDeleteMessage = async (deleteType: 'forMe' | 'forEveryone') => {
     if (!deleteMsgConfig.messageId) return;
+    if (deleteType === 'forEveryone' && !isSuperAdmin) {
+      triggerSuccess(language === 'am' ? 'የመሰረዝ ስልጣን' : 'Unauthorized', language === 'am' ? 'ለሁሉም አባላት መልዕክት መሰረዝ የሚችለው ዋና አድሚን ብቻ ነው።' : 'Only the Super Admin can delete messages for everyone.');
+      return;
+    }
     try {
       if (deleteType === 'forEveryone') {
         await deleteDoc(doc(db, 'messages', deleteMsgConfig.messageId));
@@ -1560,6 +1641,10 @@ export default function AdminDashboard() {
   };
 
   const deletePayout = async (payoutId: string) => {
+    if (!isSuperAdmin) {
+      triggerSuccess(language === 'am' ? 'የመሰረዝ ስልጣን' : 'Unauthorized', language === 'am' ? 'የእጣ ክፍያዎችን መደለት የሚችለው ዋና አድሚን ብቻ ነው። እባክዎ ለዋና አድሚን ያሳውቁ።' : 'Only the Super Admin can delete payouts. Please contact the Super Admin.');
+      return;
+    }
     // Optimistic UI Update - making it "immediate" as requested
     setPayouts(prev => prev.filter(p => p.id !== payoutId));
     setAllPayouts(prev => prev.filter(p => p.id !== payoutId));
@@ -1699,6 +1784,10 @@ export default function AdminDashboard() {
   };
 
   const deleteNotification = async (id: string) => {
+    if (!isSuperAdmin) {
+      triggerSuccess(language === 'am' ? 'የመሰረዝ ስልጣን' : 'Unauthorized', language === 'am' ? 'ማሳወቂያዎችን መደለት የሚችለው ዋና አድሚን ብቻ ነው። እባክዎ ለዋና አድሚን ያሳውቁ።' : 'Only the Super Admin can delete notifications. Please contact the Super Admin.');
+      return;
+    }
     if (!await confirmAction(language === 'am' ? 'ይህንን ማሳወቂያ መሰረዝ እርግጠኛ ነዎት?' : 'Are you sure you want to delete this notification?')) return;
     try {
       await deleteDoc(doc(db, 'notifications', id));
@@ -1733,6 +1822,10 @@ export default function AdminDashboard() {
   };
 
   const deleteTicket = async (id: string) => {
+    if (!isSuperAdmin) {
+      triggerSuccess(language === 'am' ? 'የመሰረዝ ስልጣን' : 'Unauthorized', language === 'am' ? 'የአባላት ጥያቄዎችን መደለት የሚችለው ዋና አድሚን ብቻ ነው። እባክዎ ለዋና አድሚን ያሳውቁ።' : 'Only the Super Admin can delete support tickets. Please contact the Super Admin.');
+      return;
+    }
     if (!await confirmAction(language === 'am' ? 'ይህንን ጥያቄ መሰረዝ እርግጠኛ ነዎት?' : 'Confirm delete this ticket?')) return;
     try {
       await deleteDoc(doc(db, 'support_tickets', id));
@@ -2034,6 +2127,10 @@ export default function AdminDashboard() {
   };
 
   const deleteUserAdmin = (userId: string) => {
+    if (!isSuperAdmin) {
+      triggerSuccess(language === 'am' ? 'የመሰረዝ ስልጣን' : 'Unauthorized', language === 'am' ? 'አባላትን መደለት የሚችለው ዋና አድሚን ብቻ ነው። እባክዎ ለዋና አድሚን ያሳውቁ።' : 'Only the Super Admin can delete members/admins. Please contact the Super Admin.');
+      return;
+    }
     if (userId === auth.currentUser?.uid) {
       triggerSuccess(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'ራስዎን መሰረዝ አይችሉም' : 'You cannot delete yourself');
       return;
@@ -2404,10 +2501,13 @@ export default function AdminDashboard() {
         memberCount: addGroupForm.memberCount,
         type: addGroupForm.type,
         status: 'registration',
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        cbeAccount: addGroupForm.cbeAccount || '',
+        telebirrAccount: addGroupForm.telebirrAccount || '',
+        boaAccount: addGroupForm.boaAccount || ''
       });
       setShowAddGroupModal(false);
-      setAddGroupForm({ name: '', amount: 1000, memberCount: 10, type: 'weekly' });
+      setAddGroupForm({ name: '', amount: 1000, memberCount: 10, type: 'weekly', cbeAccount: '', telebirrAccount: '', boaAccount: '' });
       triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Group added successfully');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'groups');
@@ -2700,8 +2800,55 @@ export default function AdminDashboard() {
 
   const [showManageGroupModal, setShowManageGroupModal] = useState(false);
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
-  const [addGroupForm, setAddGroupForm] = useState({ name: '', amount: 1000, memberCount: 10, type: 'weekly' });
+  const [addGroupForm, setAddGroupForm] = useState({ name: '', amount: 1000, memberCount: 10, type: 'weekly', cbeAccount: '', telebirrAccount: '', boaAccount: '' });
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
+  const [groupCbe, setGroupCbe] = useState('');
+  const [groupTelebirr, setGroupTelebirr] = useState('');
+  const [groupBoa, setGroupBoa] = useState('');
+
+  useEffect(() => {
+    if (selectedGroup) {
+      setGroupCbe(selectedGroup.cbeAccount || '');
+      setGroupTelebirr(selectedGroup.telebirrAccount || '');
+      setGroupBoa(selectedGroup.boaAccount || '');
+    } else {
+      setGroupCbe('');
+      setGroupTelebirr('');
+      setGroupBoa('');
+    }
+  }, [selectedGroup]);
+
+  const handleSaveGroupBankAccounts = async () => {
+    if (!selectedGroup) return;
+    try {
+      setIsLoading(true);
+      await updateDoc(doc(db, 'groups', selectedGroup.id), {
+        cbeAccount: groupCbe,
+        telebirrAccount: groupTelebirr,
+        boaAccount: groupBoa
+      });
+      // Update selected group local state
+      setSelectedGroup({
+        ...selectedGroup,
+        cbeAccount: groupCbe,
+        telebirrAccount: groupTelebirr,
+        boaAccount: groupBoa
+      });
+      triggerSuccess(
+        language === 'am' ? 'ማሳወቂያ' : 'Notice', 
+        language === 'am' ? 'የባንክ ሂሳብ መረጃዎች በተሳካ ሁኔታ ተስተካክለዋል!' : 'Bank details updated successfully!'
+      );
+    } catch (error) {
+      console.error("Error updating group bank accounts:", error);
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error', 
+        language === 'am' ? 'የባንክ ሂሳብ መረጃን ማስተካከል አልተቻለም።' : 'Failed to save bank details.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const [showEndCycleModal, setShowEndCycleModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -2764,6 +2911,10 @@ export default function AdminDashboard() {
   };
 
   const deletePaymentReceipt = async (paymentId: string) => {
+    if (!isSuperAdmin) {
+      triggerSuccess(language === 'am' ? 'የመሰረዝ ስልጣን' : 'Unauthorized', language === 'am' ? 'ደረሰኞችን መደለት የሚችለው ዋና አድሚን ብቻ ነው። እባክዎ ለዋና አድሚን ያሳውቁ።' : 'Only the Super Admin can delete payment receipts. Please contact the Super Admin.');
+      return;
+    }
     if (!await confirmAction(language === 'am' ? 'ይህንን ደረሰኝ/ትራንዛክሽን በቋሚነት ለመሰረዝ እርግጠኛ ነዎት?' : 'Are you sure you want to permanently delete this receipt/transaction?')) return;
     try {
       await deleteDoc(doc(db, 'payments', paymentId));
@@ -3326,7 +3477,7 @@ export default function AdminDashboard() {
                          </span>
                          <div className="flex items-center gap-2">
                             <div className="h-1 w-1 rounded-full bg-white/50"></div>
-                            <span className="text-[9px] font-black text-white/80 uppercase tracking-widest">{pendingUsers.length} ጥያቄዎች</span>
+                            <span className="text-[9px] font-black text-white/80 uppercase tracking-widest">{allowedPendingUsers.length} ጥያቄዎች</span>
                          </div>
                       </div>
                     </div>
@@ -3337,8 +3488,8 @@ export default function AdminDashboard() {
 
                   <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
                     {[
-                      { label: language === 'am' ? 'ማረጋገጫ የሚጠብቁ' : 'Pending Review', value: pendingUsers.length, icon: Clock, color: 'text-amber-100' },
-                      { label: language === 'am' ? 'በቅርብ የገቡ' : 'New Today', value: pendingUsers.filter(u => {
+                      { label: language === 'am' ? 'ማረጋገጫ የሚጠብቁ' : 'Pending Review', value: allowedPendingUsers.length, icon: Clock, color: 'text-amber-100' },
+                      { label: language === 'am' ? 'በቅርብ የገቡ' : 'New Today', value: allowedPendingUsers.filter(u => {
                         if (!u.createdAt) return false;
                         const d = u.createdAt.toDate ? u.createdAt.toDate() : new Date(u.createdAt);
                         return d instanceof Date && !isNaN(d.getTime()) && d.toDateString() === new Date().toDateString();
@@ -3519,14 +3670,16 @@ export default function AdminDashboard() {
                           </button>
                         </div>
                       </div>
-                      <div className="px-3 pb-3">
-                         <button 
-                           onClick={() => deleteUserAdmin(user.id)}
-                           className="w-full py-2 bg-rose-50 text-rose-500 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all border border-rose-100 flex items-center justify-center gap-2"
-                         >
-                           <Trash2 size={12} /> {language === 'am' ? 'በቋሚነት አጥፋ' : 'Delete Member Permanently'}
-                         </button>
-                      </div>
+                      {isSuperAdmin && (
+                        <div className="px-3 pb-3">
+                           <button 
+                             onClick={() => deleteUserAdmin(user.id)}
+                             className="w-full py-2 bg-rose-50 text-rose-500 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all border border-rose-100 flex items-center justify-center gap-2"
+                           >
+                             <Trash2 size={12} /> {language === 'am' ? 'በቋሚነት አጥፋ' : 'Delete Member Permanently'}
+                           </button>
+                        </div>
+                      )}
                     </motion.div>
                  ))
                )}
@@ -4017,12 +4170,14 @@ export default function AdminDashboard() {
                         >
                           <CreditCard size={12} /> ID Card
                         </button>
-                        <button 
-                          onClick={() => deleteUserAdmin(u.id)}
-                          className="col-span-1 py-2.5 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-1.5 group/del"
-                        >
-                          <Trash2 size={12} className="group-hover/del:scale-110 transition-transform" /> Delete
-                        </button>
+                        {isSuperAdmin && (
+                          <button 
+                            onClick={() => deleteUserAdmin(u.id)}
+                            className="col-span-1 py-2.5 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-1.5 group/del"
+                          >
+                            <Trash2 size={12} className="group-hover/del:scale-110 transition-transform" /> Delete
+                          </button>
+                        )}
                      </div>
                    </motion.div>
                    ) : (
@@ -4080,12 +4235,14 @@ export default function AdminDashboard() {
                            <button onClick={() => { setEditUserForm(u); setShowEditUserModal(true); }} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
                               <Edit3 size={16} />
                            </button>
-                           <button 
-                             onClick={() => deleteUserAdmin(u.id)} 
-                             className="p-2.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm border border-rose-100"
-                           >
-                              <Trash2 size={16} />
-                           </button>
+                           {isSuperAdmin && (
+                             <button 
+                               onClick={() => deleteUserAdmin(u.id)} 
+                               className="p-2.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm border border-rose-100"
+                             >
+                                <Trash2 size={16} />
+                             </button>
+                           )}
                         </div>
                      </motion.div>
                    )
@@ -4160,7 +4317,7 @@ export default function AdminDashboard() {
                     የተከማቹ ማህደሮች
                   </div>
                   <div className="h-1 w-1 rounded-full bg-slate-600"></div>
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{rejectedUsers.length} በአጠቃላይ ጥያቄዎች</span>
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{allowedRejectedUsers.length} በአጠቃላይ ጥያቄዎች</span>
                 </div>
                 <p className="text-slate-400 font-medium max-w-xl text-xs leading-relaxed">
                   ውድቅ የተደረጉ የአባላት ምዝገባዎች እዚህ ይገኛሉ። እነዚህ አባላት ከዋናው ዳሽቦርድ ተወግደዋል እና በተመሳሳይ መረጃ እንደገና መመዝገብ ይችላሉ። አድሚን ውድቅ የተደረገበትን ምክንያት እዚህ ማየት ይችላል።
@@ -4168,7 +4325,7 @@ export default function AdminDashboard() {
              </div>
 
              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-32">
-                {rejectedUsers.length === 0 ? (
+                {allowedRejectedUsers.length === 0 ? (
                   <div className="col-span-full py-24 text-center bg-white rounded-3xl border-2 border-dashed border-slate-100">
                      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
                         <XCircle size={32} />
@@ -4177,7 +4334,7 @@ export default function AdminDashboard() {
                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">በሲስተሙ ውስጥ ውድቅ የሆነ ጥያቄ የለም.</p>
                   </div>
                 ) : (
-                  rejectedUsers.map((u, idx) => (
+                  allowedRejectedUsers.map((u, idx) => (
                     <motion.div 
                       key={u.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -5143,11 +5300,11 @@ export default function AdminDashboard() {
                   <div className="flex flex-wrap justify-center gap-3">
                      <div className="px-6 py-4 bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 text-center min-w-[140px]">
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">ተከፍሏል (Paid)</p>
-                        <p className="text-xl font-black text-white">{allPayments.length}</p>
+                        <p className="text-xl font-black text-white">{allowedAllPayments.length}</p>
                      </div>
                      <div className="px-6 py-4 bg-blue-500 rounded-3xl text-center min-w-[140px] shadow-xl shadow-blue-500/20">
                         <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest mb-1">በሂደት ላይ (Pending)</p>
-                        <p className="text-xl font-black text-white">{payments.length}</p>
+                        <p className="text-xl font-black text-white">{allowedPayments.length}</p>
                      </div>
                   </div>
                </div>
@@ -5163,9 +5320,9 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-center gap-2">
                     <Clock size={14} />
                     {t('admin.under_review')}
-                    {payments.length > 0 && (
+                    {allowedPayments.length > 0 && (
                       <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[8px] text-white">
-                        {payments.length}
+                        {allowedPayments.length}
                       </span>
                     )}
                   </div>
@@ -5204,7 +5361,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* List of payments */}
-            {(paymentHistoryView === 'pending' ? payments : allPayments).filter(p => 
+            {(paymentHistoryView === 'pending' ? allowedPayments : allowedAllPayments).filter(p => 
               p.userName?.toLowerCase().includes(paymentSearch.toLowerCase()) || 
               p.groupName?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
               p.reference?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
@@ -5229,7 +5386,7 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(paymentHistoryView === 'pending' ? payments : allPayments)
+                  {(paymentHistoryView === 'pending' ? allowedPayments : allowedAllPayments)
                     .filter(p => 
                       p.userName?.toLowerCase().includes(paymentSearch.toLowerCase()) || 
                       p.groupName?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
@@ -5329,13 +5486,15 @@ export default function AdminDashboard() {
                           </button>
                         )}
 
-                        <button 
-                          onClick={() => deletePaymentReceipt(payment.id)}
-                          className="px-4 py-3 bg-rose-50 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-100/50 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-2"
-                          title={language === 'am' ? 'ሰርዝ' : 'Delete'}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {isSuperAdmin && (
+                          <button 
+                            onClick={() => deletePaymentReceipt(payment.id)}
+                            className="px-4 py-3 bg-rose-50 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-100/50 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-2"
+                            title={language === 'am' ? 'ሰርዝ' : 'Delete'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </motion.div>
                   ))}
@@ -6864,12 +7023,14 @@ export default function AdminDashboard() {
                                    አንብቤዋለሁ
                                 </button>
                               )}
-                              <button 
-                                 onClick={() => deleteNotification(notif.id)}
-                                 className="w-12 h-12 flex items-center justify-center bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100"
-                              >
-                                 <Trash2 size={18} />
-                              </button>
+                              {isSuperAdmin && (
+                                <button 
+                                   onClick={() => deleteNotification(notif.id)}
+                                   className="w-12 h-12 flex items-center justify-center bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100"
+                                >
+                                   <Trash2 size={18} />
+                                </button>
+                              )}
                            </div>
                         </motion.div>
                       ))}
@@ -7440,12 +7601,14 @@ export default function AdminDashboard() {
                                       እንደገና ክፈት (Re-open)
                                     </button>
                                  )}
-                                 <button 
-                                   onClick={() => deleteTicket(ticket.id)}
-                                   className="w-14 h-14 bg-slate-50 text-slate-300 rounded-2xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100 active:scale-95"
-                                 >
-                                   <Trash2 size={20} />
-                                 </button>
+                                 {isSuperAdmin && (
+                                   <button 
+                                     onClick={() => deleteTicket(ticket.id)}
+                                     className="w-14 h-14 bg-slate-50 text-slate-300 rounded-2xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100 active:scale-95"
+                                   >
+                                     <Trash2 size={20} />
+                                   </button>
+                                 )}
                               </div>
                            </div>
 
@@ -7718,12 +7881,14 @@ export default function AdminDashboard() {
                         >
                           <BellRing size={20} />
                         </button>
-                        <button 
-                          onClick={() => deleteUpcomingDraw(draw.id)}
-                          className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 size={20} />
-                        </button>
+                        {isSuperAdmin && (
+                          <button 
+                            onClick={() => deleteUpcomingDraw(draw.id)}
+                            className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        )}
                       </div>
                     ))
                   )}
@@ -11469,13 +11634,15 @@ export default function AdminDashboard() {
                   {language === 'am' ? 'ይህ ሰነድ በዲጂታል መንገድ የተረጋገጠ እና በህግ ተቀባይነት ያለው ነው።' : 'This document is digitally verified and legally binding.'}
                </p>
                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                  <button 
-                    onClick={() => deletePaymentReceipt(selectedPayment.id)}
-                    className="flex-1 sm:flex-none px-6 py-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95 animate-pulse"
-                  >
-                    <Trash2 size={16} />
-                    {language === 'am' ? 'ደረሰኝ ሰርዝ' : 'Delete'}
-                  </button>
+                  {isSuperAdmin && (
+                    <button 
+                      onClick={() => deletePaymentReceipt(selectedPayment.id)}
+                      className="flex-1 sm:flex-none px-6 py-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95 animate-pulse"
+                    >
+                      <Trash2 size={16} />
+                      {language === 'am' ? 'ደረሰኝ ሰርዝ' : 'Delete'}
+                    </button>
+                  )}
                   <button 
                     onClick={() => setShowReceiptModal(false)}
                     className="flex-1 sm:flex-none px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm active:scale-95"
@@ -11606,6 +11773,39 @@ export default function AdminDashboard() {
                   </select>
                </div>
 
+               <div className="space-y-4">
+                 <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-4">CBE Account (Optional)</label>
+                    <input 
+                      type="text" 
+                      value={addGroupForm.cbeAccount} 
+                      onChange={e => setAddGroupForm({...addGroupForm, cbeAccount: e.target.value})} 
+                      placeholder="e.g. 1000123456789"
+                      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all"
+                    />
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-4">Telebirr Account (Optional)</label>
+                    <input 
+                      type="text" 
+                      value={addGroupForm.telebirrAccount} 
+                      onChange={e => setAddGroupForm({...addGroupForm, telebirrAccount: e.target.value})} 
+                      placeholder="e.g. 0911234567"
+                      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all"
+                    />
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-4">BOA Account (Optional)</label>
+                    <input 
+                      type="text" 
+                      value={addGroupForm.boaAccount} 
+                      onChange={e => setAddGroupForm({...addGroupForm, boaAccount: e.target.value})} 
+                      placeholder="e.g. 12345678"
+                      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-200 transition-all"
+                    />
+                 </div>
+               </div>
+
               <div className="pt-4 flex gap-4">
                 <button 
                   type="button" 
@@ -11656,7 +11856,52 @@ export default function AdminDashboard() {
                   </div>
               </div>
 
-              <div className="space-y-2">
+              {isSuperAdmin && (
+                <div className="space-y-2 pt-4 border-t border-slate-100">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Group Bank Accounts</p>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2">CBE Account</label>
+                      <input 
+                        type="text" 
+                        value={groupCbe} 
+                        onChange={e => setGroupCbe(e.target.value)} 
+                        placeholder="CBE Account"
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2">Telebirr Account</label>
+                      <input 
+                        type="text" 
+                        value={groupTelebirr} 
+                        onChange={e => setGroupTelebirr(e.target.value)} 
+                        placeholder="Telebirr Number"
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2">Bank of Abyssinia</label>
+                      <input 
+                        type="text" 
+                        value={groupBoa} 
+                        onChange={e => setGroupBoa(e.target.value)} 
+                        placeholder="BOA Account"
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                    <button 
+                      onClick={handleSaveGroupBankAccounts}
+                      disabled={isLoading}
+                      className="w-full py-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                    >
+                      Save Accounts
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2 mt-4 pt-4 border-t border-slate-100">
                 {selectedGroup.status === 'registration' || selectedGroup.status === 'open' ? (
                   <button 
                     onClick={() => startGroup(selectedGroup.id)}
@@ -11679,23 +11924,25 @@ export default function AdminDashboard() {
                   </>
                 )}
                 
-                <button 
-                  onClick={async () => {
-                    if (await confirmAction(`Are you sure you want to delete the group ${selectedGroup.name}?`)) {
-                      try {
-                        await deleteDoc(doc(db, 'groups', selectedGroup.id));
-                        setShowManageGroupModal(false);
-                        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Group deleted successfully.');
-                      } catch (e) {
-                        console.error("Error deleting group:", e);
-                        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Failed to delete group.');
+                {isSuperAdmin && (
+                  <button 
+                    onClick={async () => {
+                      if (await confirmAction(`Are you sure you want to delete the group ${selectedGroup.name}?`)) {
+                        try {
+                          await deleteDoc(doc(db, 'groups', selectedGroup.id));
+                          setShowManageGroupModal(false);
+                          triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Group deleted successfully.');
+                        } catch (e) {
+                          console.error("Error deleting group:", e);
+                          triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Failed to delete group.');
+                        }
                       }
-                    }
-                  }}
-                  className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm border border-rose-100 flex items-center justify-center gap-2 hover:bg-rose-100 transition-colors"
-                >
-                  <Trash2 size={14} /> Delete Group
-                </button>
+                    }}
+                    className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm border border-rose-100 flex items-center justify-center gap-2 hover:bg-rose-100 transition-colors"
+                  >
+                    <Trash2 size={14} /> Delete Group
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>

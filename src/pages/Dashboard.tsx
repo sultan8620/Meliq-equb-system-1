@@ -68,6 +68,9 @@ interface Group {
   nextDrawDate?: any;
   createdAt?: any;
   currentRound?: number;
+  cbeAccount?: string;
+  telebirrAccount?: string;
+  boaAccount?: string;
 }
 
 interface GroupMember {
@@ -4195,19 +4198,19 @@ export default function Dashboard() {
                         { 
                           id: 'cbe', 
                           name: 'CBE',
-                          acc: '1000082143134 (SULTAN KEDIR HUSSEN)',
+                          acc: group?.cbeAccount || '1000082143134 (SULTAN KEDIR HUSSEN)',
                           activeClass: 'border-purple-600 bg-purple-600 text-white shadow-lg shadow-purple-600/30'
                         },
                         { 
                           id: 'telebirr', 
                           name: 'Telebirr',
-                          acc: '0986204981 (KEDIR HUSSEN)',
+                          acc: group?.telebirrAccount || '0986204981 (KEDIR HUSSEN)',
                           activeClass: 'border-emerald-500 bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
                         },
                         { 
                           id: 'boa', 
                           name: 'BOA',
-                          acc: '151045774 (SULTAN KEDIR HUSSEN)',
+                          acc: group?.boaAccount || '151045774 (SULTAN KEDIR HUSSEN)',
                           activeClass: 'border-amber-500 bg-amber-500 text-white shadow-lg shadow-amber-500/30'
                         }
                       ].map((bank) => (

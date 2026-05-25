@@ -166,25 +166,25 @@ const Landing = () => {
   const slides = landingSettings?.sliderImages?.length > 0 
     ? landingSettings.sliderImages.map((img: string, idx: number) => ({
         image: img,
-        titleAm: idx === 0 ? (landingSettings.heroTitleAm || "ስማርት እቁብ") : (landingSettings.heroTitleModernAm || "ብሩህ ተስፋ"),
-        titleEn: idx === 0 ? (landingSettings.heroTitle || "Smart Ekub") : (landingSettings.heroTitleModern || "Bright Future"),
-        descAm: landingSettings.heroSubtitleAm || "ሁሌም የእርስዎ የሆነውን የገንዘብ ማሳደጊያ ጥበብ በአዲስ እና ዘመናዊ ቴክኖሎጂ አዘምነን ይዘንልዎት መጥተናል።",
-        descEn: landingSettings.heroSubtitle || "We bring you the traditional art of growing your money, perfectly modernized with smart technology."
+        titleAm: idx === 0 ? (landingSettings.heroTitleAm || "ዘመናዊ የዲጂታል እቁብ") : (landingSettings.heroTitleModernAm || "በጋራ ይቆጥቡ"),
+        titleEn: idx === 0 ? (landingSettings.heroTitle || "Digital Ekub Platform") : (landingSettings.heroTitleModern || "Save Together"),
+        descAm: landingSettings.heroSubtitleAm || "የተለመደውን የእቁብ አሰራር በዘመናዊ ቴክኖሎጂ አዘምነን አቅርበናል። በተንቀሳቃሽ ስልክዎ በቀላሉ ይቆጥቡ፣ ይከታተሉ።",
+        descEn: landingSettings.heroSubtitle || "We digitized the traditional Ekub system. Save and track your contributions easily from your phone."
       }))
     : [
         {
           image: "https://images.unsplash.com/photo-1531206715517-5c0ba140b2b8?ixlib=rb-4.0.3&auto=format&fit=crop&q=80&w=2000",
-          titleAm: "ስማርት እቁብ፣ ብሩህ ተስፋ",
-          titleEn: "Smart Ekub, Bright Future",
-          descAm: "ሁሌም የእርስዎ የሆነውን የገንዘብ ማሳደጊያ ጥበብ በአዲስ እና ዘመናዊ ቴክኖሎጂ አዘምነን ይዘንልዎት መጥተናል። ባህላችንን ሳንለቅ ወደፊት እንራመድ!",
-          descEn: "We bring you the traditional art of growing your money, perfectly modernized with smart technology."
+          titleAm: "ዘመናዊ የዲጂታል እቁብ",
+          titleEn: "Digital Ekub Platform",
+          descAm: "የተለመደውን የእቁብ አሰራር በዘመናዊ ቴክኖሎጂ አዘምነን አቅርበናል። በተንቀሳቃሽ ስልክዎ በቀላሉ ይቆጥቡ፣ ይከታተሉ።",
+          descEn: "We digitized the traditional Ekub system. Save and track your contributions easily from your phone."
         },
         {
           image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?ixlib=rb-4.0.3&auto=format&fit=crop&q=80&w=2000",
-          titleAm: "በአንድነት ከፍ እንበል",
-          titleEn: "Rise Together",
-          descEn: "Increase your financial capacity by saving together. Start a transparent and highly secure journey today.",
-          descAm: "በጋራ በመቆጠብ የፋይናንስ አቅምዎን አሳድገው የነገ ህልምዎን እውን ያድርጉ። ከተረጋገጠ ደህንነት ጋር የጋራ ጉዞ ዛሬውኑ ይጀምሩ。"
+          titleAm: "በጋራ ይቆጥቡ",
+          titleEn: "Save Together",
+          descEn: "Join saving circles and manage your contributions transparently with your community.",
+          descAm: "ከማህበረሰብ ጋር በመሆን እቁብ ይቆጥቡ። ግልፅ እና አስተማማኝ በሆነ አሰራር የፋይናንስ አቅምዎን ያሳድጉ።"
         }
       ];
 
@@ -269,7 +269,7 @@ const Landing = () => {
                 <div className="inline-flex items-center gap-3 px-6 py-2.5 bg-amber-500/20 rounded-full mb-8 border border-amber-500/30 animate-fade-in-up">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                   <span className="text-[11px] font-black text-amber-200 uppercase tracking-[0.4em]">
-                    {language === 'am' ? 'የኢትዮጵያ ኩራት' : 'The Pride of Ethiopia'}
+                    {language === 'am' ? 'ዲጂታል እቁብ' : 'Digital Ekub'}
                   </span>
                 </div>
 
@@ -318,33 +318,33 @@ const Landing = () => {
           <div className="grid lg:grid-cols-3 gap-8">
             {(landingSettings?.customFeatures || [
               { 
-                title: "Green Legacy", 
-                titleAm: "የአረንጓዴው ራዕይ",
-                desc: "Harnessing the power of Ethiopian 'Ekub' with fresh digital precision.", 
-                descAm: "ባህላዊውን የእቁብ ስርዓት በዘመናዊ ቴክኖሎጂ አቀናጅተን አቅርበናል።",
+                title: "Traditional Roots", 
+                titleAm: "ቁጠባ",
+                desc: "The traditional Ekub system modernized with digital tools.", 
+                descAm: "ባህላዊውን የእቁብ ስርዓት በዘመናዊ መንገድ አቅርበናል።",
                 color: "bg-emerald-600",
                 shadowColor: "shadow-emerald-600/30",
                 icon: "Leaf",
                 accent: "text-emerald-600"
               },
               { 
-                title: "Golden Standard", 
-                titleAm: "የወርቅ ደረጃ",
-                desc: "Premium wealth management tools designed for your peace of mind.", 
-                descAm: "ለእርስዎ በሚመች መልኩ የተዘጋጀ ከፍተኛ የገንዘብ አስተዳደር ስርዓት።",
+                title: "Reliable Security", 
+                titleAm: "አስተማማኝ",
+                desc: "Modern money management tools designed for your peace of mind.", 
+                descAm: "ለእርስዎ በሚመች መልኩ የተዘጋጀ ደህንነቱ የተጠበቀ የገንዘብ አስተዳደር ስርዓት።",
                 color: "bg-amber-500",
                 shadowColor: "shadow-amber-500/40",
-                icon: "Star",
+                icon: "ShieldCheck",
                 accent: "text-amber-500"
               },
               { 
-                title: "Vibrant Growth", 
-                titleAm: "ፈጣን እድገት",
-                desc: "Real-time tracking and vibrant community analytics for all members.", 
-                descAm: "የአባላት የቁጠባ ሒደት እና እድገት በግልጽ የሚገኝበት ስርዓት።",
+                title: "Transparent", 
+                titleAm: "ግልፅ አሰራር",
+                desc: "Real-time tracking of savings and payouts for all members.", 
+                descAm: "የአባላት የቁጠባ ሒደት እና የእጣ አወጣጥ በግልጽ የሚታይበት አሰራር።",
                 color: "bg-rose-600",
                 shadowColor: "shadow-rose-600/30",
-                icon: "TrendingUp",
+                icon: "BarChart3",
                 accent: "text-rose-600"
               }
             ]).map((prop: any, i: number) => (
@@ -389,7 +389,7 @@ const Landing = () => {
                 title: "Register",
                 titleAm: "ተመዝገቡ",
                 desc: "Create your account gracefully and complete verification effortlessly.",
-                descAm: "በቀላሉ እና በጥንቃቄ መለያዎን ይፍጠሩ እና ማረጋገጫ ያግኙ።",
+                descAm: "በቀላሉ መለያዎን ይፍጠሩ እና ራስዎን ያረጋግጡ።",
                 icon: "UserPlus",
                 color: "bg-emerald-50 text-emerald-600 border-emerald-100"
               },
@@ -397,23 +397,23 @@ const Landing = () => {
                 title: "Join a Circle",
                 titleAm: "እቁብ ይምረጡ",
                 desc: "Find and join a vibrant saving circle that fits your financial goals.",
-                descAm: "ከእርስዎ የፋይናንስ አቅም ጋር የሚስማማ ማራኪ እቁብ ይቀላቀሉ።",
+                descAm: "ከዕቅድዎ እና ከአቅምዎ ሚያስማማ እቁብ ይምረጡ እና ይቀላቀሉ።",
                 icon: "Layers",
                 color: "bg-amber-50 text-amber-500 border-amber-100"
               },
               {
                  title: "Contribute",
-                 titleAm: "በወቅቱ ይቆጥቡ",
+                 titleAm: "ክፍያ ይፈፅሙ",
                  desc: "Make your scheduled payments securely through our advanced platform.",
-                 descAm: "ክፍያዎን በተያዘለት ጊዜ ደህንነቱ በተጠበቀ እና እምነት በሚጣልበት መንገድ ይክፈሉ።",
+                 descAm: "ክፍያዎን በየጊዜው ደህንነቱ በተጠበቀ መንገድ ይክፈሉ።",
                  icon: "Wallet",
                  color: "bg-rose-50 text-rose-500 border-rose-100"
               },
               {
                  title: "Get Payout",
                  titleAm: "እጣዎትን ይውሰዱ",
-                 desc: "Receive your accumulated pool and celebrate financial freedom.",
-                 descAm: "የሚጠብቁትን የእጣ ሰዓት በደስታ ይቀበሉ እና ህልምዎን እውን ያድርጉ።",
+                 desc: "Receive your accumulated pool when your turn arrives.",
+                 descAm: "እጣው የእርሶ ሲሆን ተራዎትን ይጠብቁ እና ብርዎን ይውሰዱ።",
                  icon: "Gift",
                  color: "bg-blue-50 text-blue-500 border-blue-100"
               }
@@ -448,30 +448,30 @@ const Landing = () => {
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-24 gap-8">
             <div className="max-w-2xl">
               <span className="inline-block px-5 py-2.5 bg-amber-100 text-amber-900 rounded-full font-black uppercase tracking-[0.4em] text-xs sm:text-sm mb-6 border border-amber-200/50 shadow-sm">
-                {language === 'am' ? 'የቁጠባ ዓይነቶች' : 'Vibrant Schemes'}
+                {language === 'am' ? 'የቁጠባ ዓይነቶች' : 'Categories'}
               </span>
               <h2 className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-emerald-950 tracking-tighter leading-none ${language === 'am' ? 'font-am' : ''}`}>
-                {language === 'am' ? 'የእቁብ ዓይነቶች እና የቁጠባ ዕቅዶች' : 'Our Specialized Equb Schemes'}
+                {language === 'am' ? 'የእቁብ ዓይነቶች' : 'Ekub Categories'}
               </h2>
             </div>
             <p className="max-w-xl text-slate-700 font-semibold text-lg sm:text-xl lg:text-2xl border-l-4 border-amber-500 pl-6 leading-relaxed">
               {language === 'am' 
-                ? 'ለእያንዳንዱ የቁጠባ ዓላማ ከተለየ የቀለም-ብርሃን እና የሻዶው አጨራረስ ጋር የተዘጋጁ ማራኪ የእቁብ አማራጮችን እዚህ በሰፊው ያግኙ። ካርዶቹን ጠቅ በማድረግ ሙሉውን ዝርዝር መግለጫ ይመልከቱ።'
-                : 'Discover unique tailored saving categories decorated with vibrant shadow borders, customized timers, and high-impact visual design. Click any card to explore full benefits.'}
+                ? 'ለተለያዩ የቁጠባ ዓላማዎች የተዘጋጁ የእቁብ አማራጮችን ይመልከቱ። ዝርዝር መረጃ ለማግኘት ካርዶቹን ይጫኑ።'
+                : 'Explore different Ekub options tailored for various saving goals. Click on the cards to see more details.'}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {[
               {
-                title: "Dream Home Equb",
-                titleAm: "የቤት እቅድ እቁብ",
+                title: "Housing Equb",
+                titleAm: "የቤት እቁብ",
                 tag: "Real Estate",
-                tagAm: "ሪል ስቴት",
-                desc: "Raise structured capital to build or purchase family real estate without exhausting loans.",
-                descAm: "ያለ ከፍተኛ የባንክ ወለድ የዕቅዶትን የመኖሪያ ቤት ለመገንባት ወይም ለመግዛት የሚያስችል አስተማማኝ እቁብ።",
-                details: "This premium circle brings together members aimed at raising structured, massive capital for home acquisitions, land purchases, construction, or high-value finishing packages. It entirely replaces the necessity of taking high-interest loans, leveraging community trust coupled with digital legal signatures.",
-                detailsAm: "ይህ ልዩ የእቁብ ዘርፍ የመኖሪያ ቤት ለመግዛት፣ ለመገንባት፣ የግንባታ ማጠናቀቂያዎችን ወይም ቦታዎችን ለመግዛት ከፍተኛ ገንዘብ ለማሰባሰብ ለሚፈልጉ አባላት የተዘጋጀ ነው። ከፍተኛ የባንክ ወለዶችን በማስቀረትና በማህበረሰብ እምነት ላይ በመመርኮዝ ታላቅ ህልምዎን እውን ያደርጋል።",
+                tagAm: "ቤት ግዢ",
+                desc: "Save together to build or purchase a home.",
+                descAm: "ቤት ለመግዛት ወይም ለመስራት የሚሆን ገንዘብ በጋራ ለመቆጠብ።",
+                details: "This circle brings members together who are aiming to gather capital for home acquisitions or construction, avoiding bank loans.",
+                detailsAm: "ይህ የእቁብ ዘርፍ የመኖሪያ ቤት ለመግዛት፣ ለመገንባት፣ ወይም ቦታዎችን ለመግዛት የገንዘብ አቅም ለማሳደግ ለሚፈልጉ አባላት የተዘጋጀ ነው።",
                 img: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800",
                 icon: <Home size={22} />,
                 glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(16,185,129,0.35)]",
@@ -484,32 +484,30 @@ const Landing = () => {
                   { labelAm: "ዓይነት", labelEn: "Category", value: "Property" }
                 ],
                 tagColor: "from-emerald-600 to-teal-500",
-                targetGroupEn: "Families, returning Diaspora, and real estate buyers",
-                targetGroupAm: "ቤተሰቦች፣ ዲያስፖራዎች እና የቤት ፈላጊዎች",
-                safetyEn: "Bank-locked escrow pool ensures zero capital flight with verified legal status.",
-                safetyAm: "በታማኝ የባንክ አካውንት የተቆለፈ ፈንድ የገንዘቡን ዋስትና በሕግ በተረጋገጠ ውል ሙሉ በሙሉ ያረጋግጣል።",
+                targetGroupEn: "Families and real estate buyers",
+                targetGroupAm: "ቤተሰቦች እና የቤት ፈላጊዎች",
+                safetyEn: "Saving pool is secured in transparent accounts.",
+                safetyAm: "ማንነታቸው የተረጋገጠ አባላት ያሉበት ደህንነቱ የተጠበቀ ክፍያ።",
                 benefitsEn: [
-                  "Access to bulk capital packages up to 3,000,000 ETB seamlessly",
-                  "Secured with legal digital notary witnesses and bank escrows",
-                  "Special discounts from pre-vetted construction material suppliers",
-                  "Flexible guarantor backup parameters and priority drawing modes"
+                  "Access to structured capital packages",
+                  "Verified members and secure record keeping",
+                  "Guarantor support options available"
                 ],
                 benefitsAm: [
-                  "እስከ 3,000,000 ብር የሚደርስ ታላላቅ የካፒታል ጥቅሎችን ያለምንም ውጣውረድ ያገኛሉ",
-                  "በሕግ በተረጋገጡ የዲጂታል ውሎችና በታመኑ የባንክ አካውንቶች የተደገፈ ነው",
-                  "ቅድሚያ ከተረጋገጡ የግንባታ እቃዎች አቅራቢዎች ልዩ ቅናሾችን ያገኛሉ",
-                  "ተለዋዋጭ እና ምቹ የዋሶች (Guarantors) አከፋፈልና ማረጋገጫ አሰራር"
+                  "ያለ ባንክ ወለድ የገንዘብ አቅም ማሳደግ",
+                  "አስተማማኝ የክፍያ እና የመረጃ አያያዝ",
+                  "በሚያስፈልግ ጊዜ የዋስ አሰራር አማራጭ"
                 ]
               },
               {
                 title: "Business Growth",
-                titleAm: "የንግድና ስራ እቁብ",
-                tag: "Seed Capital",
-                tagAm: "ጅማሬ ካፒታል",
-                desc: "Accelerate your restaurant, tech development, or import venture with seamless seed funds.",
+                titleAm: "የንግድ እቁብ",
+                tag: "Business",
+                tagAm: "ንግድ አቅም",
+                desc: "Equb intended to gather capital for business operations.",
                 descAm: "ለንግድ ስራ ማስፋፊያ፣ ጥሬ እቃ መግዣ ወይም ለአዲስ ስራዎች መጀመሪያ ፈጣን ካፒታል ማሰባሰቢያ እቁብ።",
-                details: "Accelerate your businesses, tech development, farm imports, or retail expansions with prompt equity-free capital pools. Designed specifically for ambitious Ethiopian business owners who need immediate liquid capital to purchase raw inventory, scale operational equipment, or hire key staff.",
-                detailsAm: "ለንግድዎ ስራ ማስፋፊያ፣ ጥሬ እቃ መግዣ ወይም ለአዳዲስ የንግድ ህልሞችዎ መጀመሪያ ፈጣን ካፒታል ማሰባሰቢያ እቁብ። ያለ ባንክ ወለድና ያለ ድርጅት የባለቤትነት ድርሻ ሽያጭ እምነት የሚጣልበት የፋይናንስ ምንጭ ያግኙ።",
+                details: "Created for business owners who need immediate liquid capital to purchase raw inventory, scale operational equipment, or start a new venture.",
+                detailsAm: "ለንግድዎ ስራ ማስፋፊያ፣ ጥሬ እቃ መግዣ ወይም ለአዳዲስ የንግድ ህልሞችዎ መጀመሪያ ካፒታል ማሰባሰቢያ እቁብ። ያለ ባንክ ወለድ የፋይናንስ ምንጭ ያግኙ።",
                 img: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=800",
                 icon: <Briefcase size={22} />,
                 glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(245,158,11,0.4)]",
@@ -522,32 +520,30 @@ const Landing = () => {
                   { labelAm: "ዓይነት", labelEn: "Category", value: "Commercial" }
                 ],
                 tagColor: "from-amber-500 to-orange-400",
-                targetGroupEn: "Shop owners, tech startups, agricultural traders, and logistics providers",
-                targetGroupAm: "የሱቅ ባለቤቶች፣ ጀማሪ ስራዎች፣ የግብርና ነጋዴዎች እና የትራንስፖርት አገልግሎት ሰጪዎች",
-                safetyEn: "Requires formal trade licenses or enterprise guarantee contracts.",
-                safetyAm: "የሚሰራ የንግድ ፈቃድ ወይም የተረጋገጠ የድርጅት ዋስትና ግዴታ አለበት።",
+                targetGroupEn: "Shop owners, startups, and traders",
+                targetGroupAm: "ነጋዴዎች እና ጀማሪ የንግድ ስራዎች",
+                safetyEn: "Requires formal trade licenses or guarantee.",
+                safetyAm: "የሚሰራ የንግድ ፈቃድ ወይም ዋስትና ያስፈልገዋል።",
                 benefitsEn: [
-                  "Bi-weekly short-duration rapid payout rounds for fast inventory purchases",
-                  "Opportunity for zero-interest seed funding up to 1,500,000 ETB",
-                  "Integration with commercial business advisory groups",
-                  "Instant bank settlement directly to supplier bank accounts on winning"
+                  "Bi-weekly short-duration payouts",
+                  "Zero-interest funding",
+                  "Clear cycle tracking"
                 ],
                 benefitsAm: [
-                  "ጥሬ እቃዎችን በአፋጣኝ ለመግዛት በየሁለት ሳምንቱ የሚካሄድ ፈጣን የእጣ ዙርያ",
-                  "እስከ 1,500,000 ብር የሚደርስ ከወለድ ነፃ የሆነ የጅማሬ ካፒታል ማግኛ ዕድል",
-                  "ከድርጅት አማካሪዎችና የህግ ባለሙያዎች ጋር የሚደረግ ነፃ የሙያ ትስስር",
-                  "እጣው ሲወጣ በቀጥታ ወደ እቃዎች አቅራቢዎች ባንክ የሚተላለፍ የክፍያ ስርዓት"
+                  "በየሁለት ሳምንቱ የሚካሄድ የእጣ ዙርያ",
+                  "ከወለድ ነፃ የሆነ የካፒታል ማግኛ ዕድል",
+                  "ግልጽ የዙር ክትትል"
                 ]
               },
               {
-                title: "Automobile & Transit",
-                titleAm: "የመኪና መግዣ እቁብ",
+                title: "Vehicle Equb",
+                titleAm: "የመኪና እቁብ",
                 tag: "Transport",
                 tagAm: "ተሽከርካሪ",
-                desc: "Upgrade or acquire commercial vehicles or personal transport under certified escrow guidance.",
-                descAm: "የመኪና ባለቤት ለመሆን ወይም ለድርጅትዎ የትራንስፖርት አገልግሎት የሚሆኑ ተሽከርካሪዎችን ለመግዛት።",
-                details: "Designed specifically to help purchase personal transport automobiles, delivery vans, tractors, agricultural heavy vehicles, or ride-share transport cars. Payouts are safely wired directly to licensed dealerships, protecting members from fraud or intermediary markups.",
-                detailsAm: "የግል ወይም የድርጅት ተሽከርካሪዎችን፣ የጭነት መኪናዎችን፣ የግብርና ትራክተሮችን ወይም የትርፍ ሰዓት ስራ የትራንስፖርት መኪናዎችን ለመግዛት የተመቻቸ እቁብ። እጣው ሲወጣ ክፍያው በቀጥታ ወደ መኪና አስመጪዎች ወይም ሽያጭ ማዕከላት በባንክ ይተላለፋል።",
+                desc: "Save up to buy a personal or commercial vehicle.",
+                descAm: "የመኪና ባለቤት ለመሆን ወይም ለድርጅት የትራንስፖርት ተሽከርካሪዎችን ለመግዛት የሚረዳ።",
+                details: "Designed specifically to help purchase personal automobiles, delivery vans, or commercial vehicles jointly with community members.",
+                detailsAm: "የግል ወይም የድርጅት ተሽከርካሪዎችን፣ የጭነት መኪናዎችን፣ ወይም የትርፍ ሰዓት ስራ የትራንስፖርት መኪናዎችን ለመግዛት የተመቻቸ እቁብ።",
                 img: "https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&q=80&w=800",
                 icon: <Layers size={22} />,
                 glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(59,130,246,0.35)]",
@@ -557,35 +553,33 @@ const Landing = () => {
                 iconBg: "bg-blue-50 text-blue-700",
                 stats: [
                   { labelAm: "ክፍያ", labelEn: "Cycles", value: "Monthly" },
-                  { labelAm: "ዓይነት", labelEn: "Category", value: "Transit" }
+                  { labelAm: "ዓይነት", labelEn: "Category", value: "Vehicle" }
                 ],
                 tagColor: "from-blue-600 to-cyan-500",
-                targetGroupEn: "Drivers, freight agencies, family planners, and logistics scale plans",
-                targetGroupAm: "አሽከርካሪዎች፣ የትራንስፖርት ድርጅቶች፣ ቤተሰቦች እና የሎጅስቲክስ ተቋማት",
-                safetyEn: "Direct wire to trusted dealership bank accounts only, with transparent refund options.",
-                safetyAm: "እጣው ሲወጣ ክፍያው በቀጥታ ወደ መኪና አቅራቢ ታማኝ የባንክ ሂሳብ ብቻ ይተላለፋል።",
+                targetGroupEn: "Drivers and family planners",
+                targetGroupAm: "አሽከርካሪዎች፣ የትራንስፖርት ድርጅቶች፣ እና ቤተሰቦች",
+                safetyEn: "Provides structured community trust.",
+                safetyAm: "በግልፅ ደንብ የተደገፈ እቁብ።",
                 benefitsEn: [
-                  "Pre-negotiated discounts with certified automobile dealerships in Addis Ababa",
-                  "Special discounts on vehicle insurance packages up to 25% for platform members",
-                  "Highly structured monthly circles optimized for medium-to-high caliber savings",
-                  "Flexible swap options if buying targets change during the ongoing saving cycles"
+                  "Helps buy a car without bank interest",
+                  "Clear monthly cycles",
+                  "Transparent payment system"
                 ],
                 benefitsAm: [
-                  "በአዲስ አበባ ካሉ ፈቃድ ካላቸው አስመጪዎች ጋር በተደረገ ስምምነት ልዩ ቅናሾች",
-                  "እስከ 25% የሚደርስ ልዩ የመኪና ኢንሹራንስ ቅናሽ ጥቅሎች",
-                  "ለመካከለኛና ከፍተኛ ቁጣቢዎች የተመቻቹ ወርሃዊ ግልጽ ዙሪያዎች",
-                  "የመግዣ ዕቅዶት ቢቀየር ገንዘቡን ለሌላ አገልግሎት የማዋል ተለዋዋጭነት"
+                  "ያለ ባንክ ወለድ መኪና ለመግዛት",
+                  "ግልፅ ወርሃዊ የእቁብ ዙሮች",
+                  "አስተማማኝ የክፍያ ስርዓት"
                 ]
               },
               {
-                title: "Lifestyle & Safety",
+                title: "Lifestyle Equb",
                 titleAm: "የዕለት ኑሮ እቁብ",
                 tag: "Micro Savings",
-                tagAm: "ፈጣን ቁጠባ",
-                desc: "Covers crucial event planning, school tuitions, wedding support, or micro emergency funds.",
-                descAm: "ለያንዴ ዝግጅቶች፣ ለልጆች የትምህርት ቤት ክፍያ፣ ለሰርግ ወይም ለአይነተኛ ፈጣን ጉዳዮች።",
-                details: "A micro-savings design focusing on immediate life priorities like school tuitions, wedding preparations, medical backups, festive holiday feasts, or quick personal emergency cushions. Offers highly elastic weekly drawing slots and seamless mobile wallet integrations for your daily peace of mind.",
-                detailsAm: "ለያንዴ ዝግጅቶች፣ ለልጆች የትምህርት ቤት ክፍያ፣ ለሰርግ ዝግጅት፣ ለበዓል መግዣ ወይም ለድንገተኛ ፈጣን የህክምና ጉዳዮች የተዘጋጀ እቁብ። በየሳምንቱ አነስተኛ ክፍያዎችን በሞባይል ገንዘብ (Telebirr, CBE Birr) በቀላሉ መቆጠብ የሚያስችል ምቹ መድረክ።",
+                tagAm: "በአነስተኛ",
+                desc: "For event planning, school tuition, weddings, or emergency funds.",
+                descAm: "ለዝግጅቶች፣ ለልጆች ትምህርት ቤት፣ ለሰርግ ወይም ለአይነተኛ ጉዳዮች።",
+                details: "A savings plan focusing on personal life priorities like school tuitions, medical backups, festive holidays, or personal use.",
+                detailsAm: "ለጥቃቅን ዝግጅቶች፣ የልጆች ትምህርት፣ ሰርግ፣ በዓላት ወይም ለራስዎ ጉዳዮች የተዘጋጀ እቁብ። አነስተኛ ክፍያዎችን በየሳምንቱ እየቆጠቡ የሚያስቀመጡበት ነው።",
                 img: "https://images.unsplash.com/photo-1512909006721-3d6018887383?auto=format&fit=crop&q=80&w=800",
                 icon: <Sparkles size={22} />,
                 glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(168,85,247,0.35)]",
@@ -598,21 +592,19 @@ const Landing = () => {
                   { labelAm: "ዓይነት", labelEn: "Category", value: "Lifestyle" }
                 ],
                 tagColor: "from-purple-600 to-pink-500",
-                targetGroupEn: "Students, young couples, homemakers, and quick savings focus groups",
-                targetGroupAm: "ተማሪዎች፣ አዲስ ተጋቢዎች፣ የቤት እመቤቶች እና ፈጣን ቆጣቢ ቡድኖች",
-                safetyEn: "Zero complex paperwork required, fully responsive online setup.",
-                safetyAm: "ምንም የተወሳሰበ የሰነድ ዝግጅት አያስፈልገውም፤ በደቂቃዎች ውስጥ የሚጠናቀቅ።",
+                targetGroupEn: "Students, couples, and fast savers",
+                targetGroupAm: "ተማሪዎች፣ ቤተሰብ እና ጥቃቅን ቆጣቢዎች",
+                safetyEn: "Simple and digital processes.",
+                safetyAm: "ቀላል እና ዲጂታል አሰራር።",
                 benefitsEn: [
-                  "Ultra-low entry barriers with high-speed weekly payouts",
-                  "Direct integration with Telebirr, CBE Birr, and Chapa payment APIs",
-                  "Instant SMS and push alert notifications for contributions and winning drawings",
-                  "Emergency cash-out borrow capabilities if unforeseen life events occur"
+                  "Lower entry barrier",
+                  "Weekly fast payouts",
+                  "Easy payment options via mobile money"
                 ],
                 benefitsAm: [
-                  "በእጅጉ አነስተኛ መግቢያ እና በየሳምንቱ የሚወጣ ፈጣን የዕጣ እድል",
-                  "ከተሌብር (Telebirr) ፣ የሲቢኢ ብር እና ቻፓ ክፍያዎች ጋር ቀጥተኛ ትስስር",
-                  "ለቁጠባዎ እና ለእጣው ሒደት ፈጣን የኤስኤምኤስ (SMS) የጽሁፍ መልዕክቶች",
-                  "በድንገተኛ አደጋ ጊዜ ቀድሞ የመበደር ወይም ገንዘብ የማውጣት ልዩ ፈቃድ"
+                  "አነስተኛ መግቢያ መጠን",
+                  "በየሳምንቱ የሚወጣ ዕጣ",
+                  "በሞባይል ባንኪንግ በቀላሉ ክፍያ መፈፀም"
                 ]
               }
             ].map((plan: any, idx: number) => (
