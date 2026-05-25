@@ -636,6 +636,8 @@ export default function Dashboard() {
   const [payments, setPayments] = useState<any[]>([]);
   const [userPenalties, setUserPenalties] = useState<any[]>([]);
   const [paymentBank, setPaymentBank] = useState('');
+  const [paymentPayerName, setPaymentPayerName] = useState('');
+  const [paymentPayerAccount, setPaymentPayerAccount] = useState('');
   const [paymentCode, setPaymentCode] = useState('');
   const [memberCode, setMemberCode] = useState('');
   const [receiptImages, setReceiptImages] = useState<string[]>([]);
@@ -974,10 +976,10 @@ export default function Dashboard() {
 
   const handleSendPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentBank || !paymentCode || (receiptImages.length === 0)) {
+    if (!paymentBank || !paymentCode || !paymentPayerName || !paymentPayerAccount || (receiptImages.length === 0)) {
       triggerError(
         language === 'am' ? 'ያልተሟላ መረጃ' : 'Incomplete Info',
-        language === 'am' ? 'ባንክ፣ ኮድ እና የደረሳኝ ፎቶ መሞላት አለባቸው።' : 'Please select bank, enter transaction code, and upload receipt photo.'
+        language === 'am' ? 'ባንክ፣ ኮድ፣ የከፋይ ስም፣ የከፋይ ሂሳብ ቁጥር እና የደረሳኝ ፎቶ መሞላት አለባቸው።' : 'Please provide all details including payer name and account.'
       );
       return;
     }
@@ -994,6 +996,8 @@ export default function Dashboard() {
         groupName: group?.name || 'Unknown Group',
         amount: calculatedAmount,
         bank: paymentBank,
+        payerName: paymentPayerName,
+        payerAccount: paymentPayerAccount,
         transactionCode: paymentCode,
         receiptImages: receiptImages,
         status: 'pending',
@@ -1007,6 +1011,8 @@ export default function Dashboard() {
       
       setPaymentBank('');
       setPaymentCode('');
+      setPaymentPayerName('');
+      setPaymentPayerAccount('');
       // setMemberCode(''); // Keep member code
       setReceiptImages([]);
       setActiveTab('overview');
@@ -1453,35 +1459,68 @@ export default function Dashboard() {
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(15, 23, 42);
       pdf.text(time, 80, 80);
+
+      const bankMap: Record<string, string> = {
+        'cbe': 'CBE', 'boa': 'Abyssinia', 'awash': 'Awash', 'dashen': 'Dashen', 'zemen': 'Zemen', 'telebirr': 'Telebirr'
+      };
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Bank', 20, 90);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(payment.bank ? (bankMap[payment.bank] || payment.bank.toUpperCase()) : 'N/A', 20, 95);
+
+      if (payment.payerName) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('Payer', 80, 90);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(payment.payerName.slice(0, 20), 80, 95);
+      }
+
+      if (payment.payerAccount) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('Account', 20, 105);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(payment.payerAccount.slice(0, 20), 20, 110);
+      }
+
+      if (payment.transactionCode) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('TXN Code', 80, 105);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(payment.transactionCode, 80, 110);
+      }
       
       pdf.setFillColor(15, 23, 42); 
-      pdf.roundedRect(20, 90, 108, 35, 4, 4, 'F');
+      pdf.roundedRect(20, 118, 108, 35, 4, 4, 'F');
       
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(9);
       pdf.setTextColor(148, 163, 184);
-      pdf.text('Amount Paid', 25, 102);
+      pdf.text('Amount Paid', 25, 130);
       pdf.setFontSize(18);
       pdf.setTextColor(255, 255, 255);
-      pdf.text(`${amount} ETB`, 25, 115);
-
-      if (payment.transactionCode) {
-        pdf.setFontSize(8);
-        pdf.setTextColor(148, 163, 184);
-        pdf.text(`TXN: ${payment.transactionCode}`, 25, 125);
-      }
+      pdf.text(`${amount} ETB`, 25, 143);
       
       pdf.setFontSize(9);
       pdf.setTextColor(52, 211, 153); 
-      pdf.text('Status', 100, 102);
+      pdf.text('Status', 100, 130);
       pdf.setFontSize(12);
       pdf.setTextColor(255, 255, 255);
-      pdf.text(payment.status === 'active' ? 'Verified' : 'Pending', 100, 115);
+      pdf.text(payment.status === 'active' || payment.status === 'approved' ? 'Verified' : 'Pending', 100, 143);
       
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(9);
       pdf.setTextColor(100, 116, 139); 
-      pdf.text('"Thank you. Your savings are secure."', 35, 140);
+      pdf.text('"Thank you. Your savings are secure."', 35, 168);
 
       // Add a digital signature placeholder line
       pdf.setDrawColor(203, 213, 225);
@@ -1787,10 +1826,10 @@ export default function Dashboard() {
   const handleContribute = async () => {
     if (!user || !userData || !group) return;
     
-    if (!receiptImage || !paymentCode) {
+    if (!receiptImage || !paymentCode || !paymentBank || !paymentPayerName || !paymentPayerAccount) {
       triggerError(
         language === 'am' ? 'ያልተሟላ መረጃ' : 'Incomplete Info',
-        language === 'am' ? 'እባክዎ የክፍያ ፎቶ እና የትራንዛክሽን ኮድ ያስገቡ።' : 'Please upload a receipt photo and enter transaction code.'
+        language === 'am' ? 'እባክዎ የክፍያ ፎቶ፣ ኮድ፣ ባንክ እና የከፋይ መረጃ ያስገቡ።' : 'Please upload receipt, enter code, bank and payer details.'
       );
       return;
     }
@@ -1809,6 +1848,9 @@ export default function Dashboard() {
         amount: userData?.totalPerSlot ? (userData.totalPerSlot * (userData.slots || 1)) : ((group?.amount || 0) * 1.1 * (userData?.slots || 1)),
         status: systemSettings.autoApprove ? 'approved' : 'pending',
         type: 'contribution',
+        bank: paymentBank,
+        payerName: paymentPayerName,
+        payerAccount: paymentPayerAccount,
         receiptImage: receiptImage,
         transactionCode: paymentCode,
         receiptId: generatedReceiptId,
@@ -2498,6 +2540,45 @@ export default function Dashboard() {
                      ? `${userData?.amount || 0} ብር * ${getDurationLabel()} * ${group?.limit || 10} አባላት` 
                      : `${userData?.amount || 0} ETB * ${getDurationLabel()} * ${group?.limit || 10} members`}
                 </p>
+              </div>
+
+              <div className="mb-4">
+                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{language === 'am' ? 'ባንክ' : 'Bank'}</label>
+                 <select 
+                   value={paymentBank}
+                   onChange={(e) => setPaymentBank(e.target.value)}
+                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                 >
+                    <option value="">{language === 'am' ? 'ባንክ ይምረጡ' : 'Select Bank'}</option>
+                    <option value="cbe">CBE</option>
+                    <option value="boa">Abyssinia</option>
+                    <option value="awash">Awash</option>
+                    <option value="dashen">Dashen</option>
+                    <option value="zemen">Zemen</option>
+                    <option value="telebirr">Telebirr</option>
+                 </select>
+              </div>
+
+              <div className="mb-4">
+                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{language === 'am' ? 'የከፋይ ስም' : 'Payer Name'}</label>
+                 <input 
+                   type="text"
+                   value={paymentPayerName}
+                   onChange={(e) => setPaymentPayerName(e.target.value)}
+                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                   placeholder={language === 'am' ? 'ስም ያስገቡ...' : 'Enter name...'}
+                 />
+              </div>
+
+              <div className="mb-4">
+                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{language === 'am' ? 'የከፋይ ሂሳብ ቁጥር' : 'Payer Account Number'}</label>
+                 <input 
+                   type="text"
+                   value={paymentPayerAccount}
+                   onChange={(e) => setPaymentPayerAccount(e.target.value)}
+                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                   placeholder={language === 'am' ? 'ሂሳብ ቁጥር...' : 'Enter account...'}
+                 />
               </div>
 
               <div className="mb-6">
@@ -3488,6 +3569,39 @@ export default function Dashboard() {
                           </span>
                         </div>
                       </div>
+                      
+                      {/* Inline receipt photos display (instantly visible both before and after approval) */}
+                      {(() => {
+                        const listImages = payment.receiptImages && payment.receiptImages.length > 0
+                          ? payment.receiptImages
+                          : (payment.receiptImage ? [payment.receiptImage] : (payment.receiptUrl ? [payment.receiptUrl] : []));
+                        
+                        if (listImages.length === 0) return null;
+                        
+                        return (
+                          <div className="mt-3 w-full border-t border-slate-50 pt-3 flex flex-col gap-1.5">
+                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                              {language === 'am' ? 'የተላከ ደረሰኝ ፎቶ(ዎች)' : 'Uploaded Receipt Photo(s)'} ({listImages.length})
+                            </p>
+                            <div className={`grid ${listImages.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                              {listImages.map((imgUrl: string, idx: number) => (
+                                <img 
+                                  key={idx}
+                                  src={imgUrl} 
+                                  alt={`Receipt ${idx + 1}`} 
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-32 object-cover rounded-2xl border border-slate-100 cursor-pointer hover:opacity-90 transition-opacity" 
+                                  onClick={() => {
+                                    setSelectedReceiptImages(listImages);
+                                    setShowReceiptImagesModal(true);
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {payment.status === 'rejected' && payment.reviewMessage && (
                         <div className="mt-2 text-[10px] font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100 border-dashed">
                           <span className="font-black text-[8px] uppercase tracking-widest block mb-1 opacity-70">Admin Note:</span>
@@ -4133,6 +4247,32 @@ export default function Dashboard() {
                       value={paymentCode}
                       onChange={(e) => setPaymentCode(e.target.value)}
                       placeholder={language === 'am' ? 'ትራንዛክሽን ኮድ ያስገቡ' : 'Enter transaction code'}
+                      className="w-full h-14 bg-slate-50 border border-slate-200 rounded-2xl px-5 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-slate-200 outline-none" 
+                    />
+                 </div>
+
+                 {/* Payer Account Name */}
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">{language === 'am' ? 'የከፋይ ስም' : 'Payer Name'}</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={paymentPayerName}
+                      onChange={(e) => setPaymentPayerName(e.target.value)}
+                      placeholder={language === 'am' ? 'የከፋይ ስም ያስገቡ' : 'Enter payer name'}
+                      className="w-full h-14 bg-slate-50 border border-slate-200 rounded-2xl px-5 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-slate-200 outline-none" 
+                    />
+                 </div>
+
+                 {/* Payer Account Number */}
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">{language === 'am' ? 'የከፋይ ሂሳብ ቁጥር' : 'Payer Account Number'}</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={paymentPayerAccount}
+                      onChange={(e) => setPaymentPayerAccount(e.target.value)}
+                      placeholder={language === 'am' ? 'የከፋይ ሂሳብ ቁጥር ያስገቡ' : 'Enter payer account number'}
                       className="w-full h-14 bg-slate-50 border border-slate-200 rounded-2xl px-5 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-slate-200 outline-none" 
                     />
                  </div>
@@ -6052,9 +6192,27 @@ export default function Dashboard() {
                     )}
                   </div>
                   <div>
-                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'የክፍያ መንገድ' : 'Payment Method'}</p>
+                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'የክፍያ መንገድ/ባንክ' : 'Bank Method'}</p>
                     <p className="text-[8px] font-black text-slate-900 font-mono leading-tight">
-                      {selectedPayment.paymentDetails?.method || (selectedPayment.receiptImage ? 'Bank Transfer' : 'Cash/Manual')}
+                      {selectedPayment.bank ? selectedPayment.bank.toUpperCase() : (selectedPayment.paymentDetails?.method || 'Bank Transfer')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'የከፋይ ስም' : 'Payer Name'}</p>
+                    <p className="text-[8px] font-black text-slate-900 font-mono leading-tight">
+                      {selectedPayment.payerName || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'የከፋይ ሂሳብ' : 'Account/TXN'}</p>
+                    <p className="text-[8px] font-black text-slate-900 font-mono leading-tight">
+                      Acc: {selectedPayment.payerAccount || 'N/A'}
+                    </p>
+                    <p className="text-[7px] font-black text-slate-500 mt-0.5">
+                      TXN: {selectedPayment.transactionCode || 'N/A'}
                     </p>
                   </div>
                 </div>

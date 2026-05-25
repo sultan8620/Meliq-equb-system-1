@@ -7,7 +7,7 @@ export interface SMSLogEntry {
   recipientName: string;
   message: string;
   status: 'sent' | 'failed' | 'processing';
-  type: 'approval' | 'campaign';
+  type: 'approval' | 'campaign' | 'otp';
   sentAt: any;
   error?: string;
 }
@@ -21,7 +21,7 @@ export async function sendSMS(
   toPhone: string,
   message: string,
   recipientName: string,
-  type: 'approval' | 'campaign'
+  type: 'approval' | 'campaign' | 'otp'
 ): Promise<boolean> {
   try {
     if (!toPhone) {

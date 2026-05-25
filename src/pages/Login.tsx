@@ -6,6 +6,7 @@ import { Mail, Lock, LogIn, Chrome, ArrowRight, Phone, CheckCircle, ChevronLeft,
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { useLanguage } from '../lib/LanguageContext';
 import { useAuth } from '../components/FirebaseProvider';
+import { sendSMS } from '../lib/smsHelper';
 import { doc, getDoc, query, collection, where, getDocs, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 export const normalizePhone = (phone: string) => {
@@ -26,7 +27,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [flow, setFlow] = useState<'login' | 'forgot' | 'verify' | 'reset'>('login');
+  const [flow, setFlow] = useState<'login' | 'forgot' | 'verify' | 'reset' | 'login_verify'>('login');
   const [detectedRole, setDetectedRole] = useState<'admin' | 'user' | null>(null);
   const [detectedEmail, setDetectedEmail] = useState<string | null>(null);
   const [isCheckingAccount, setIsCheckingAccount] = useState(false);
@@ -34,6 +35,7 @@ export default function Login() {
   const [generatedCode, setGeneratedCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [pendingLoginData, setPendingLoginData] = useState<any>(null);
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -105,6 +107,35 @@ export default function Login() {
     if (verificationCode === generatedCode) {
       setFlow('reset');
       setError(null);
+    } else {
+      setError(language === 'am' ? 'የተሳሳተ ኮድ' : 'Invalid verification code');
+    }
+  };
+
+  const handleVerifyLoginOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (verificationCode === generatedCode) {
+      // Allow login
+      setError(null);
+      if (pendingLoginData?.isAdminPhone) {
+        navigate('/admin');
+      } else {
+        const data = pendingLoginData?.userData;
+        if (data && (data.status === 'pending' || data.status === 'rejected')) {
+          navigate('/pending-approval', {
+            state: {
+              registeredInfo: {
+                name: data.fullName,
+                phone: data.phone,
+                group: data.group || data.groupId,
+                memberCode: data.memberCode
+              }
+            }
+          });
+        } else {
+          navigate('/dashboard');
+        }
+      }
     } else {
       setError(language === 'am' ? 'የተሳሳተ ኮድ' : 'Invalid verification code');
     }
@@ -317,31 +348,39 @@ export default function Login() {
         throw lastError;
       }
       
-      if (isAdminPhone) {
-        navigate('/admin');
-      } else {
-        const currentUser = auth.currentUser;
-        if (currentUser) {
-          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            if (data.status === 'pending' || data.status === 'rejected') {
-              navigate('/pending-approval', {
-                state: {
-                  registeredInfo: {
-                    name: data.fullName,
-                    phone: data.phone,
-                    group: data.group || data.groupId,
-                    memberCode: data.memberCode
-                  }
-                }
-              });
-              return;
-            }
-          }
+      const currentUser = auth.currentUser;
+      let actualPhone = phoneNumber.trim();
+      let actualName = 'User';
+      let pendingData: any = { isAdminPhone, uid: currentUser?.uid };
+
+      if (!isAdminPhone && currentUser) {
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          actualPhone = data.phone || actualPhone;
+          actualName = data.fullName || actualName;
+          pendingData = { ...pendingData, userData: data };
         }
-        navigate('/dashboard');
       }
+
+      setPendingLoginData(pendingData);
+
+      // Generate and Send OTP
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedCode(code);
+      
+      try {
+        const smsMsg = language === 'am' ? `የእርስዎ ማረጋገጫ ኮድ፡ ${code}` : `Your verification code is: ${code}`;
+        await sendSMS(actualPhone, smsMsg, actualName, 'otp');
+        setError(language === 'am' ? 'የማረጋገጫ ኮድ በስልክዎ ተልኳል' : 'Verification code sent to your phone');
+      } catch (smsErr) {
+        console.warn("SMS sending failed, falling back to UI:", smsErr);
+        setError(`${t('auth.verification_code_sms').replace('{code}', code)}`); // Fallback
+      }
+
+      setVerificationCode('');
+      setFlow('login_verify');
+      
     } catch (err: any) {
       console.error('Login Error:', err);
       if (err.code === 'custom/account-not-found') {
@@ -684,6 +723,45 @@ export default function Login() {
                     />
                     <button type="submit" className="w-full py-4.5 bg-[#0A0A0A] hover:bg-black text-white rounded-2xl font-black text-[12px] uppercase tracking-[0.15em] transition-all shadow-xl shadow-slate-900/10 active:scale-[0.98]">
                       {t('auth.verify_button')}
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+
+              {flow === 'login_verify' && (
+                <motion.div
+                  key="login_verify"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="bg-white p-6 sm:p-8 rounded-[2.5rem] shadow-2xl shadow-slate-200/40 border border-slate-100"
+                >
+                  <div className="mb-10 text-center">
+                    <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
+                      <ShieldIcon size={32} strokeWidth={2.5} />
+                    </div>
+                    <h2 className="text-[1.75rem] font-black text-slate-900 tracking-tight leading-tight">{language === 'am' ? 'የደህንነት ማረጋገጫ' : 'Security Verification'}</h2>
+                    <p className="text-slate-400 text-[10px] mt-3 font-bold uppercase tracking-[0.2em]">{language === 'am' ? 'ወደ ስልክዎ የተላከውን ኮድ ያስገቡ' : 'Enter the code sent to your phone'}</p>
+                  </div>
+                  <form onSubmit={handleVerifyLoginOtp} className="space-y-6">
+                    {error && <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-500 text-[11px] font-black uppercase tracking-widest text-center">{error}</div>}
+                    <input 
+                      type="text" 
+                      maxLength={6}
+                      placeholder="000000" 
+                      value={verificationCode} 
+                      onChange={(e) => setVerificationCode(e.target.value)} 
+                      className="w-full text-center tracking-[1em] py-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none text-2xl font-black text-slate-900 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-200"
+                    />
+                    <button type="submit" className="w-full py-4.5 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-[12px] uppercase tracking-[0.15em] transition-all shadow-xl shadow-slate-900/10 active:scale-[0.98]">
+                      {language === 'am' ? 'አረጋግጥ እና ይግቡ' : 'Verify & Login'}
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setFlow('login')} 
+                      className="w-full mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors"
+                    >
+                      {t('common.back')}
                     </button>
                   </form>
                 </motion.div>

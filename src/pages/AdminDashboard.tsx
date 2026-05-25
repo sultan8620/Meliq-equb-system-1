@@ -2866,35 +2866,68 @@ export default function AdminDashboard() {
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(15, 23, 42);
       pdf.text(time, 80, 80);
+
+      const bankMap: Record<string, string> = {
+        'cbe': 'CBE', 'boa': 'Abyssinia', 'awash': 'Awash', 'dashen': 'Dashen', 'zemen': 'Zemen', 'telebirr': 'Telebirr'
+      };
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text('Bank', 20, 90);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(payment.bank ? (bankMap[payment.bank] || payment.bank.toUpperCase()) : 'N/A', 20, 95);
+
+      if (payment.payerName) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('Payer', 80, 90);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(payment.payerName.slice(0, 20), 80, 95);
+      }
+
+      if (payment.payerAccount) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('Account', 20, 105);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(payment.payerAccount.slice(0, 20), 20, 110);
+      }
+
+      if (payment.transactionCode) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('TXN Code', 80, 105);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(payment.transactionCode, 80, 110);
+      }
       
       pdf.setFillColor(15, 23, 42); 
-      pdf.roundedRect(20, 90, 108, 35, 4, 4, 'F');
+      pdf.roundedRect(20, 118, 108, 35, 4, 4, 'F');
       
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(9);
       pdf.setTextColor(148, 163, 184);
-      pdf.text('Amount Paid', 25, 102);
+      pdf.text('Amount Paid', 25, 130);
       pdf.setFontSize(18);
       pdf.setTextColor(255, 255, 255);
-      pdf.text(`${amount} ETB`, 25, 115);
-
-      if (payment.transactionCode) {
-        pdf.setFontSize(8);
-        pdf.setTextColor(148, 163, 184);
-        pdf.text(`TXN: ${payment.transactionCode}`, 25, 125);
-      }
+      pdf.text(`${amount} ETB`, 25, 143);
       
       pdf.setFontSize(9);
       pdf.setTextColor(52, 211, 153); 
-      pdf.text('Status', 100, 102);
+      pdf.text('Status', 100, 130);
       pdf.setFontSize(12);
       pdf.setTextColor(255, 255, 255);
-      pdf.text(payment.status === 'active' ? 'Verified' : 'Pending', 100, 115);
+      pdf.text(payment.status === 'active' || payment.status === 'approved' ? 'Verified' : 'Pending', 100, 143);
       
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(9);
       pdf.setTextColor(100, 116, 139); 
-      pdf.text('"Thank you. Your savings are secure."', 35, 140);
+      pdf.text('"Thank you. Your savings are secure."', 35, 168);
       
       // Add a digital signature placeholder line
       pdf.setDrawColor(203, 213, 225);
@@ -11349,9 +11382,27 @@ export default function AdminDashboard() {
                       )}
                     </div>
                     <div>
-                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የክፍያ መንገድ' : 'Payment Method'}</p>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የክፍያ መንገድ/ባንክ' : 'Bank Method'}</p>
                       <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
-                        {selectedPayment.paymentDetails?.method || (selectedPayment.receiptImage ? 'Bank Transfer' : 'Cash/Manual')}
+                        {selectedPayment.bank ? selectedPayment.bank.toUpperCase() : (selectedPayment.paymentDetails?.method || 'Bank Transfer')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የከፋይ ስም' : 'Payer Name'}</p>
+                      <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
+                        {selectedPayment.payerName || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የከፋይ ሂሳብ' : 'Account/TXN'}</p>
+                      <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
+                        Acc: {selectedPayment.payerAccount || 'N/A'}
+                      </p>
+                      <p className="text-[9px] font-black text-slate-500 mt-0.5">
+                        TXN: {selectedPayment.transactionCode || 'N/A'}
                       </p>
                     </div>
                   </div>

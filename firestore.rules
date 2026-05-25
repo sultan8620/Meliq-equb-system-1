@@ -195,6 +195,19 @@ service cloud.firestore {
     match /upcoming_draws/{id} { allow read: if isSignedIn(); allow write: if isAdmin(); }
     match /draw_history/{id} { allow read: if isSignedIn(); allow write: if isAdmin(); }
     
+    // Collection: deletion_requests
+    match /deletion_requests/{requestId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && (incoming().userId == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // Collection: draws
+    match /draws/{drawId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
     // Generic Catch-all for designated IDs if needed
     match /system_stats/{id} { allow read: if true; allow write: if isAdmin(); }
   }
