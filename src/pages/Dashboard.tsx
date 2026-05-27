@@ -6044,7 +6044,8 @@ export default function Dashboard() {
       </div>
 
       {/* Mobile Bottom Navigation - Sticky */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-2xl border-t border-slate-100 px-4 pt-2 pb-safe-offset-2 flex items-center justify-around z-[45] mobile-bottom-nav">
+      <div className="sm:hidden h-20" /> {/* Spacer for bottom nav */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-slate-200/50 px-2 pt-3 pb-6 flex items-center justify-around z-[90] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] rounded-t-[1.5rem]">
         {[
           { id: 'home', icon: Home, label: language === 'am' ? 'ቤት' : 'Home' },
           { id: 'draws', icon: Zap, label: language === 'am' ? 'እጣ' : 'Draws' },
@@ -6065,18 +6066,15 @@ export default function Dashboard() {
                   if (item.id === 'chat') setUnreadChat(false);
                 }
               }}
-              className={`flex flex-col items-center gap-1.5 p-2 transition-all relative ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}
+              className={`flex flex-col items-center justify-center gap-1.5 w-14 h-12 transition-all relative ${isActive ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600 active:scale-95'}`}
             >
-              <div className={`relative ${isActive ? 'scale-110' : 'scale-100'} transition-transform duration-300`}>
-                <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+              <div className={`relative flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-300 ${isActive ? 'bg-indigo-50 text-indigo-600 scale-110 shadow-sm' : 'bg-transparent text-slate-400'}`}>
+                <Icon size={isActive ? 20 : 22} strokeWidth={isActive ? 2.5 : 2} />
                 {item.id === 'chat' && unreadChat && !isActive && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 border-2 border-white rounded-full animate-pulse" />
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-rose-500 border-2 border-white rounded-full animate-pulse shadow-sm" />
                 )}
               </div>
-              <span className={`text-[8px] font-black uppercase tracking-widest ${isActive ? 'opacity-100' : 'opacity-60'}`}>{item.label}</span>
-              {isActive && item.id !== 'menu' && (
-                <motion.div layoutId="activeMobileTab" className="absolute -top-2 w-1 h-1 bg-indigo-600 rounded-full" />
-              )}
+              <span className={`text-[9px] font-black tracking-widest transition-all ${isActive ? 'opacity-100' : 'opacity-0 scale-75 absolute -bottom-4 visible'}`}>{item.label}</span>
             </button>
           );
         })}

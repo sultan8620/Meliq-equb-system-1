@@ -10086,16 +10086,28 @@ export default function AdminDashboard() {
                                     className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none font-am"
                                  />
                               </div>
-                              <textarea 
-                                 placeholder="Description..."
-                                 value={f.desc}
-                                 onChange={(e) => {
-                                    const newF = [...landingSettings.customFeatures];
-                                    newF[idx].desc = e.target.value;
-                                    setLandingSettings({...landingSettings, customFeatures: newF});
-                                 }}
-                                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:border-emerald-500 outline-none h-20 resize-none"
-                              />
+                              <div className="grid grid-cols-2 gap-4">
+                                 <textarea 
+                                    placeholder="Description (EN)..."
+                                    value={f.desc}
+                                    onChange={(e) => {
+                                       const newF = [...landingSettings.customFeatures];
+                                       newF[idx].desc = e.target.value;
+                                       setLandingSettings({...landingSettings, customFeatures: newF});
+                                    }}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:border-emerald-500 outline-none h-20 resize-none"
+                                 />
+                                 <textarea 
+                                    placeholder="ማብራሪያ (አማ)..."
+                                    value={f.descAm}
+                                    onChange={(e) => {
+                                       const newF = [...landingSettings.customFeatures];
+                                       newF[idx].descAm = e.target.value;
+                                       setLandingSettings({...landingSettings, customFeatures: newF});
+                                    }}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:border-emerald-500 outline-none h-20 resize-none font-am"
+                                 />
+                              </div>
                               <select 
                                  value={f.icon}
                                  onChange={(e) => {
@@ -10105,12 +10117,111 @@ export default function AdminDashboard() {
                                  }}
                                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none appearance-none"
                               >
+                                 <option value="Leaf">Leaf Icon</option>
                                  <option value="Users">Users Icon</option>
                                  <option value="ShieldCheck">Security Icon</option>
                                  <option value="Zap">Zap/Speed Icon</option>
                                  <option value="Eye">Eye/Transparency Icon</option>
                                  <option value="Gift">Gift Icon</option>
                                  <option value="BarChart3">Chart Icon</option>
+                                 <option value="Building2">Building Icon</option>
+                                 <option value="Layers">Layers Icon</option>
+                                 <option value="Briefcase">Biz Icon</option>
+                                 <option value="Sparkles">Sparkle Icon</option>
+                              </select>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* How it Works Blocks */}
+                  <div className="space-y-6">
+                     <div className="flex items-center justify-between">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">How It Works Steps</h4>
+                        <button 
+                           onClick={() => {
+                              const newStep = { title: 'New Step', titleAm: 'አዲስ ደረጃ', desc: 'Description...', descAm: 'ዝርዝር...', icon: 'UserPlus', color: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
+                              setLandingSettings({...landingSettings, howItWorksSteps: [...(landingSettings.howItWorksSteps || []), newStep]});
+                           }}
+                           className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-600 hover:text-amber-700 bg-amber-50 px-4 py-2 rounded-xl transition-all"
+                        >
+                           <Plus size={14} /> Add Step
+                        </button>
+                     </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {(landingSettings.howItWorksSteps || []).map((step: any, idx: number) => (
+                           <div key={idx} className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-4 relative shadow-sm">
+                              <button 
+                                 onClick={() => {
+                                    const newSteps = [...landingSettings.howItWorksSteps];
+                                    newSteps.splice(idx, 1);
+                                    setLandingSettings({...landingSettings, howItWorksSteps: newSteps});
+                                 }}
+                                 className="absolute top-6 right-6 text-slate-300 hover:text-rose-500 transition-colors"
+                              >
+                                 <Trash2 size={18} />
+                              </button>
+                              <div className="grid grid-cols-2 gap-4">
+                                 <input 
+                                    type="text" 
+                                    placeholder="Title (EN)"
+                                    value={step.title}
+                                    onChange={(e) => {
+                                       const newT = [...landingSettings.howItWorksSteps];
+                                       newT[idx].title = e.target.value;
+                                       setLandingSettings({...landingSettings, howItWorksSteps: newT});
+                                    }}
+                                    className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none"
+                                 />
+                                 <input 
+                                    type="text" 
+                                    placeholder="ርዕስ (አማ)"
+                                    value={step.titleAm}
+                                    onChange={(e) => {
+                                       const newT = [...landingSettings.howItWorksSteps];
+                                       newT[idx].titleAm = e.target.value;
+                                       setLandingSettings({...landingSettings, howItWorksSteps: newT});
+                                    }}
+                                    className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-50 outline-none font-am"
+                                 />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                 <textarea 
+                                    placeholder="Description (EN)..."
+                                    value={step.desc}
+                                    onChange={(e) => {
+                                       const newT = [...landingSettings.howItWorksSteps];
+                                       newT[idx].desc = e.target.value;
+                                       setLandingSettings({...landingSettings, howItWorksSteps: newT});
+                                    }}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:border-emerald-500 outline-none h-20 resize-none"
+                                 />
+                                 <textarea 
+                                    placeholder="ማብራሪያ (አማ)..."
+                                    value={step.descAm}
+                                    onChange={(e) => {
+                                       const newT = [...landingSettings.howItWorksSteps];
+                                       newT[idx].descAm = e.target.value;
+                                       setLandingSettings({...landingSettings, howItWorksSteps: newT});
+                                    }}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:border-emerald-500 outline-none h-20 resize-none font-am"
+                                 />
+                              </div>
+                              <select 
+                                 value={step.icon}
+                                 onChange={(e) => {
+                                    const newT = [...landingSettings.howItWorksSteps];
+                                    newT[idx].icon = e.target.value;
+                                    setLandingSettings({...landingSettings, howItWorksSteps: newT});
+                                 }}
+                                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold focus:border-emerald-500 outline-none appearance-none"
+                              >
+                                 <option value="UserPlus">User Plus Icon</option>
+                                 <option value="Layers">Layers Icon</option>
+                                 <option value="Wallet">Wallet Icon</option>
+                                 <option value="Gift">Gift Icon</option>
+                                 <option value="CheckCircle2">Check Icon</option>
+                                 <option value="Star">Star Icon</option>
                               </select>
                            </div>
                         ))}

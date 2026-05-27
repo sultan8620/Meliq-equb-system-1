@@ -14,6 +14,8 @@ import {
   Smartphone, 
   Lock, 
   Layers,
+  Menu,
+  X,
   Facebook,
   Twitter,
   Instagram,
@@ -866,24 +868,37 @@ const Landing = () => {
                        {language === 'am' ? 'ያግኙን' : 'Contact Us'}
                     </h4>
                     <div className="space-y-6">
-                       <a href={`mailto:${landingSettings?.footerEmail || 'support@melikekub.com'}`} className="flex items-start gap-4 group">
-                          <div className="w-12 h-12 rounded-xl bg-emerald-900 flex items-center justify-center text-amber-500 group-hover:bg-amber-400 group-hover:text-emerald-950 transition-all flex-shrink-0">
-                             <Mail size={18} />
-                          </div>
-                          <div>
-                             <p className="text-emerald-100/40 text-xs font-black uppercase mb-1">Email Us</p>
-                             <p className="text-emerald-50 font-bold">{landingSettings?.footerEmail || 'support@melikekub.com'}</p>
-                          </div>
-                       </a>
-                       <a href={`tel:${landingSettings?.footerPhone || '+251 911 234 567'}`} className="flex items-start gap-4 group">
-                          <div className="w-12 h-12 rounded-xl bg-emerald-900 flex items-center justify-center text-amber-500 group-hover:bg-amber-400 group-hover:text-emerald-950 transition-all flex-shrink-0">
-                             <Phone size={18} />
-                          </div>
-                          <div>
-                             <p className="text-emerald-100/40 text-xs font-black uppercase mb-1">Call Us</p>
-                             <p className="text-emerald-50 font-bold">{landingSettings?.footerPhone || '+251 911 234 567'}</p>
-                          </div>
-                       </a>
+                       {(() => {
+                           // If null, use default. If undefined, use default. If "", use "".
+                           const emailVal = landingSettings === null ? 'support@melikekub.com' : (landingSettings.footerEmail !== undefined ? landingSettings.footerEmail : 'support@melikekub.com');
+                           if (!emailVal) return null;
+                           return (
+                             <a href={`mailto:${emailVal}`} className="flex items-start gap-4 group">
+                                <div className="w-12 h-12 rounded-xl bg-emerald-900 flex items-center justify-center text-amber-500 group-hover:bg-amber-400 group-hover:text-emerald-950 transition-all flex-shrink-0">
+                                   <Mail size={18} />
+                                </div>
+                                <div>
+                                   <p className="text-emerald-100/40 text-xs font-black uppercase mb-1">Email Us</p>
+                                   <p className="text-emerald-50 font-bold">{emailVal}</p>
+                                </div>
+                             </a>
+                           );
+                       })()}
+                       {(() => {
+                           const phoneVal = landingSettings === null ? '' : (landingSettings.footerPhone !== undefined ? landingSettings.footerPhone : '');
+                           if (!phoneVal) return null;
+                           return (
+                             <a href={`tel:${phoneVal}`} className="flex items-start gap-4 group">
+                                <div className="w-12 h-12 rounded-xl bg-emerald-900 flex items-center justify-center text-amber-500 group-hover:bg-amber-400 group-hover:text-emerald-950 transition-all flex-shrink-0">
+                                   <Phone size={18} />
+                                </div>
+                                <div>
+                                   <p className="text-emerald-100/40 text-xs font-black uppercase mb-1">Call Us</p>
+                                   <p className="text-emerald-50 font-bold">{phoneVal}</p>
+                                </div>
+                             </a>
+                           );
+                       })()}
                     </div>
                   </div>
                </div>
