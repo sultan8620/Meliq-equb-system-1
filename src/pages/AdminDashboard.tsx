@@ -2946,7 +2946,9 @@ export default function AdminDashboard() {
     try {
       const dataUrl = await htmlToImage.toPng(element, {
         pixelRatio: 2,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        skipFonts: true,
+        skipAutoScale: true
       });
       
       const img = new window.Image();
@@ -2977,29 +2979,20 @@ export default function AdminDashboard() {
       }
 
       // We use htmlToImage to convert the styled DOM node exactly into an image
-      const dataUrl = await htmlToImage.toPng(element, { pixelRatio: 3, backgroundColor: '#ffffff' });
-
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a5'
+      const dataUrl = await htmlToImage.toPng(element, { 
+        pixelRatio: 3, 
+        backgroundColor: '#ffffff',
+        skipAutoScale: true,
+        skipFonts: true
       });
-      
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      
-      // Calculate aspect ratio to fit the generated image
-      const imgProps = pdf.getImageProperties(dataUrl);
-      const imgRatio = imgProps.width / imgProps.height;
-      
-      // We will add padding to the PDF (10mm on all sides)
-      const padding = 10;
-      const renderWidth = pdfWidth - (padding * 2);
-      const renderHeight = renderWidth / imgRatio;
 
-      pdf.addImage(dataUrl, 'PNG', padding, padding, renderWidth, renderHeight);
-      
       const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
-      pdf.save(`Receipt-${receiptId}.pdf`);
+      
+      const link = document.createElement('a');
+      link.download = `Receipt-${receiptId}.png`;
+      link.href = dataUrl;
+      link.click();
+      
       setShowReceiptModal(false);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -11526,8 +11519,25 @@ export default function AdminDashboard() {
                 className="bg-white p-6 rounded-[2rem] border-2 border-slate-50 relative overflow-hidden shadow-sm mx-auto max-w-sm"
               >
                 {/* Watermark Logo bg */}
-                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-20 pointer-events-none">
-                  <img src="/logo.png" alt="Watermark" className="w-[80%] h-[80%] object-contain" />
+                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.06] pointer-events-none">
+                  <svg viewBox="0 0 500 500" className="w-[85%] h-[85%] -rotate-12 stroke-current text-slate-900">
+                    <circle cx="250" cy="250" r="230" fill="none" strokeWidth="3" strokeDasharray="12 12" />
+                    <circle cx="250" cy="250" r="220" fill="none" strokeWidth="2" />
+                    <circle cx="250" cy="250" r="210" fill="none" strokeWidth="1" />
+                    <circle cx="250" cy="250" r="195" fill="none" strokeWidth="8" strokeDasharray="3 20" strokeLinecap="round" />
+                    <circle cx="250" cy="250" r="185" fill="none" strokeWidth="1" />
+                    <g transform="translate(0, -10)">
+                      <path d="M250 120 Q260 120 260 150 Q260 190 280 230 Q310 270 310 310 Q310 360 250 360 Q190 360 190 310 Q190 270 220 230 Q240 190 240 150 Q240 120 250 120 Z" fill="none" strokeWidth="6" strokeLinejoin="round" />
+                      <path d="M250 120 L250 90 M235 90 L265 90" strokeWidth="6" strokeLinecap="round" />
+                      <path d="M190 290 Q130 290 150 220 Q170 160 230 210" fill="none" strokeWidth="6" strokeLinecap="round" />
+                      <path d="M305 250 Q370 230 370 180 Q370 160 350 150" fill="none" strokeWidth="6" strokeLinecap="round" />
+                      <circle cx="340" cy="140" r="5" fill="currentColor" stroke="none" />
+                      <path d="M230 360 L210 395 L290 395 L270 360 Z" fill="none" strokeWidth="6" strokeLinejoin="round" />
+                      <path d="M170 440 Q250 490 330 440 M190 420 Q250 460 310 420 M210 405 Q250 430 290 405" fill="none" strokeWidth="3" strokeLinecap="round" />
+                    </g>
+                    <text x="250" y="480" textAnchor="middle" fontSize="38" fontWeight="900" fontFamily="sans-serif" fill="currentColor" stroke="none" letterSpacing="12">እቁብ</text>
+                    <text x="250" y="50" textAnchor="middle" fontSize="22" fontWeight="800" fontFamily="sans-serif" fill="currentColor" stroke="none" letterSpacing="16">ETHIOPIA</text>
+                  </svg>
                 </div>
 
                 <div className="flex justify-between items-start mb-6 pb-4 border-b border-slate-100 relative z-10">
@@ -11592,7 +11602,25 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.5rem] flex justify-between items-center text-white mt-6 shadow-inner relative overflow-hidden">
-                    <div className="absolute inset-0 z-0 opacity-20 bg-center bg-no-repeat bg-contain" style={{ backgroundImage: "url('/logo.png')" }}>
+                    <div className="absolute inset-0 z-0 opacity-10 flex items-center justify-center">
+                      <svg viewBox="0 0 500 500" className="w-[120%] h-[120%] -rotate-12 translate-x-12 translate-y-4 stroke-current text-white">
+                        <circle cx="250" cy="250" r="230" fill="none" strokeWidth="3" strokeDasharray="12 12" />
+                        <circle cx="250" cy="250" r="220" fill="none" strokeWidth="2" />
+                        <circle cx="250" cy="250" r="210" fill="none" strokeWidth="1" />
+                        <circle cx="250" cy="250" r="195" fill="none" strokeWidth="8" strokeDasharray="3 20" strokeLinecap="round" />
+                        <circle cx="250" cy="250" r="185" fill="none" strokeWidth="1" />
+                        <g transform="translate(0, -10)">
+                          <path d="M250 120 Q260 120 260 150 Q260 190 280 230 Q310 270 310 310 Q310 360 250 360 Q190 360 190 310 Q190 270 220 230 Q240 190 240 150 Q240 120 250 120 Z" fill="none" strokeWidth="6" strokeLinejoin="round" />
+                          <path d="M250 120 L250 90 M235 90 L265 90" strokeWidth="6" strokeLinecap="round" />
+                          <path d="M190 290 Q130 290 150 220 Q170 160 230 210" fill="none" strokeWidth="6" strokeLinecap="round" />
+                          <path d="M305 250 Q370 230 370 180 Q370 160 350 150" fill="none" strokeWidth="6" strokeLinecap="round" />
+                          <circle cx="340" cy="140" r="5" fill="currentColor" stroke="none" />
+                          <path d="M230 360 L210 395 L290 395 L270 360 Z" fill="none" strokeWidth="6" strokeLinejoin="round" />
+                          <path d="M170 440 Q250 490 330 440 M190 420 Q250 460 310 420 M210 405 Q250 430 290 405" fill="none" strokeWidth="3" strokeLinecap="round" />
+                        </g>
+                        <text x="250" y="480" textAnchor="middle" fontSize="38" fontWeight="900" fontFamily="sans-serif" fill="currentColor" stroke="none" letterSpacing="12">እቁብ</text>
+                        <text x="250" y="50" textAnchor="middle" fontSize="22" fontWeight="800" fontFamily="sans-serif" fill="currentColor" stroke="none" letterSpacing="16">ETHIOPIA</text>
+                      </svg>
                     </div>
                     <div className="relative z-10">
                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'የተከፈለው መጠን' : 'Amount Paid'}</p>
@@ -11655,7 +11683,7 @@ export default function AdminDashboard() {
                     className="flex-1 sm:flex-none px-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-95"
                   >
                     <Download size={18} />
-                    {language === 'am' ? 'ያውርዱ (PDF)' : 'Download PDF'}
+                    {language === 'am' ? 'ያውርዱ (ደረሰኝ)' : 'Download Receipt'}
                   </button>
                </div>
             </div>
@@ -12330,8 +12358,12 @@ export default function AdminDashboard() {
                 onClick={async () => {
                   const element = document.getElementById('admin-id-card-content');
                   if (!element) return;
-                  const canvas = await htmlToImage.toCanvas(element, { pixelRatio: 4, backgroundColor: null });
-                  const imgData = canvas.toDataURL('image/png');
+                  const imgData = await htmlToImage.toPng(element, { 
+                    pixelRatio: 4, 
+                    backgroundColor: null,
+                    skipFonts: true,
+                    skipAutoScale: true
+                  });
                   const pdf = new jsPDF('l', 'mm', 'a4');
                   pdf.addImage(imgData, 'PNG', 15, 40, 267, 85);
                   pdf.save(`${selectedIDUser.fullName || 'Member'}_ID.pdf`);
