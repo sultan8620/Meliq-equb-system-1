@@ -1074,8 +1074,21 @@ export default function AdminDashboard() {
   }, [allowedUsers, searchTerm, selectedRegionFilter, insightFilter, userSortBy, userSortOrder]);
 
   const filteredPending = useMemo(() => {
-    return filteredUsers.filter(u => !u.isVerified);
-  }, [filteredUsers]);
+    return allowedPendingUsers.filter(u => {
+      const matchesSearch = (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (u.phone || '').includes(searchTerm);
+      const matchesRegionFilter = selectedRegionFilter === 'All' || u.addressRegion === selectedRegionFilter;
+      return matchesSearch && matchesRegionFilter;
+    }).sort((a, b) => {
+      let valA: any, valB: any;
+      if (userSortBy === 'name') { valA = a.fullName || ''; valB = b.fullName || ''; }
+      else if (userSortBy === 'date') { valA = a.createdAt?.seconds || 0; valB = b.createdAt?.seconds || 0; }
+      else if (userSortBy === 'slots') { valA = a.slots || 1; valB = b.slots || 1; }
+      else if (userSortBy === 'region') { valA = a.addressRegion || ''; valB = b.addressRegion || ''; }
+      
+      if (userSortOrder === 'asc') return valA > valB ? 1 : -1;
+      return valA < valB ? 1 : -1;
+    });
+  }, [allowedPendingUsers, searchTerm, selectedRegionFilter, userSortBy, userSortOrder]);
 
   const [deleteMsgConfig, setDeleteMsgConfig] = useState<{isOpen: boolean, messageId: string | null}>({isOpen: false, messageId: null});
   const [messages, setMessages] = useState<any[]>([]);

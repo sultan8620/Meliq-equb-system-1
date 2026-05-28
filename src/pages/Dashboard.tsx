@@ -128,7 +128,7 @@ const RULES_CONTENT = [
   }
 ];
 
-const DrawsView = ({ upcomingDraws, winners, group }: { upcomingDraws: any[], winners: any[], group: any }) => {
+const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upcomingDraws: any[], winners: any[], group: any, userData: any, payments: any[] }) => {
   const { t, language } = useLanguage();
   const [activeDrawTab, setActiveDrawTab] = useState<'upcoming' | 'history'>('upcoming');
   const [selectedDraw, setSelectedDraw] = useState<any>(null);
@@ -320,31 +320,40 @@ const DrawsView = ({ upcomingDraws, winners, group }: { upcomingDraws: any[], wi
                      </div>
                   </div>
                </div>
-               <motion.div 
-                 whileHover={{ scale: 1.05 }}
-                 onClick={() => setSelectedDraw({ 
-                   title: language === 'am' ? 'ባለ እድለኛ እንቆቅልሽ' : 'Drawing Algorithm', 
-                   details: language === 'am' ? 'የእኛ የእጣ አወጣጥ ሲስተም በዘመናዊ እና ግልጽነት ባለው መልኩ የተገነባ በመሆኑ ለማንም አያዳላም።' : 'Our drawing algorithm is built on provably fair digital selection, ensuring zero human bias.',
-                   status: 'Active',
-                   date: 'LIVE'
-                 })}
-                 className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[3rem] p-10 text-center min-w-[280px] shadow-2xl relative group/timer cursor-pointer"
-               >
-                  <div className="absolute inset-0 bg-gold-500/5 opacity-0 group-hover/timer:opacity-100 transition-all rounded-[3rem]" />
-                  <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-6 relative z-10">
-                    {language === 'am' ? 'ቀጣዩ እጣ የሚወጣው' : 'Next Draw In'}
-                  </p>
-                  <div className="flex items-center justify-center gap-4 mb-6 relative z-10">
-                     <div className="text-4xl font-display font-black text-gold-400 tracking-tighter">
-                       {countdown.hours} : {countdown.mins} : {countdown.secs}
-                     </div>
-                  </div>
-                  <div className="flex justify-center gap-10 text-[8px] font-bold text-white/30 uppercase tracking-widest relative z-10">
-                     <div className="flex flex-col gap-1"><span>{language === 'am' ? 'ባለ' : 'Hrs'}</span><span className="text-gold-500/50 text-[10px]">{language === 'am' ? 'ሰዓት' : 'Hours'}</span></div>
-                     <div className="flex flex-col gap-1"><span>{language === 'am' ? 'ደቂቃ' : 'Mins'}</span><span className="text-gold-500/50 text-[10px]">{language === 'am' ? 'ደቂቃዎች' : 'Minutes'}</span></div>
-                     <div className="flex flex-col gap-1"><span>{language === 'am' ? 'ሰኮንድ' : 'Secs'}</span><span className="text-gold-500/50 text-[10px]">{language === 'am' ? 'ሰኮንዶች' : 'Seconds'}</span></div>
-                  </div>
-               </motion.div>
+               {group?.nextDrawDate ? (
+                 <motion.div 
+                   whileHover={{ scale: 1.05 }}
+                   onClick={() => setSelectedDraw({ 
+                     title: language === 'am' ? 'ባለ እድለኛ እንቆቅልሽ' : 'Drawing Algorithm', 
+                     details: language === 'am' ? 'የእኛ የእጣ አወጣጥ ሲስተም በዘመናዊ እና ግልጽነት ባለው መልኩ የተገነባ በመሆኑ ለማንም አያዳላም።' : 'Our drawing algorithm is built on provably fair digital selection, ensuring zero human bias.',
+                     status: 'Active',
+                     date: 'LIVE'
+                   })}
+                   className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[3rem] p-10 text-center min-w-[280px] shadow-2xl relative group/timer cursor-pointer"
+                 >
+                    <div className="absolute inset-0 bg-gold-500/5 opacity-0 group-hover/timer:opacity-100 transition-all rounded-[3rem]" />
+                    <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-6 relative z-10">
+                      {language === 'am' ? 'ቀጣዩ እጣ የሚወጣው' : 'Next Draw In'}
+                    </p>
+                    <div className="flex items-center justify-center gap-4 mb-6 relative z-10">
+                       <div className="text-4xl font-display font-black text-gold-400 tracking-tighter">
+                         {countdown.hours} : {countdown.mins} : {countdown.secs}
+                       </div>
+                    </div>
+                    <div className="flex justify-center gap-10 text-[8px] font-bold text-white/30 uppercase tracking-widest relative z-10">
+                       <div className="flex flex-col gap-1"><span>{language === 'am' ? 'ባለ' : 'Hrs'}</span><span className="text-gold-500/50 text-[10px]">{language === 'am' ? 'ሰዓት' : 'Hours'}</span></div>
+                       <div className="flex flex-col gap-1"><span>{language === 'am' ? 'ደቂቃ' : 'Mins'}</span><span className="text-gold-500/50 text-[10px]">{language === 'am' ? 'ደቂቃዎች' : 'Minutes'}</span></div>
+                       <div className="flex flex-col gap-1"><span>{language === 'am' ? 'ሰኮንድ' : 'Secs'}</span><span className="text-gold-500/50 text-[10px]">{language === 'am' ? 'ሰኮንዶች' : 'Seconds'}</span></div>
+                    </div>
+                 </motion.div>
+               ) : (
+                 <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[3rem] p-10 text-center min-w-[280px] shadow-2xl relative flex flex-col items-center justify-center">
+                    <ShieldCheck size={32} className="text-white/30 mb-4" />
+                    <p className="text-[10px] font-black text-white/50 uppercase tracking-widest leading-relaxed">
+                      {language === 'am' ? 'ቀጣይ እጣ አልተቆረጠም' : 'No Draw Scheduled'}
+                    </p>
+                 </div>
+               )}
             </div>
           </div>
 
@@ -355,18 +364,37 @@ const DrawsView = ({ upcomingDraws, winners, group }: { upcomingDraws: any[], wi
                  <ShieldCheck size={24} />
               </div>
               <h3 className="text-xl font-display font-black tracking-tighter uppercase mb-4 italic underline decoration-white/20 underline-offset-8">
-                 {language === 'am' ? 'የተረጋገጠ ክፍያ' : 'Total Distributed'}
+                 {language === 'am' ? 'የእርስዎ ክፍያ ማጠቃለያ' : 'Your Payment Summary'}
               </h3>
               <p className="text-white/80 font-medium text-xs leading-relaxed">
-                 {language === 'am' ? 'እስካሁን ለአባላት የደረሰ ጠቅላላ ክፍያ።' : 'Total prize money distributed to our community members.'}
+                 {language === 'am' ? 'ባለዎት የክፍያ ሁኔታ ላይ የተመሰረተ' : 'Based on your payment status.'}
               </p>
            </div>
            <div className="mt-8">
-              <div className="text-4xl font-display font-black text-white">450,000 <span className="text-[10px] uppercase opacity-60">ETB</span></div>
-              <div className="mt-2 flex items-center gap-2">
-                 <div className="w-2 h-2 bg-emerald-300 rounded-full animate-pulse" />
-                 <span className="text-[9px] font-black uppercase text-emerald-100">{language === 'am' ? 'መረጃው ትክክል ነው' : 'Audit Confirmed'}</span>
-              </div>
+              {(() => {
+                const totalPaid = Array.isArray(payments) ? payments.filter(p => p.status === 'active' || p.status === 'approved').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0) : 0;
+                if (totalPaid > 0) {
+                  return (
+                    <>
+                      <div className="text-4xl font-display font-black text-white">{totalPaid.toLocaleString()} <span className="text-[10px] uppercase opacity-60">ETB</span></div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-300 rounded-full animate-pulse" />
+                        <span className="text-[9px] font-black uppercase text-emerald-100">{language === 'am' ? 'የተከፈለ መጠን (Audit Confirmed)' : 'Total Paid'}</span>
+                      </div>
+                    </>
+                  );
+                } else {
+                   return (
+                    <>
+                      <div className="text-4xl font-display font-black text-white/50">0 <span className="text-[10px] uppercase opacity-60">ETB</span></div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-rose-300 rounded-full animate-pulse" />
+                        <span className="text-[9px] font-black uppercase text-rose-100">{language === 'am' ? 'እስካሁን አልተከፈለም' : 'Unpaid Status'}</span>
+                      </div>
+                    </>
+                  );
+                }
+              })()}
            </div>
         </div>
       </div>
@@ -4212,7 +4240,7 @@ export default function Dashboard() {
           )}
 
           {activeTab === 'draws' && (
-            <DrawsView upcomingDraws={upcomingDraws} winners={drawWinners} group={group} />
+            <DrawsView upcomingDraws={upcomingDraws} winners={drawWinners} group={group} userData={userData} payments={payments} />
           )}
 
           {activeTab === 'notifications' && (
