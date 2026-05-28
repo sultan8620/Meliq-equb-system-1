@@ -3,6 +3,7 @@ import Inspiration from '../components/Inspiration';
 import ShareApp from '../components/ShareApp';
 import Marketplace from '../components/Marketplace';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import * as htmlToImage from 'html-to-image';
 import { useAuth } from '../components/FirebaseProvider';
 import { signOut, updatePassword } from 'firebase/auth';
@@ -1377,172 +1378,44 @@ export default function Dashboard() {
     }
   };
 
-  const handleDownloadReceipt = async (payment: any) => {
-    const element = document.getElementById(`receipt-${payment.id}`);
-    if (!element) {
-      setSelectedPayment(payment);
-      setShowReceiptModal(true);
-      setTimeout(() => generatePDF(payment), 100);
-      return;
-    }
-    generatePDF(payment);
+  const handleDownloadReceipt = (payment: any) => {
+    setSelectedPayment(payment);
+    setShowReceiptModal(true);
   };
 
-  const generatePDF = (payment: any) => {
+  const generatePDF = async (payment: any) => {
     try {
+      const element = document.getElementById(`receipt-${payment.id}`);
+      if (!element) {
+        triggerSuccess('Error', 'Receipt interface could not be found.');
+        return;
+      }
+
+      // We use htmlToImage to convert the styled DOM node exactly into an image
+      const dataUrl = await htmlToImage.toPng(element, { pixelRatio: 3, backgroundColor: '#ffffff' });
+
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a5'
       });
       
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      // Calculate aspect ratio to fit the generated image
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const imgRatio = imgProps.width / imgProps.height;
+      
+      // We will add padding to the PDF (10mm on all sides)
+      const padding = 10;
+      const renderWidth = pdfWidth - (padding * 2);
+      const renderHeight = renderWidth / imgRatio;
+
+      pdf.addImage(dataUrl, 'PNG', padding, padding, renderWidth, renderHeight);
+      
       const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
-      const userName = payment.userName || userData?.fullName || '';
-      const groupName = payment.groupName || group?.name || '';
-      const date = payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleDateString() : new Date(payment.createdAt).toLocaleDateString();
-      const time = payment.paymentDetails?.time || (payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleTimeString() : new Date(payment.createdAt).toLocaleTimeString());
-      const amount = (payment.amount || 0).toLocaleString();
-
-      pdf.setFillColor(255, 255, 255);
-      pdf.rect(0, 0, 148, 210, 'F');
-
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(22);
-      pdf.setTextColor(15, 23, 42); 
-      pdf.text(t('common.appName').toUpperCase(), 20, 30);
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(10);
-      pdf.setTextColor(99, 102, 241); 
-      pdf.text('OFFICIAL RECEIPT', 20, 38);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      pdf.setTextColor(148, 163, 184); 
-      pdf.text('Receipt ID', 100, 30);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(`#${receiptId}`, 100, 35);
-
-      pdf.setFontSize(8);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Group ID', 100, 42);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(payment.groupId?.slice(0, 8).toUpperCase() || 'N/A', 100, 46);
-      
-      pdf.setDrawColor(241, 245, 249); 
-      pdf.line(20, 52, 128, 52);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(9);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Member Name', 20, 60);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(userName, 20, 65);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Group/Round', 80, 60);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(groupName, 80, 65);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Payment Date', 20, 75);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(date, 20, 80);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Time', 80, 75);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(time, 80, 80);
-
-      const bankMap: Record<string, string> = {
-        'cbe': 'CBE', 'boa': 'Abyssinia', 'awash': 'Awash', 'dashen': 'Dashen', 'zemen': 'Zemen', 'telebirr': 'Telebirr'
-      };
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(9);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Bank', 20, 90);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(payment.bank ? (bankMap[payment.bank] || payment.bank.toUpperCase()) : 'N/A', 20, 95);
-
-      if (payment.payerName) {
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(148, 163, 184);
-        pdf.text('Payer', 80, 90);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(15, 23, 42);
-        pdf.text(payment.payerName.slice(0, 20), 80, 95);
-      }
-
-      if (payment.payerAccount) {
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(148, 163, 184);
-        pdf.text('Account', 20, 105);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(15, 23, 42);
-        pdf.text(payment.payerAccount.slice(0, 20), 20, 110);
-      }
-
-      if (payment.transactionCode) {
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(148, 163, 184);
-        pdf.text('TXN Code', 80, 105);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(15, 23, 42);
-        pdf.text(payment.transactionCode, 80, 110);
-      }
-      
-      pdf.setFillColor(15, 23, 42); 
-      pdf.roundedRect(20, 118, 108, 35, 4, 4, 'F');
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(9);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Amount Paid', 25, 130);
-      pdf.setFontSize(18);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text(`${amount} ETB`, 25, 143);
-      
-      pdf.setFontSize(9);
-      pdf.setTextColor(52, 211, 153); 
-      pdf.text('Status', 100, 130);
-      pdf.setFontSize(12);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text(payment.status === 'active' || payment.status === 'approved' ? 'Verified' : 'Pending', 100, 143);
-      
-      pdf.setFont('helvetica', 'italic');
-      pdf.setFontSize(9);
-      pdf.setTextColor(100, 116, 139); 
-      pdf.text('"Thank you. Your savings are secure."', 35, 168);
-
-      // Add a digital signature placeholder line
-      pdf.setDrawColor(203, 213, 225);
-      pdf.line(90, 150, 128, 150);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7);
-      pdf.text('Authorized Signature', 95, 155);
-      
-      pdf.setDrawColor(241, 245, 249);
-      pdf.line(20, 160, 128, 160);
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text(`Digital Auth Verified`, 20, 170);
-      pdf.text(`© ${new Date().getFullYear()} ${t('common.appName').toUpperCase()}`, 85, 170);
-      
       pdf.save(`Receipt-${receiptId}.pdf`);
-      setShowReceiptModal(false);
     } catch (error) {
       console.error('Error generating PDF:', error);
       triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'ደረሰኝ ማመንጨት አልተሳካም: ' + (error instanceof Error ? error.message : String(error)));
@@ -6133,139 +6006,153 @@ export default function Dashboard() {
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white p-3 rounded-[2rem] w-full max-w-[260px] shadow-2xl overflow-hidden mx-auto"
+            className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden relative"
           >
-            <div className="flex justify-between items-center mb-3 px-1">
-              <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{language === 'am' ? 'የክፍያ ደረሰኝ' : 'Payment Receipt'}</h3>
+            {/* Header with Close Button */}
+            <div className="flex justify-between items-center p-8 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                  <FileText size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">
+                    {language === 'am' ? 'የክፍያ ደረሰኝ' : 'Payment Receipt'}
+                  </h3>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">Transaction Preview</p>
+                </div>
+              </div>
               <button 
                 onClick={() => setShowReceiptModal(false)}
-                className="p-1.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-colors"
-                aria-label="Close"
+                className="w-12 h-12 bg-slate-50 text-slate-400 rounded-full hover:bg-rose-50 hover:text-rose-500 transition-all flex items-center justify-center group"
               >
-                <XCircle size={14} />
+                <X size={24} className="group-hover:rotate-90 transition-transform duration-500" />
               </button>
             </div>
 
-            <div 
-              id={`receipt-${selectedPayment.id}`}
-              className="bg-white p-4 border-2 border-slate-50 rounded-2xl relative overflow-hidden"
-            >
-              <div className="absolute -right-6 -top-6 opacity-[0.03] transform rotate-12 pointer-events-none">
-                <ShieldCheck size={120} />
-              </div>
-              <div className="absolute -left-6 -bottom-6 opacity-[0.02] transform -rotate-12 pointer-events-none">
-                <FileText size={100} />
-              </div>
-
-              <div className="flex justify-between items-start mb-4 pb-3 border-b border-slate-100 relative z-10">
-                <div>
-                  <h1 className="text-sm font-black text-slate-900 tracking-tighter mb-0.5">{t('common.appName')}</h1>
-                  <p className="text-[6px] font-black text-indigo-500 uppercase tracking-[0.2em]">{language === 'am' ? 'ህጋዊ ደረሰኝ' : 'Official Receipt'}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
-                  <p className="text-[8px] font-black text-slate-900 font-mono">#{selectedPayment.receiptId || selectedPayment.id.slice(0, 8).toUpperCase()}</p>
-                </div>
-              </div>
-
-              <div className="space-y-3 relative z-10">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'የአባል ስም' : 'Member Name'}</p>
-                    <p className="text-[9px] font-black text-slate-900 uppercase truncate">{selectedPayment.userName || userData?.fullName}</p>
-                  </div>
-                  <div>
-                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'እቁብ/ምድብ' : 'Group/Round'}</p>
-                    <p className="text-[9px] font-black text-slate-900 truncate">{selectedPayment.groupName || group?.name}</p>
-                  </div>
+            <div className="p-8 max-h-[70vh] overflow-y-auto bg-slate-50/50">
+              {/* Receipt Content for Capture */}
+              <div 
+                id={`receipt-${selectedPayment.id}`}
+                className="bg-white p-6 rounded-[2rem] border-2 border-slate-50 relative overflow-hidden shadow-sm mx-auto max-w-sm"
+              >
+                {/* Watermark Logo bg */}
+                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.05] pointer-events-none">
+                  <img src="/logo.png" alt="Watermark" className="w-[80%] h-[80%] object-contain" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex justify-between items-start mb-6 pb-4 border-b border-slate-100 relative z-10">
                   <div>
-                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'የተከፈለበት ቀን' : 'Payment Date'}</p>
-                    <p className="text-[8px] font-black text-slate-900">
-                      {selectedPayment.createdAt?.toDate ? selectedPayment.createdAt.toDate().toLocaleDateString() : new Date(selectedPayment.createdAt).toLocaleDateString()}
-                    </p>
-                    {selectedPayment.paymentDetails?.time && (
-                      <p className="text-[7px] font-black text-slate-500 mt-0.5">
-                        {selectedPayment.paymentDetails.time}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'የክፍያ መንገድ/ባንክ' : 'Bank Method'}</p>
-                    <p className="text-[8px] font-black text-slate-900 font-mono leading-tight">
-                      {selectedPayment.bank ? selectedPayment.bank.toUpperCase() : (selectedPayment.paymentDetails?.method || 'Bank Transfer')}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'የከፋይ ስም' : 'Payer Name'}</p>
-                    <p className="text-[8px] font-black text-slate-900 font-mono leading-tight">
-                      {selectedPayment.payerName || 'N/A'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'የከፋይ ሂሳብ' : 'Account/TXN'}</p>
-                    <p className="text-[8px] font-black text-slate-900 font-mono leading-tight">
-                      Acc: {selectedPayment.payerAccount || 'N/A'}
-                    </p>
-                    <p className="text-[7px] font-black text-slate-500 mt-0.5">
-                      TXN: {selectedPayment.transactionCode || 'N/A'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1rem] flex justify-between items-center text-white mt-4 shadow-inner">
-                  <div>
-                    <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 text-shadow-sm">{language === 'am' ? 'የተከፈለው መጠን' : 'Amount Paid'}</p>
-                    <p className="text-sm font-black text-shadow">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[8px] font-bold text-slate-400">ETB</span></p>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tighter mb-0.5">{language === 'am' ? 'መሊቅ እቁብ' : 'MELIQ EKUB'}</h1>
+                    <p className="text-[7px] font-black text-indigo-500 uppercase tracking-[0.2em]">{language === 'am' ? 'ህጋዊ ደረሰኝ' : 'Official Payment Receipt'}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[7px] font-black text-emerald-400 uppercase tracking-widest mb-0.5 text-shadow-sm">{language === 'am' ? 'ሁኔታ' : 'Status'}</p>
-                    <p className="text-[8px] font-black uppercase tracking-widest">{language === 'am' ? 'ተረጋግጧል' : 'Verified'}</p>
+                    <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
+                    <p className="text-[10px] font-black text-slate-900 font-mono">#{selectedPayment.receiptId || selectedPayment.id.slice(0, 8).toUpperCase()}</p>
                   </div>
                 </div>
 
-                <div className="pt-2 flex justify-between items-end relative z-10">
-                  <div className="inline-block px-2 py-1 bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-[6px] font-bold text-slate-500 italic max-w-[120px] leading-relaxed">
-                      {language === 'am' ? '"እናመሰግናለን። ቁጠባዎ ደህንነቱ የተጠበቀ ነው።"' : '"Thank you. Your savings are secure with us."'}
-                    </p>
+                <div className="space-y-4 relative z-10">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የአባል ስም' : 'Member Name'}</p>
+                      <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">{selectedPayment.userName || userData?.fullName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'እቁብ/ምድብ' : 'Group/Round'}</p>
+                      <p className="text-xs font-black text-slate-900 leading-tight truncate">{selectedPayment.groupName || group?.name}</p>
+                    </div>
                   </div>
-                  <div className="text-center w-16">
-                     <div className="border-b border-slate-300 w-full mb-1"></div>
-                     <p className="text-[5px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'ፊርማ' : 'Signature'}</p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የተከፈለበት ቀን' : 'Payment Date'}</p>
+                      <p className="text-[10px] font-black text-slate-900">
+                        {selectedPayment.createdAt?.toDate ? selectedPayment.createdAt.toDate().toLocaleDateString() : new Date(selectedPayment.createdAt).toLocaleDateString()}
+                      </p>
+                      {selectedPayment.paymentDetails?.time && (
+                        <p className="text-[9px] font-black text-slate-500 mt-0.5">
+                          {selectedPayment.paymentDetails.time}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የክፍያ መንገድ/ባንክ' : 'Bank Method'}</p>
+                      <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
+                        {selectedPayment.bank ? selectedPayment.bank.toUpperCase() : (selectedPayment.paymentDetails?.method || 'Bank Transfer')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የከፋይ ስም' : 'Payer Name'}</p>
+                      <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
+                        {selectedPayment.payerName || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የከፋይ ሂሳብ' : 'Account/TXN'}</p>
+                      <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
+                        Acc: {selectedPayment.payerAccount || 'N/A'}
+                      </p>
+                      <p className="text-[9px] font-black text-slate-500 mt-0.5">
+                        TXN: {selectedPayment.transactionCode || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.5rem] flex justify-between items-center text-white mt-6 shadow-inner relative overflow-hidden">
+                    <div className="absolute inset-0 z-0 opacity-10">
+                      <img src="/logo.png" alt="Watermark" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="relative z-10">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'የተከፈለው መጠን' : 'Amount Paid'}</p>
+                      <p className="text-xl font-black">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">ETB</span></p>
+                    </div>
+                    <div className="text-right relative z-10">
+                      <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'ሁኔታ' : 'Status'}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">{language === 'am' ? 'ተረጋግጧል' : 'Verified'}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex justify-between items-end relative z-10">
+                    <div className="inline-block px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
+                      <p className="text-[7px] font-bold text-slate-500 italic max-w-[160px] leading-relaxed">
+                        {language === 'am' ? '"እናመሰግናለን። ቁጠባዎ ደህንነቱ የተጠበቀ ነው።"' : '"Thank you. Your savings are secure with us."'}
+                      </p>
+                    </div>
+                    <div className="text-center w-20">
+                       <div className="border-b border-slate-300 w-full mb-1"></div>
+                       <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'ፊርማ' : 'Signature'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-dashed border-slate-200 flex justify-between items-center relative z-10">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck size={12} className="text-indigo-500" />
+                    <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">Digital Auth Verified</p>
+                  </div>
+                  <div className="text-right text-[6px] font-black text-slate-300 uppercase tracking-widest">
+                    © {new Date().getFullYear()} {t('common.appName').toUpperCase()}
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-dashed border-slate-200 flex justify-between items-center relative z-10">
-                <div className="flex items-center gap-1">
-                  <ShieldCheck size={9} className="text-indigo-500" />
-                  <p className="text-[5px] font-black text-slate-400 uppercase tracking-widest">Digital Auth Verified</p>
-                </div>
-                <div className="text-right text-[5px] font-black text-slate-300 uppercase tracking-widest">
-                  © {new Date().getFullYear()} {t('common.appName').toUpperCase()}
-                </div>
+              <div className="mt-8 flex flex-col sm:flex-row gap-4 max-w-sm mx-auto">
+                <button 
+                  onClick={() => generatePDF(selectedPayment)}
+                  className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 active:scale-95"
+                >
+                  <FileText size={16} /> {language === 'am' ? 'አውርድ (PDF)' : 'Download PDF'}
+                </button>
+                <button 
+                  onClick={() => setShowReceiptModal(false)}
+                  className="flex-1 py-4 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                >
+                  {language === 'am' ? 'ተመለስ' : 'Go Back'}
+                </button>
               </div>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-2 px-1">
-              <button 
-                onClick={() => generatePDF(selectedPayment)}
-                className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 active:scale-95"
-              >
-                <FileText size={12} /> {language === 'am' ? 'አውርድ (PDF)' : 'Download PDF'}
-              </button>
-              <button 
-                onClick={() => setShowReceiptModal(false)}
-                className="w-full py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all active:scale-95"
-              >
-                {language === 'am' ? 'ተመለስ' : 'Go Back'}
-              </button>
             </div>
           </motion.div>
         </div>

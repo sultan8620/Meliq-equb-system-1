@@ -2955,159 +2955,37 @@ export default function AdminDashboard() {
     }
   };
 
-  const generatePDF = (payment: any) => {
+  const generatePDF = async (payment: any) => {
     try {
+      const element = document.getElementById(`receipt-${payment.id}`);
+      if (!element) {
+        triggerSuccess('Error', 'Receipt interface could not be found.');
+        return;
+      }
+
+      // We use htmlToImage to convert the styled DOM node exactly into an image
+      const dataUrl = await htmlToImage.toPng(element, { pixelRatio: 3, backgroundColor: '#ffffff' });
+
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a5'
       });
       
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      
+      // Calculate aspect ratio to fit the generated image
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const imgRatio = imgProps.width / imgProps.height;
+      
+      // We will add padding to the PDF (10mm on all sides)
+      const padding = 10;
+      const renderWidth = pdfWidth - (padding * 2);
+      const renderHeight = renderWidth / imgRatio;
+
+      pdf.addImage(dataUrl, 'PNG', padding, padding, renderWidth, renderHeight);
+      
       const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
-      const userName = payment.userName || '';
-      const groupName = payment.groupName || '';
-      const date = payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleDateString() : new Date(payment.createdAt).toLocaleDateString();
-      const time = payment.paymentDetails?.time || (payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleTimeString() : new Date(payment.createdAt).toLocaleTimeString());
-      const amount = (payment.amount || 0).toLocaleString();
-
-      pdf.setFillColor(255, 255, 255);
-      pdf.rect(0, 0, 148, 210, 'F');
-
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(22);
-      pdf.setTextColor(15, 23, 42); 
-      pdf.text(t('common.appName').toUpperCase(), 20, 30);
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(10);
-      pdf.setTextColor(99, 102, 241); 
-      pdf.text('OFFICIAL RECEIPT', 20, 38);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      pdf.setTextColor(148, 163, 184); 
-      pdf.text('Receipt ID', 100, 30);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(`#${receiptId}`, 100, 35);
-      
-      pdf.setFontSize(8);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Group ID', 100, 42);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(payment.groupId?.slice(0, 8).toUpperCase() || 'N/A', 100, 46);
-
-      pdf.setDrawColor(241, 245, 249); 
-      pdf.line(20, 52, 128, 52);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(9);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Member Name', 20, 60);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(userName, 20, 65);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Group/Round', 80, 60);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(groupName, 80, 65);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Payment Date', 20, 75);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(date, 20, 80);
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Time', 80, 75);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(time, 80, 80);
-
-      const bankMap: Record<string, string> = {
-        'cbe': 'CBE', 'boa': 'Abyssinia', 'awash': 'Awash', 'dashen': 'Dashen', 'zemen': 'Zemen', 'telebirr': 'Telebirr'
-      };
-      
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(9);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Bank', 20, 90);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(15, 23, 42);
-      pdf.text(payment.bank ? (bankMap[payment.bank] || payment.bank.toUpperCase()) : 'N/A', 20, 95);
-
-      if (payment.payerName) {
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(148, 163, 184);
-        pdf.text('Payer', 80, 90);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(15, 23, 42);
-        pdf.text(payment.payerName.slice(0, 20), 80, 95);
-      }
-
-      if (payment.payerAccount) {
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(148, 163, 184);
-        pdf.text('Account', 20, 105);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(15, 23, 42);
-        pdf.text(payment.payerAccount.slice(0, 20), 20, 110);
-      }
-
-      if (payment.transactionCode) {
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(148, 163, 184);
-        pdf.text('TXN Code', 80, 105);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(15, 23, 42);
-        pdf.text(payment.transactionCode, 80, 110);
-      }
-      
-      pdf.setFillColor(15, 23, 42); 
-      pdf.roundedRect(20, 118, 108, 35, 4, 4, 'F');
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(9);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text('Amount Paid', 25, 130);
-      pdf.setFontSize(18);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text(`${amount} ETB`, 25, 143);
-      
-      pdf.setFontSize(9);
-      pdf.setTextColor(52, 211, 153); 
-      pdf.text('Status', 100, 130);
-      pdf.setFontSize(12);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text(payment.status === 'active' || payment.status === 'approved' ? 'Verified' : 'Pending', 100, 143);
-      
-      pdf.setFont('helvetica', 'italic');
-      pdf.setFontSize(9);
-      pdf.setTextColor(100, 116, 139); 
-      pdf.text('"Thank you. Your savings are secure."', 35, 168);
-      
-      // Add a digital signature placeholder line
-      pdf.setDrawColor(203, 213, 225);
-      pdf.line(90, 150, 128, 150);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7);
-      pdf.text('Authorized Signature', 95, 155);
-
-      pdf.setDrawColor(241, 245, 249);
-      pdf.line(20, 160, 128, 160);
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text(`Digital Auth Verified`, 20, 170);
-      pdf.text(`© ${new Date().getFullYear()} ${t('common.appName').toUpperCase()}`, 85, 170);
-      
       pdf.save(`Receipt-${receiptId}.pdf`);
       setShowReceiptModal(false);
     } catch (error) {
@@ -11635,11 +11513,8 @@ export default function AdminDashboard() {
                 className="bg-white p-6 rounded-[2rem] border-2 border-slate-50 relative overflow-hidden shadow-sm mx-auto max-w-sm"
               >
                 {/* Watermark Logo bg */}
-                <div className="absolute -right-6 -bottom-6 opacity-[0.03] transform rotate-12 pointer-events-none">
-                  <ShieldCheck size={160} />
-                </div>
-                <div className="absolute -left-6 -top-6 opacity-[0.02] transform -rotate-12 pointer-events-none">
-                  <FileText size={140} />
+                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.05] pointer-events-none">
+                  <img src="/logo.png" alt="Watermark" className="w-[80%] h-[80%] object-contain" />
                 </div>
 
                 <div className="flex justify-between items-start mb-6 pb-4 border-b border-slate-100 relative z-10">
@@ -11703,12 +11578,15 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.5rem] flex justify-between items-center text-white mt-6 shadow-inner">
-                    <div>
+                  <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.5rem] flex justify-between items-center text-white mt-6 shadow-inner relative overflow-hidden">
+                    <div className="absolute inset-0 z-0 opacity-10">
+                      <img src="/logo.png" alt="Watermark" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="relative z-10">
                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'የተከፈለው መጠን' : 'Amount Paid'}</p>
                       <p className="text-xl font-black">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">ETB</span></p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right relative z-10">
                       <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'ሁኔታ' : 'Status'}</p>
                       <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">{language === 'am' ? 'ተረጋግጧል' : 'Verified'}</p>
                     </div>
