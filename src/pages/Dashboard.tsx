@@ -2059,7 +2059,7 @@ export default function Dashboard() {
   if (!userData) {
     if (isCheckingRejected) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-6 text-center">
+        <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-50 p-6 text-center">
           <motion.div 
             animate={{ rotate: 360 }}
             transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
@@ -2072,7 +2072,7 @@ export default function Dashboard() {
 
     if (rejectedInfo) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-white p-8 text-center max-w-md mx-auto">
+        <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-white p-8 text-center max-w-md mx-auto">
           <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-8 animate-bounce shadow-lg shadow-rose-100">
             <XCircle size={48} />
           </div>
@@ -2126,7 +2126,7 @@ export default function Dashboard() {
     }
 
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-6 text-center">
+      <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-50 p-6 text-center">
         <motion.div 
           animate={{ scale: [1, 1.1, 1] }}
           transition={{ repeat: Infinity, duration: 2 }}
@@ -2170,7 +2170,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-50 flex font-sans">
+    <div className="h-[100dvh] overflow-hidden bg-slate-50 flex font-sans">
       {/* Mobile Drawer Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -2262,7 +2262,7 @@ export default function Dashboard() {
       </AnimatePresence>
 
       {/* Sidebar Navigation */}
-      <aside className="w-16 md:w-60 bg-white border-r border-slate-100 flex flex-col h-screen sticky top-0 z-40 hidden sm:flex shrink-0">
+      <aside className="w-16 md:w-60 bg-white border-r border-slate-100 flex flex-col h-[100dvh] sticky top-0 z-40 hidden sm:flex shrink-0">
         <div className="p-4 flex items-center justify-between border-b border-slate-50 mb-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-gold-500 shadow-lg">
@@ -2345,7 +2345,7 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      <div className="flex-1 max-h-screen overflow-y-auto custom-scrollbar p-3 sm:p-6 lg:p-8 space-y-6 pb-24 sm:pb-8">
+      <div className="flex-1 max-h-[100dvh] overflow-y-auto custom-scrollbar p-3 sm:p-6 lg:p-8 space-y-6 pb-24 sm:pb-8">
       <AnimatePresence>
         {/* Image Preview Lightbox */}
         <AnimatePresence>

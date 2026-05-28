@@ -209,7 +209,7 @@ const Landing = () => {
   const primaryShadow = landingSettings?.primaryColor ? `shadow-${landingSettings.primaryColor.split('-')[0]}-900/20` : 'shadow-emerald-900/20';
 
   return (
-    <div className={`flex flex-col min-h-screen bg-[#FAFAF8] font-sans selection:bg-emerald-200 selection:text-emerald-950 overflow-x-clip relative`}>
+    <div className={`flex flex-col min-h-[100dvh] bg-[#FAFAF8] font-sans selection:bg-emerald-200 selection:text-emerald-950 overflow-x-clip relative`}>
       {/* Background Subtle Pattern */}
       <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-0">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">

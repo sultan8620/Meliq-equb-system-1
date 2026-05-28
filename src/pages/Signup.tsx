@@ -1069,7 +1069,7 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center font-sans bg-[#FAFAFA] relative overflow-hidden py-12 px-4">
+    <div className="min-h-[100dvh] flex items-center justify-center font-sans bg-[#FAFAFA] relative overflow-hidden py-12 px-4">
       {/* Background Elements */}
       <div className="absolute top-[-5%] left-[-5%] w-[50%] h-[50%] bg-emerald-100/40 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-[40%] h-[40%] bg-indigo-100/40 rounded-full blur-[100px] pointer-events-none" />

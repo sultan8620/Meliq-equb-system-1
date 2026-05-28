@@ -3144,7 +3144,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-50 flex font-sans">
+    <div className="h-[100dvh] overflow-hidden bg-slate-50 flex font-sans">
       {/* Mobile Menu Drawer Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -3267,7 +3267,7 @@ export default function AdminDashboard() {
       </AnimatePresence>
 
       {/* Sidebar Navigation */}
-      <aside className="w-16 md:w-56 bg-white border-r border-slate-100 flex flex-col h-screen sticky top-0 z-40 hidden sm:flex shrink-0">
+      <aside className="w-16 md:w-56 bg-white border-r border-slate-100 flex flex-col h-[100dvh] sticky top-0 z-40 hidden sm:flex shrink-0">
         <div className="p-4 flex items-center gap-2 border-b border-slate-50 mb-2">
           <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg">
             <ShieldCheck size={16} />
@@ -3439,7 +3439,7 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
-      <main className="flex-1 p-3 md:p-6 lg:p-8 max-h-screen overflow-y-auto custom-scrollbar space-y-4">
+      <main className="flex-1 p-3 md:p-6 lg:p-8 max-h-[100dvh] overflow-y-auto custom-scrollbar space-y-4">
           <div className="sm:hidden flex justify-between items-center mb-4">
              <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 font-display">{t('admin.panel')}</span>
              <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-slate-900 text-rose-500 rounded-lg shadow-lg">

@@ -501,7 +501,7 @@ export default function Login() {
   const isIframe = window !== window.parent;
   
   return (
-    <div className="min-h-screen flex items-center justify-center font-sans bg-[#FAFAFA] relative overflow-hidden">
+    <div className="min-h-[100dvh] flex items-center justify-center font-sans bg-[#FAFAFA] relative overflow-hidden">
       {/* Dynamic Background Elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-emerald-100/50 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-indigo-100/50 rounded-full blur-[120px] pointer-events-none" />
