@@ -11526,7 +11526,7 @@ export default function AdminDashboard() {
                 className="bg-white p-6 rounded-[2rem] border-2 border-slate-50 relative overflow-hidden shadow-sm mx-auto max-w-sm"
               >
                 {/* Watermark Logo bg */}
-                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.05] pointer-events-none">
+                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-20 pointer-events-none">
                   <img src="/logo.png" alt="Watermark" className="w-[80%] h-[80%] object-contain" />
                 </div>
 
@@ -11592,8 +11592,7 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="p-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.5rem] flex justify-between items-center text-white mt-6 shadow-inner relative overflow-hidden">
-                    <div className="absolute inset-0 z-0 opacity-10">
-                      <img src="/logo.png" alt="Watermark" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 z-0 opacity-20 bg-center bg-no-repeat bg-contain" style={{ backgroundImage: "url('/logo.png')" }}>
                     </div>
                     <div className="relative z-10">
                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'የተከፈለው መጠን' : 'Amount Paid'}</p>
