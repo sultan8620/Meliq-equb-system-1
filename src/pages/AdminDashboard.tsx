@@ -11,7 +11,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { useLanguage } from '../lib/LanguageContext';
 import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSnapshot, serverTimestamp, limit, setDoc, deleteDoc, orderBy, arrayUnion, or } from 'firebase/firestore';
-import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff, UserMinus } from 'lucide-react';
+import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ChevronDown, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff, UserMinus } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { sendSMS } from '../lib/smsHelper';
 
@@ -3019,9 +3019,17 @@ export default function AdminDashboard() {
     const groupPenalties = penalties.filter((p: any) => p.groupId === group.id);
     const unpaidMemberIds = new Set(groupPenalties.map((p: any) => p.userId));
     
-    // In a real system, we'd also check if they have a 'verified' payment for group.currentRound
-    // For this implementation, we'll use pending penalties as the primary 'missing days' indicator
-    const excluded = group.members.filter((m: any) => unpaidMemberIds.has(m.id) && !m.wonDraw);
+    // Check missing days based on payment count vs current round
+    const currentRound = group.currentRound || 1;
+    const missingDaysIds = new Set();
+    group.members.forEach((m: any) => {
+       const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === group.id && p.status === 'verified');
+       if (userPayments.length < currentRound - 1) { // If round 2, they must have 1 verified payment at least.
+         missingDaysIds.add(m.id);
+       }
+    });
+
+    const excluded = group.members.filter((m: any) => (unpaidMemberIds.has(m.id) || missingDaysIds.has(m.id)) && !m.wonDraw);
     setIneligibleMembers(excluded);
     setSelectedGroup(group);
     setShowDrawModal(true);
@@ -11083,46 +11091,75 @@ export default function AdminDashboard() {
               <div className="flex-1 overflow-y-auto p-8 relative flex flex-col items-center justify-center min-h-[400px]">
                 {drawStage === 'select' && (
                   <div className="w-full space-y-8 animate-in fade-in zoom-in duration-500">
-                    <div className="text-center space-y-2">
-                       <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">አሸናፊውን ይምረጡ (Select Winner)</h2>
-                       <p className="text-xs font-bold text-slate-500">በዘፈቀደ (Random) ወይም የተመረጠ አባል (Manual Pick) ለዚህ ዙር እጣ መምረጥ ይችላሉ።</p>
+                    <div className="text-center space-y-2 mb-8">
+                       <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">አሸናፊውን ይምረጡ</h2>
+                       <p className="text-[11px] font-bold text-slate-500 tracking-widest uppercase">Select Winner for Round {selectedDrawGroup.currentRound || 1}</p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl mx-auto">
+                    {/* Eligible vs Ineligible Members Count */}
+                    <div className="flex justify-center gap-6 mb-8">
+                        <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">
+                           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                           <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">
+                             የሚሳተፉ: {selectedDrawGroup.members.length - ineligibleMembers.length}
+                           </span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-rose-50 px-4 py-2 rounded-xl border border-rose-100">
+                           <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                           <span className="text-[10px] font-black text-rose-700 uppercase tracking-widest">
+                             የማይሳተፉ: {ineligibleMembers.length}
+                           </span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full max-w-4xl mx-auto">
                        {/* Auto Draw Option */}
                        <div 
                          onClick={() => startDrawAnimation('auto')}
-                         className="flex flex-col items-center justify-center p-8 rounded-[2rem] bg-gradient-to-br from-indigo-50 to-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/20 transition-all cursor-pointer group"
+                         className="flex flex-col items-center justify-center p-10 rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-800 text-white border-4 border-indigo-100/10 hover:scale-105 hover:shadow-2xl hover:shadow-indigo-500/40 transition-all cursor-pointer group relative overflow-hidden"
                        >
-                          <div className="w-20 h-20 rounded-[2rem] bg-indigo-500 text-white flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/30 group-hover:scale-110 transition-transform">
-                             <RefreshCw size={32} />
+                          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-[50px] rounded-full -mr-32 -mt-32"></div>
+                          <div className="relative z-10 w-24 h-24 rounded-full bg-white/20 text-white flex items-center justify-center mb-6 shadow-2xl backdrop-blur-sm group-hover:rotate-180 transition-transform duration-700 ease-in-out border border-white/20">
+                             <RefreshCw size={40} className="group-hover:scale-110 transition-transform" />
                           </div>
-                          <h3 className="text-lg font-black text-indigo-900 uppercase tracking-widest mb-2 text-center">በዘፈቀደ አውጣ <br/>(Random Draw)</h3>
-                          <p className="text-[10px] font-bold text-indigo-500/80 text-center uppercase tracking-widest">ፍትሀዊ አወጣጥ ለሁሉም</p>
+                          <h3 className="text-2xl font-black uppercase tracking-tighter mb-2 text-center text-white drop-shadow-md">በዘፈቀደ አውጣ <br/><span className="text-sm font-bold text-indigo-200 tracking-widest">(Random Draw)</span></h3>
+                          <p className="text-[11px] font-medium text-indigo-100 text-center mt-2 bg-black/20 px-4 py-1.5 rounded-full">ፍትሀዊ አወጣጥ ለሁሉም</p>
                        </div>
 
                        {/* Manual Select Option */}
-                       <div className="flex flex-col p-6 rounded-[2rem] bg-slate-50 border-2 border-slate-200 transition-all">
-                          <div className="w-12 h-12 rounded-xl bg-slate-200 text-slate-500 flex items-center justify-center mb-4">
-                             <User size={20} />
+                       <div className="flex flex-col p-8 rounded-[3rem] bg-white border-2 border-slate-100 hover:border-slate-200 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative">
+                          <div className="absolute top-4 right-4 bg-slate-100 text-slate-400 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                             <Shield size={10} /> Admin Only
                           </div>
-                          <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">አባል ምረጥ (Manual Select)</h3>
-                          <p className="text-[9px] font-bold text-slate-500 mb-6 uppercase tracking-widest">አድሚን ብቻ የሚጠቀምበት</p>
+                          <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-6">
+                             <User size={28} />
+                          </div>
+                          <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-1">አባል ምረጥ</h3>
+                          <p className="text-[10px] font-bold text-slate-400 mb-8 uppercase tracking-widest">Manual Select Winner</p>
 
-                          <div className="mt-auto space-y-4">
-                             <select 
-                               value={manualWinnerId}
-                               onChange={e => setManualWinnerId(e.target.value)}
-                               className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-rose-500"
-                             >
-                               <option value="">-- አባል ይምረጡ --</option>
-                               {selectedDrawGroup.members
-                                  .filter((m: any) => !m.wonDraw && !ineligibleMembers.find(im => im.id === m.id))
-                                  .map((m: any) => (
-                                    <option key={m.id} value={m.id}>{m.fullName}</option>
-                                  ))
-                               }
-                             </select>
+                          <div className="mt-auto space-y-5">
+                             <div className="relative">
+                               <select 
+                                 value={manualWinnerId}
+                                 onChange={e => setManualWinnerId(e.target.value)}
+                                 className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] font-bold text-slate-700 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all appearance-none"
+                               >
+                                 <option value="">-- አባል ይምረጡ --</option>
+                                 {selectedDrawGroup.members
+                                    .filter((m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id))
+                                    .map((m: any) => (
+                                      <option key={m.id} value={m.id}>{m.fullName}</option>
+                                    ))
+                                 }
+                               </select>
+                               <div className="absolute top-1/2 -translate-y-1/2 left-4 text-slate-400">
+                                 <User size={16} />
+                               </div>
+                               <div className="absolute top-1/2 -translate-y-1/2 right-4 text-slate-400 pointer-events-none">
+                                 <ChevronDown size={14} />
+                               </div>
+                             </div>
+                             
                              <button
                                onClick={() => {
                                  if (!manualWinnerId) {
@@ -11132,13 +11169,43 @@ export default function AdminDashboard() {
                                  startDrawAnimation(manualWinnerId);
                                }}
                                disabled={!manualWinnerId}
-                               className="w-full p-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all font-mono"
+                               className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] flex items-center justify-center gap-2"
                              >
-                               አሸናፊ አድርግ (Confirm)
+                               <Trophy size={16} /> ማረጋገጫ (Confirm)
                              </button>
                           </div>
                        </div>
                     </div>
+
+                     {/* Ineligible Members Warning - Moved to Select Stage */}
+                     {ineligibleMembers.length > 0 && (
+                       <motion.div 
+                         initial={{ opacity: 0, y: 10 }}
+                         animate={{ opacity: 1, y: 0 }}
+                         className="bg-rose-50/50 border border-rose-100/50 p-6 rounded-[2rem] w-full max-w-4xl mx-auto mt-8"
+                       >
+                          <div className="flex items-center gap-3 text-rose-500 mb-4 pb-4 border-b border-rose-100/50">
+                             <AlertTriangle size={18} />
+                             <span className="text-[10px] font-black uppercase tracking-widest">በዚህ እጣ የማይካተቱ አባላት (Excluded Members)</span>
+                          </div>
+                          
+                          <div className="grid border border-rose-100 rounded-xl overflow-hidden bg-white/50">
+                            {ineligibleMembers.map((m: any, idx) => (
+                               <div key={m.id} className={`flex items-center justify-between p-3 px-4 ${idx !== ineligibleMembers.length - 1 ? 'border-b border-rose-50' : ''}`}>
+                                  <div className="flex items-center gap-3">
+                                     <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-500">
+                                        <User size={10} />
+                                     </div>
+                                     <span className="text-[11px] font-black text-rose-600">{m.fullName}</span>
+                                  </div>
+                                  <span className="text-[9px] font-black text-rose-400 bg-rose-50 px-2.5 py-1 rounded-md tracking-widest uppercase">
+                                     ጎዶሎ ቀን ወይም ክፍያ የሌለው (Missed payment)
+                                  </span>
+                               </div>
+                            ))}
+                          </div>
+                       </motion.div>
+                     )}
                   </div>
                 )}
 
@@ -11172,25 +11239,6 @@ export default function AdminDashboard() {
                         </div>
                      </div>
 
-                     {/* Ineligible Members Warning */}
-                     {ineligibleMembers.length > 0 && (
-                       <div className="bg-rose-50 border border-rose-100 p-6 rounded-[2rem] w-full max-w-2xl mx-auto">
-                          <div className="flex items-center gap-3 text-rose-600 mb-3">
-                             <AlertTriangle size={20} />
-                             <span className="text-xs font-black uppercase tracking-widest">እጣ ውስጥ የማይገቡ አባላት (Excluded Members)</span>
-                          </div>
-                          <p className="text-[10px] font-bold text-rose-500 mb-4 uppercase tracking-widest leading-relaxed">
-                             የሚከተሉት አባላት ክፍያ ስላልጨረሱ ወይም ጎዶሎ ቀን ስላለባቸው በዚህ ዙር እጣ ውስጥ አይካተቱም።
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                             {ineligibleMembers.map(m => (
-                                <div key={m.id} className="px-3 py-1.5 bg-white border border-rose-100 rounded-lg text-[10px] font-bold text-rose-600 shadow-sm">
-                                   {m.fullName}
-                                </div>
-                             ))}
-                          </div>
-                       </div>
-                     )}
                   </div>
                 )}
 
