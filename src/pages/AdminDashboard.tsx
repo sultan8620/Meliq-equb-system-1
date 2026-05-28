@@ -770,6 +770,31 @@ export default function AdminDashboard() {
   const [drawWinner, setDrawWinner] = useState<any>(null);
   const [manualWinnerId, setManualWinnerId] = useState('');
 
+  // Enhanced Draw States
+  const [animatingName, setAnimatingName] = useState('');
+  const [animatingAvatar, setAnimatingAvatar] = useState('');
+  const [drawActiveTab, setDrawActiveTab] = useState<'eligible' | 'excluded' | 'winners'>('eligible');
+  const [drawModalSearch, setDrawModalSearch] = useState('');
+
+  useEffect(() => {
+    let interval: any;
+    if (drawStage === 'animating' && selectedDrawGroup) {
+      const eligible = selectedDrawGroup.members.filter(
+        (m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id)
+      );
+      if (eligible.length > 0) {
+        let counter = 0;
+        interval = setInterval(() => {
+          const m = eligible[counter % eligible.length];
+          setAnimatingName(m.fullName);
+          setAnimatingAvatar(m.faceScan || '');
+          counter++;
+        }, 85);
+      }
+    }
+    return () => clearInterval(interval);
+  }, [drawStage, selectedDrawGroup, ineligibleMembers]);
+
   const regions = ['All', 'አዲስ አበባ', 'አማራ', 'ኦሮሚያ', 'ትግራይ', 'ደቡብ ኢትዮጵያ', 'ደቡብ', 'ሶማሌ', 'አፋር', 'ቤንሻንጉል ጉሙዝ', 'ጋምቤላ', 'ሐረሪ', 'ሲዳማ', 'ድሬዳዋ'];
 
   const openScheduleModal = (group: any) => {
@@ -11090,59 +11115,44 @@ export default function AdminDashboard() {
               {/* Modal Body */}
               <div className="flex-1 overflow-y-auto p-8 relative flex flex-col items-center justify-center min-h-[400px]">
                 {drawStage === 'select' && (
-                  <div className="w-full space-y-8 animate-in fade-in zoom-in duration-500">
-                    <div className="text-center space-y-2 mb-8">
+                  <div className="w-full space-y-6 animate-in fade-in zoom-in duration-500">
+                    <div className="text-center space-y-1 mb-6">
                        <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">አሸናፊውን ይምረጡ</h2>
-                       <p className="text-[11px] font-bold text-slate-500 tracking-widest uppercase">Select Winner for Round {selectedDrawGroup.currentRound || 1}</p>
+                       <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Select Winner for Round {selectedDrawGroup.currentRound || 1}</p>
                     </div>
 
-                    {/* Eligible vs Ineligible Members Count */}
-                    <div className="flex justify-center gap-6 mb-8">
-                        <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">
-                           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                           <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">
-                             የሚሳተፉ: {selectedDrawGroup.members.length - ineligibleMembers.length}
-                           </span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-rose-50 px-4 py-2 rounded-xl border border-rose-100">
-                           <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                           <span className="text-[10px] font-black text-rose-700 uppercase tracking-widest">
-                             የማይሳተፉ: {ineligibleMembers.length}
-                           </span>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full max-w-4xl mx-auto">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full max-w-4xl mx-auto mb-4">
                        {/* Auto Draw Option */}
                        <div 
                          onClick={() => startDrawAnimation('auto')}
-                         className="flex flex-col items-center justify-center p-10 rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-800 text-white border-4 border-indigo-100/10 hover:scale-105 hover:shadow-2xl hover:shadow-indigo-500/40 transition-all cursor-pointer group relative overflow-hidden"
+                         className="flex flex-col items-center justify-center p-8 rounded-[2.5rem] bg-gradient-to-br from-indigo-600 to-violet-800 text-white border-4 border-indigo-100/10 hover:scale-[1.03] hover:shadow-2xl hover:shadow-indigo-500/30 transition-all cursor-pointer group relative overflow-hidden"
                        >
-                          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-[50px] rounded-full -mr-32 -mt-32"></div>
-                          <div className="relative z-10 w-24 h-24 rounded-full bg-white/20 text-white flex items-center justify-center mb-6 shadow-2xl backdrop-blur-sm group-hover:rotate-180 transition-transform duration-700 ease-in-out border border-white/20">
-                             <RefreshCw size={40} className="group-hover:scale-110 transition-transform" />
+                          <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 blur-[40px] rounded-full -mr-24 -mt-24"></div>
+                          <div className="relative z-10 w-20 h-20 rounded-full bg-white/20 text-white flex items-center justify-center mb-4 shadow-xl backdrop-blur-sm group-hover:rotate-180 transition-transform duration-700 ease-in-out border border-white/10">
+                             <RefreshCw size={32} className="group-hover:scale-110 transition-transform" />
                           </div>
-                          <h3 className="text-2xl font-black uppercase tracking-tighter mb-2 text-center text-white drop-shadow-md">በዘፈቀደ አውጣ <br/><span className="text-sm font-bold text-indigo-200 tracking-widest">(Random Draw)</span></h3>
-                          <p className="text-[11px] font-medium text-indigo-100 text-center mt-2 bg-black/20 px-4 py-1.5 rounded-full">ፍትሀዊ አወጣጥ ለሁሉም</p>
+                          <h3 className="text-xl font-black uppercase tracking-tight mb-1 text-center text-white drop-shadow-md">በዘፈቀደ አውጣ</h3>
+                          <p className="text-[9px] font-bold text-indigo-200 tracking-widest uppercase mb-2">(Random Draw)</p>
+                          <p className="text-[10px] font-medium text-indigo-100 text-center bg-black/20 px-4 py-1.5 rounded-full z-10">ፍትሀዊ አወጣጥ ለሁሉም</p>
                        </div>
 
                        {/* Manual Select Option */}
-                       <div className="flex flex-col p-8 rounded-[3rem] bg-white border-2 border-slate-100 hover:border-slate-200 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative">
-                          <div className="absolute top-4 right-4 bg-slate-100 text-slate-400 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                       <div className="flex flex-col p-8 rounded-[2.5rem] bg-white border-2 border-slate-100 hover:border-slate-200 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.02)] relative">
+                          <div className="absolute top-4 right-4 bg-slate-50 text-slate-400 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
                              <Shield size={10} /> Admin Only
                           </div>
-                          <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-6">
-                             <User size={28} />
+                          <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
+                             <User size={24} />
                           </div>
-                          <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-1">አባል ምረጥ</h3>
-                          <p className="text-[10px] font-bold text-slate-400 mb-8 uppercase tracking-widest">Manual Select Winner</p>
+                          <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-1">አባል ምረጥ</h3>
+                          <p className="text-[9px] font-bold text-slate-400 mb-6 uppercase tracking-widest">(Manual Select Winner)</p>
 
-                          <div className="mt-auto space-y-5">
+                          <div className="mt-auto space-y-4">
                              <div className="relative">
                                <select 
                                  value={manualWinnerId}
                                  onChange={e => setManualWinnerId(e.target.value)}
-                                 className="w-full p-4 pl-12 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] font-bold text-slate-700 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all appearance-none"
+                                 className="w-full p-3.5 pl-10 bg-slate-50 border border-slate-255 rounded-xl text-[11px] font-bold text-slate-700 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all appearance-none"
                                >
                                  <option value="">-- አባል ይምረጡ --</option>
                                  {selectedDrawGroup.members
@@ -11152,10 +11162,10 @@ export default function AdminDashboard() {
                                     ))
                                  }
                                </select>
-                               <div className="absolute top-1/2 -translate-y-1/2 left-4 text-slate-400">
-                                 <User size={16} />
+                               <div className="absolute top-1/2 -translate-y-1/2 left-3 text-slate-400">
+                                 <User size={14} />
                                </div>
-                               <div className="absolute top-1/2 -translate-y-1/2 right-4 text-slate-400 pointer-events-none">
+                               <div className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none">
                                  <ChevronDown size={14} />
                                </div>
                              </div>
@@ -11169,43 +11179,185 @@ export default function AdminDashboard() {
                                  startDrawAnimation(manualWinnerId);
                                }}
                                disabled={!manualWinnerId}
-                               className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] flex items-center justify-center gap-2"
+                               className="w-full py-3.5 bg-slate-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all shadow-md flex items-center justify-center gap-2"
                              >
-                               <Trophy size={16} /> ማረጋገጫ (Confirm)
+                               <Trophy size={14} /> ማረጋገጫ (Confirm)
                              </button>
                           </div>
                        </div>
                     </div>
 
-                     {/* Ineligible Members Warning - Moved to Select Stage */}
-                     {ineligibleMembers.length > 0 && (
-                       <motion.div 
-                         initial={{ opacity: 0, y: 10 }}
-                         animate={{ opacity: 1, y: 0 }}
-                         className="bg-rose-50/50 border border-rose-100/50 p-6 rounded-[2rem] w-full max-w-4xl mx-auto mt-8"
-                       >
-                          <div className="flex items-center gap-3 text-rose-500 mb-4 pb-4 border-b border-rose-100/50">
-                             <AlertTriangle size={18} />
-                             <span className="text-[10px] font-black uppercase tracking-widest">በዚህ እጣ የማይካተቱ አባላት (Excluded Members)</span>
-                          </div>
-                          
-                          <div className="grid border border-rose-100 rounded-xl overflow-hidden bg-white/50">
-                            {ineligibleMembers.map((m: any, idx) => (
-                               <div key={m.id} className={`flex items-center justify-between p-3 px-4 ${idx !== ineligibleMembers.length - 1 ? 'border-b border-rose-50' : ''}`}>
-                                  <div className="flex items-center gap-3">
-                                     <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center text-rose-500">
-                                        <User size={10} />
-                                     </div>
-                                     <span className="text-[11px] font-black text-rose-600">{m.fullName}</span>
-                                  </div>
-                                  <span className="text-[9px] font-black text-rose-400 bg-rose-50 px-2.5 py-1 rounded-md tracking-widest uppercase">
-                                     ጎዶሎ ቀን ወይም ክፍያ የሌለው (Missed payment)
-                                  </span>
-                               </div>
-                            ))}
-                          </div>
-                       </motion.div>
-                     )}
+                    {/* INTERACTIVE MEMBERS EXPLORER CONTROLS */}
+                    <div className="border-t border-slate-100 pt-6">
+                      {/* Tabs Navigation */}
+                      <div className="flex justify-center border-b border-slate-100 max-w-xl mx-auto mb-4">
+                        <button
+                          onClick={() => setDrawActiveTab('eligible')}
+                          className={`px-4 py-2.5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1.5 ${
+                            drawActiveTab === 'eligible'
+                              ? 'border-indigo-500 text-indigo-600'
+                              : 'border-transparent text-slate-400 hover:text-slate-600'
+                          }`}
+                        >
+                          <UserCheck size={12} /> የሚሳተፉ ({selectedDrawGroup.members.length - ineligibleMembers.length})
+                        </button>
+                        <button
+                          onClick={() => setDrawActiveTab('excluded')}
+                          className={`px-4 py-2.5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1.5 ${
+                            drawActiveTab === 'excluded'
+                              ? 'border-rose-500 text-rose-600'
+                              : 'border-transparent text-slate-400 hover:text-slate-600'
+                          }`}
+                        >
+                          <UserMinus size={12} /> የማይሳተፉ ({ineligibleMembers.length})
+                        </button>
+                        <button
+                          onClick={() => setDrawActiveTab('winners')}
+                          className={`px-4 py-2.5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1.5 ${
+                            drawActiveTab === 'winners'
+                              ? 'border-amber-500 text-amber-600'
+                              : 'border-transparent text-slate-400 hover:text-slate-600'
+                          }`}
+                        >
+                          <Trophy size={12} /> የደረሳቸው ({selectedDrawGroup.members.filter((m: any) => m.wonDraw).length})
+                        </button>
+                      </div>
+
+                      {/* Modal Search Input */}
+                      <div className="relative max-w-md mx-auto mb-4">
+                        <input
+                          type="text"
+                          placeholder={language === 'am' ? 'የአባላትን ስም ይፈልጉ...' : 'Search members in draw list...'}
+                          value={drawModalSearch}
+                          onChange={(e) => setDrawModalSearch(e.target.value)}
+                          className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-sans"
+                        />
+                        <Search size={12} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      </div>
+
+                      {/* TAB VIEWS */}
+                      <div className="bg-slate-50/20 rounded-[2rem] p-4 max-h-[220px] overflow-y-auto border border-slate-100 custom-scrollbar">
+                         {/* Eligible Tab */}
+                         {drawActiveTab === 'eligible' && (
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {selectedDrawGroup.members
+                                .filter((m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id))
+                                .filter((m: any) => m.fullName.toLowerCase().includes(drawModalSearch.toLowerCase()))
+                                .length === 0 ? (
+                                <div className="col-span-2 text-center py-6">
+                                  <Users size={20} className="text-slate-300 mx-auto mb-1.5" />
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ምንም ተሳታፊ አባል አልተገኘም</p>
+                                </div>
+                              ) : (
+                                selectedDrawGroup.members
+                                  .filter((m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id))
+                                  .filter((m: any) => m.fullName.toLowerCase().includes(drawModalSearch.toLowerCase()))
+                                  .map((m: any) => {
+                                    const integrity = calculateIntegrityScore(m.id);
+                                    return (
+                                      <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:shadow-sm transition-shadow">
+                                         <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 font-bold overflow-hidden border border-indigo-100/50">
+                                               {m.faceScan ? (
+                                                 <img src={m.faceScan} alt="" className="w-full h-full object-cover" />
+                                               ) : (
+                                                 <User size={12} />
+                                               )}
+                                            </div>
+                                            <div>
+                                               <p className="text-[10px] font-black text-slate-800 uppercase">{m.fullName}</p>
+                                               <p className="text-[8px] font-bold text-indigo-500 uppercase mt-0.5">ታማኝነት: {integrity}%</p>
+                                            </div>
+                                         </div>
+                                         <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 tracking-wider">
+                                            ብቁ (READY)
+                                         </span>
+                                      </div>
+                                    );
+                                  })
+                              )}
+                           </div>
+                         )}
+
+                         {/* Excluded Tab */}
+                         {drawActiveTab === 'excluded' && (
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {ineligibleMembers
+                                .filter((m: any) => m.fullName.toLowerCase().includes(drawModalSearch.toLowerCase()))
+                                .length === 0 ? (
+                                <div className="col-span-2 text-center py-6">
+                                  <CheckCircle size={20} className="text-emerald-400 mx-auto mb-1.5" />
+                                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">ሁሉም አባላት ሙሉ ክፍያ ፈጽመዋል</p>
+                                </div>
+                              ) : (
+                                ineligibleMembers
+                                  .filter((m: any) => m.fullName.toLowerCase().includes(drawModalSearch.toLowerCase()))
+                                  .map((m: any) => (
+                                    <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-rose-100 rounded-xl">
+                                       <div className="flex items-center gap-2">
+                                          <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 font-bold overflow-hidden border border-rose-100/50">
+                                             {m.faceScan ? (
+                                               <img src={m.faceScan} alt="" className="w-full h-full object-cover" />
+                                             ) : (
+                                               <User size={12} />
+                                             )}
+                                          </div>
+                                          <div>
+                                             <p className="text-[10px] font-black text-rose-700 uppercase">{m.fullName}</p>
+                                             <p className="text-[8px] font-bold text-slate-400 mt-0.5">{m.phone}</p>
+                                          </div>
+                                       </div>
+                                       <span className="text-[7px] font-black text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100 uppercase tracking-widest text-center">
+                                          ክፍያ ጎዶሎ
+                                       </span>
+                                    </div>
+                                  ))
+                              )}
+                           </div>
+                         )}
+
+                         {/* Past Winners Tab */}
+                         {drawActiveTab === 'winners' && (
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {selectedDrawGroup.members.filter((m: any) => m.wonDraw).length === 0 ? (
+                                <div className="col-span-2 text-center py-6">
+                                  <Trophy size={20} className="text-slate-300 mx-auto mb-1.5" />
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">እስካሁን ያሸነፈ አባል የለም</p>
+                                </div>
+                              ) : (
+                                selectedDrawGroup.members
+                                  .filter((m: any) => m.wonDraw)
+                                  .filter((m: any) => m.fullName.toLowerCase().includes(drawModalSearch.toLowerCase()))
+                                  .map((m: any) => {
+                                    const integrity = calculateIntegrityScore(m.id);
+                                    return (
+                                      <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-amber-100 rounded-xl">
+                                         <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 font-bold overflow-hidden border border-amber-100/50">
+                                               {m.faceScan ? (
+                                                 <img src={m.faceScan} alt="" className="w-full h-full object-cover" />
+                                               ) : (
+                                                 <User size={12} />
+                                               )}
+                                            </div>
+                                            <div>
+                                               <p className="text-[10px] font-black text-slate-800 uppercase">{m.fullName}</p>
+                                               <p className="text-[8px] font-bold text-slate-400 mt-0.5">ታማኝነት: {integrity}%</p>
+                                            </div>
+                                         </div>
+                                         <div className="text-right flex flex-col items-end">
+                                            <span className="text-[7px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 uppercase tracking-wider">
+                                               ዙር {m.wonRound || 'N/A'}
+                                            </span>
+                                         </div>
+                                      </div>
+                                    );
+                                  })
+                              )}
+                           </div>
+                         )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -11215,18 +11367,48 @@ export default function AdminDashboard() {
                         <div className="w-96 h-96 bg-amber-400 blur-[100px] rounded-full animate-pulse blur-3xl"></div>
                         <div className="w-96 h-96 bg-rose-500 blur-[100px] rounded-full animate-pulse delay-700 blur-3xl mix-blend-screen absolute"></div>
                      </div>
-                     <div className="relative z-10 w-40 h-40">
-                       <motion.div 
-                         className="w-full h-full rounded-[3rem] bg-gradient-to-tr from-amber-400 to-rose-500 flex items-center justify-center shadow-2xl shadow-rose-500/40 border-4 border-white"
-                         animate={{ rotate: 360, scale: [1, 1.1, 1] }}
-                         transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-                       >
-                          <Gift size={64} className="text-white drop-shadow-md" />
-                       </motion.div>
+                     
+                     {/* Breathtaking Slot Bezel */}
+                     <div className="relative z-10 w-full max-w-md mx-auto bg-slate-950 p-6 rounded-[2.5rem] border-4 border-slate-800 shadow-2xl text-center overflow-hidden">
+                        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-400 via-rose-500 to-indigo-500"></div>
+                        <p className="text-[8px] font-black text-amber-500 uppercase tracking-[0.4em] mb-4">RANDOM SELECTOR STATUS: CYCLING</p>
+                        
+                        {/* Shimmer Slot window */}
+                        <div className="bg-slate-900 border border-slate-800/80 rounded-2xl py-8 px-4 flex flex-col items-center justify-center min-h-[140px] relative">
+                           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/60 pointer-events-none"></div>
+                           
+                           <AnimatePresence mode="popLayout">
+                             <motion.div 
+                               key={animatingName}
+                               initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                               animate={{ opacity: 1, y: 0, scale: 1 }}
+                               exit={{ opacity: 0, y: -30, scale: 0.9 }}
+                               transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                               className="flex flex-col items-center gap-3 relative z-10"
+                             >
+                                <div className="w-14 h-14 rounded-full border-2 border-amber-400 bg-slate-800 flex items-center justify-center text-white overflow-hidden shadow-lg">
+                                  {animatingAvatar ? (
+                                    <img src={animatingAvatar} alt="" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <User size={24} className="text-amber-400" />
+                                  )}
+                                </div>
+                                <span className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-rose-400 to-indigo-400 uppercase tracking-tight">
+                                   {animatingName || '...'}
+                                </span>
+                             </motion.div>
+                           </AnimatePresence>
+                        </div>
+                        
+                        <div className="flex justify-between items-center mt-4 text-[7px] font-bold text-slate-500 font-mono">
+                           <span>SYS: DRAW_ACTIVE</span>
+                           <span>ENGINE_v3.2</span>
+                        </div>
                      </div>
-                     <div className="text-center relative z-10">
+
+                     <div className="text-center relative z-10 space-y-2">
                         <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest animate-pulse">እጣ አወጣጥ በሂደት ላይ...</h2>
-                        <p className="text-xs font-bold text-slate-500 mt-2 uppercase tracking-[0.3em]">Drawing Winner...</p>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.3em]">Drawing Winner...</p>
                         <div className="flex gap-2 justify-center mt-6">
                            {[1, 2, 3].map(i => (
                              <motion.div 
@@ -11238,30 +11420,66 @@ export default function AdminDashboard() {
                            ))}
                         </div>
                      </div>
-
                   </div>
                 )}
 
                 {drawStage === 'result' && drawWinner && (
-                  <div className="flex flex-col items-center justify-center w-full animate-in zoom-in fade-in duration-500 relative">
-                     <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPgo8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJub25lIi8+CgkJPGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZkNzAwIiBzdHJva2Utd2lkdGg9IjEiPgoJCQk8cGF0aCBkPSJNMCAwIEwxMDAgMTAwIE0xMDAgMCBMMCAxMDAiIC8+CgkJPC9nPgoJCTwvc3ZnPg==')] opacity-5 pointer-events-none"></div>
+                  <div className="flex flex-col items-center justify-center w-full animate-in zoom-in fade-in duration-500 relative py-6">
+                     {/* Breathtaking confetti decorations */}
+                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        {[...Array(12)].map((_, i) => (
+                          <motion.div
+                            key={i}
+                            className="absolute w-2.5 h-2.5 rounded-full"
+                            style={{
+                              backgroundColor: ['#ffc107', '#ff5722', '#e91e63', '#4caf50', '#00bcd4'][i % 5],
+                              left: `${Math.random() * 100}%`,
+                              top: `${Math.random() * 100}%`,
+                            }}
+                            animate={{
+                              y: [-20, 200],
+                              x: [-10, 10],
+                              rotate: [0, 360],
+                              scale: [1, 1.2, 0.8]
+                            }}
+                            transition={{
+                              duration: 2 + Math.random() * 2,
+                              repeat: Infinity,
+                              delay: Math.random() * 1.5,
+                            }}
+                          />
+                        ))}
+                     </div>
 
                      <motion.div 
                        initial={{ scale: 0 }}
-                       animate={{ scale: 1, rotate: [0, -5, 5, 0] }}
+                       animate={{ scale: [1, 1.1, 1], rotate: [0, -10, 10, -5, 5, 0] }}
                        transition={{ type: 'spring', stiffness: 200, damping: 10 }}
-                       className="w-32 h-32 bg-gradient-to-br from-amber-300 to-amber-500 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/50 mb-6 border-8 border-white p-4 relative z-10"
+                       className="w-40 h-40 bg-gradient-to-br from-amber-300 via-amber-500 to-rose-500 rounded-full flex items-center justify-center shadow-2xl shadow-rose-500/40 mb-6 border-8 border-white p-4 relative z-10"
                      >
-                        <Trophy size={60} className="text-white drop-shadow-lg" />
+                        {drawWinner.faceScan ? (
+                          <img src={drawWinner.faceScan} alt="" className="w-full h-full object-cover rounded-full shadow-inner" referrerPolicy="no-referrer" />
+                        ) : (
+                          <Trophy size={68} className="text-white drop-shadow-lg" />
+                        )}
+                        <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl border border-amber-100 animate-bounce">
+                           <Trophy size={20} className="text-amber-500" />
+                        </div>
                      </motion.div>
 
-                     <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-rose-500 uppercase tracking-tighter text-center mb-2">{drawWinner.fullName}</h2>
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] bg-slate-100 px-3 py-1 rounded-full">{language === 'am' ? 'የዚህ ዙር አሸናፊ!' : 'Winner of this Round!'}</p>
+                     <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 uppercase tracking-tighter text-center mb-1 drop-shadow-sm">{drawWinner.fullName}</h2>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] bg-slate-100 px-4 py-1.5 rounded-full mb-6">{language === 'am' ? 'የዚህ ዙር አሸናፊ!' : 'Winner of this Round!'}</p>
 
-                     <div className="grid grid-cols-2 gap-4 w-full max-w-sm mt-8 border-t border-slate-100 pt-6">
+                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-lg mt-4 border-t border-slate-100 pt-6">
                         <div className="text-center p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
                            <p className="text-[8px] font-black text-emerald-600/60 uppercase tracking-widest mb-1">ስልክ</p>
-                           <p className="text-xs font-black text-emerald-700">{drawWinner.phone}</p>
+                           <p className="text-xs font-black text-emerald-700 font-mono">{drawWinner.phone}</p>
+                        </div>
+                        <div className="text-center p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+                           <p className="text-[8px] font-black text-indigo-600/60 uppercase tracking-widest mb-1">ታማኝነት ነጥብ</p>
+                           <p className="text-xs font-semibold text-indigo-700">
+                             {calculateIntegrityScore(drawWinner.id)}% Integrity
+                           </p>
                         </div>
                         <div className="text-center p-4 bg-amber-50 rounded-2xl border border-amber-100 relative group">
                            <p className="text-[8px] font-black text-amber-600/60 uppercase tracking-widest mb-1">ዋስ ያስፈልጋል</p>
@@ -11269,8 +11487,8 @@ export default function AdminDashboard() {
                              <ShieldAlert size={12} /> ግዴታ
                            </p>
                            
-                           {/* Tooltip to show requirement context */}
-                           <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-slate-900 text-white text-[9px] p-3 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 font-bold shadow-xl">
+                           {/* Tooltip */}
+                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 text-white text-[9px] p-3 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 font-bold shadow-xl">
                               እጣ ደራሽ የሆነ አባል ክፍያ ያልተጠናቀቀበት ጊዜ ላይ ዋስ የማምጣት ግዴታ አለበት።
                            </div>
                         </div>
@@ -11278,9 +11496,9 @@ export default function AdminDashboard() {
 
                      <button 
                        onClick={() => setShowDrawModal(false)}
-                       className="mt-10 px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all"
+                       className="mt-10 px-10 py-4 bg-slate-900 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
                      >
-                       ጨርስ (Done)
+                       <CheckCircle size={16} /> ጨርስ (Done)
                      </button>
                   </div>
                 )}
