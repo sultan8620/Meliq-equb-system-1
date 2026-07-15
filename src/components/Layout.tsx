@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from './FirebaseProvider';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
-import { LogOut, Globe, Soup, Menu, X, LayoutDashboard, Settings } from 'lucide-react';
+import { LogOut, Globe, Menu, X, LayoutDashboard, Settings } from 'lucide-react';
 import { useLanguage } from '../lib/LanguageContext';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -22,9 +22,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <nav className="fixed top-2 sm:top-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-5xl px-2 sm:px-4 no-flicker">
         <div className="bg-white/80 backdrop-blur-2xl border border-slate-200/50 shadow-[0_15px_40px_-5px_rgba(0,0,0,0.05)] rounded-[1.5rem] sm:rounded-[2rem] px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group shrink-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-600 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-900/10 group-hover:bg-indigo-600 group-hover:-rotate-6 transition-all duration-300">
-              <Soup size={18} className="sm:hidden" />
-              <Soup size={20} className="hidden sm:block" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/5 group-hover:-rotate-6 transition-all duration-300 border border-slate-100 overflow-hidden">
+              <img src="/logo.png" className="w-full h-full object-contain p-0.5" alt="Logo" referrerPolicy="no-referrer" />
             </div>
             <span className="text-lg sm:text-xl font-black text-slate-900 tracking-tighter uppercase italic">
               {t('common.appName').split(' ')[0]}

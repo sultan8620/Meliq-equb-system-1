@@ -526,8 +526,8 @@ export default function Login() {
         className="w-full max-w-[340px] sm:max-w-[380px] relative z-10 p-2 sm:p-4 pt-20 sm:pt-4"
       >
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-emerald-600/20 rotate-3 transform hover:rotate-0 transition-transform duration-500">
-            <ShieldIcon size={32} strokeWidth={2.5} />
+          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-slate-900/5 rotate-3 transform hover:rotate-0 transition-transform duration-500 border border-slate-100 overflow-hidden">
+            <img src="/logo.png" className="w-full h-full object-contain p-1" alt="Logo" referrerPolicy="no-referrer" />
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-tight mb-2">
             {t('common.appName')}
@@ -563,30 +563,6 @@ export default function Login() {
                     {error && (
                       <div className="space-y-4">
                         <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-500 text-[11px] font-black uppercase tracking-widest text-center">{error}</div>
-                        {isAdminPhone && (
-                           <motion.div 
-                             initial={{ opacity: 0, y: 10 }}
-                             animate={{ opacity: 1, y: 0 }}
-                             className="p-4 rounded-[1.5rem] bg-indigo-50 border border-indigo-100 text-indigo-700"
-                           >
-                              <div className="flex items-center gap-2 mb-2">
-                                <ShieldIcon size={14} className="text-indigo-600" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Admin Rescue</span>
-                              </div>
-                              <p className="text-[10px] font-bold leading-relaxed mb-3">
-                                {language === 'am' 
-                                  ? 'የይለፍ ቃል ከረሱ በ Google በመግባት የ "Admin" ዳሽቦርድ ማግኘት ይችላሉ።' 
-                                  : 'If you forgot your password, use "Login with Google" to access your Admin dashboard directly.'}
-                              </p>
-                              <button 
-                                type="button"
-                                onClick={handleGoogleLogin} 
-                                className="w-full py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
-                              >
-                                {language === 'am' ? 'በ Google ይግባ' : 'Login with Google'}
-                              </button>
-                           </motion.div>
-                        )}
                       </div>
                     )}
                     
@@ -655,20 +631,6 @@ export default function Login() {
                       )}
                     </button>
                   </form>
-
-                  <div className="relative my-10">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-                    <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest"><span className="bg-white px-4 text-slate-300">{t('common.or')}</span></div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <button onClick={handleGoogleLogin} className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 py-4.5 rounded-[1.75rem] font-black text-slate-600 text-[12px] uppercase tracking-wider transition-all hover:bg-slate-50 shadow-sm active:scale-[0.98]">
-                      <Chrome className="w-5 h-5 text-emerald-600" />
-                      {t('google_access')}
-                    </button>
-                    
-                    {/* Removed Open in New Tab section as requested */}
-                  </div>
 
                   <p className="mt-10 text-center text-slate-500 text-xs font-bold">
                     {t('no_account')} 

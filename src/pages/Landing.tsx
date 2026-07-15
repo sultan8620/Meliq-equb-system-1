@@ -1,1106 +1,1170 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { onSnapshot, doc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowRight, 
   ShieldCheck, 
   Zap, 
   BarChart3, 
   Users, 
-  Star, 
+  Gift, 
   CheckCircle2, 
-  Clock, 
-  Smartphone, 
+  Globe, 
+  Eye, 
+  Settings, 
   Lock, 
-  Layers,
-  Menu,
+  Menu, 
   X,
-  Facebook,
-  Twitter,
-  Instagram,
-  Linkedin,
-  Github,
-  Youtube,
-  Music,
-  Mail,
-  Phone,
-  MapPin,
-  ChevronRight,
-  TrendingUp,
-  Heart,
-  Globe,
+  Play,
+  Calculator,
+  Sparkles,
   Award,
-  Leaf,
-  Wallet,
-  UserPlus,
-  Gift,
-  Quote,
-  FileText,
-  LayoutGrid,
-  History,
-  Home,
-  Briefcase,
-  Sparkles
+  DollarSign,
+  TrendingUp,
+  RotateCcw,
+  Check,
+  Smartphone,
+  Info,
+  Calendar,
+  Layers,
+  HelpCircle,
+  HelpCircle as FaqIcon
 } from 'lucide-react';
 import { useLanguage } from '../lib/LanguageContext';
+// @ts-expect-error - static asset import
+import heroImg from '../assets/images/equb_hero_celebration_1782574091164.jpg';
 
-const Landing = () => {
-  const { language } = useLanguage();
-  const [scrolled, setScrolled] = useState(false);
-  const [currentSlide, setCurrentSlide] = useState(0);
+export default function Landing() {
+  const { language, setLanguage, t } = useLanguage();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Interactive Simulator States
+  const [calcContribution, setCalcContribution] = useState<number>(5000);
+  const [calcMembers, setCalcMembers] = useState<number>(10);
+  const [calcInterval, setCalcInterval] = useState<'monthly' | 'weekly'>('monthly');
 
-  const [landingSettings, setLandingSettings] = useState<any>(null);
+  // Interactive Spin Wheel / Lot Draw Simulator States
+  const [spinning, setSpinning] = useState(false);
+  const [winnerName, setWinnerName] = useState<string | null>(null);
+  const [showDrawModal, setShowDrawModal] = useState(false);
+  const [drawResult, setDrawResult] = useState<string | null>(null);
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'landing_settings', 'main'), (docSnap) => {
-      if (docSnap.exists()) {
-        setLandingSettings(docSnap.data());
-      }
-    });
-    return () => unsub();
-  }, []);
+  // Custom Toast System state
+  const [toasts, setToasts] = useState<Array<{ id: number; message: string; type: 'success' | 'info' }>>([]);
+  
+  // Feature Detail Dialog State
+  const [activeFeatureModal, setActiveFeatureModal] = useState<any>(null);
 
-  const [activeInfo, setActiveInfo] = useState<null | { title: string, titleAm: string, content: string, contentAm: string }>(null);
-  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
+  // Quick Info Modal for "About" or "Video" click
+  const [showVideoModal, setShowVideoModal] = useState(false);
 
-  const footerInfoMap: Record<string, { am: string, content: string, contentAm: string }> = {
-    'About Us': {
-      am: 'ስለ እኛ',
-      content: 'Meliq Ekub is Ethiopia\'s premier digital savings platform, bridging centuries of tradition with modern security and transparency.',
-      contentAm: 'መሊቅ እቁብ የዘመናት ባህላዊ ቁጠባን ከዘመናዊ ደህንነት እና ግልፅነት ጋር የሚያገናኝ የኢትዮጵያ ቀዳሚ የዲጂታል ቁጠባ መድረክ ነው።'
-    },
-    'Services': {
-      am: 'አገልግሎቶቻችን',
-      content: 'We offer specialized savings circles, digital contribution management, and instant payout systems.',
-      contentAm: 'ልዩ የቁጠባ ቡድኖች፣ የዲጂታል ክፍያ አስተዳደር እና ፈጣን የእጣ ክፍያ ስርዓቶችን እናቀርባለን።'
-    },
-    'Stories': {
-      am: 'የደንበኞች አስተያየት',
-      content: 'Thousands of members have achieved their goals through Meliq Ekub. Join us and share your success story.',
-      contentAm: 'በሺዎች የሚቆጠሩ አባላት በመሊቅ እቁብ አማካኝነት ግባቸውን አሳክተዋል። እርስዎም ይቀላቀሉን እና የስኬት ታሪክዎን ያጋሩ።'
-    },
-    'Payments': {
-      am: 'የክፍያ አማራጮች',
-      content: 'We support all major Ethiopian banks including CBE, BoA, and Awash for seamless transactions.',
-      contentAm: 'ለቀጥታ ክፍያዎች እንደ ሲቢኢ (CBE)፣ ቦአ (BoA) እና አዋሽ ያሉ ዋና ዋና የኢትዮጵያ ባንኮችን እንደግፋለን።'
-    },
-    'Blog': {
-      am: 'ብሎግ',
-      content: 'Read the latest trends in digital finance and community-based saving culture in Ethiopia.',
-      contentAm: 'በኢትዮጵያ ስላለው የዲጂታል ፋይናንስ and ማህበረሰብ ተኮር የቁጠባ ባህል የቅርብ ጊዜ መረጃዎችን ያንብቡ።'
-    },
-    'Privacy Policy': {
-      am: 'የግላዊነት መመሪያ',
-      content: 'Your data is encrypted and protected with bank-grade security protocols. We never share your personal information.',
-      contentAm: 'መረጃዎ በባንክ ደረጃ የደህንነት ፕሮቶኮሎች የተመሰጠረ እና የተጠበቀ ነው። የግል መረጃዎን በጭራሽ አናጋራም።'
-    },
-    'Terms & Conditions': {
-      am: 'ውልና ደንቦች',
-      content: 'Our fair-use policy ensures every member has an equal opportunity and protected rights within our circles.',
-      contentAm: 'ፍትሃዊ የአጠቃቀም መመሪያችን እያንዳንዱ አባል በእቁብ ቡድናችን ውስጥ እኩል ዕድል እና የተጠበቀ መብት እንዳለው ያረጋግጣል።'
-    },
-    'Cookie Policy': {
-      am: 'የኩኪ አጠቃቀም',
-      content: 'We use essential cookies to provide you with the best and most secure app experience possible.',
-      contentAm: 'ምርጥ እና አስተማማኝ የአፕሊኬሽን ተሞክሮ እንዲኖርዎት አስፈላጊ ኩኪዎችን እንጠቀማለን።'
-    },
-    'Security Guide': {
-      am: 'የደህንነት መመሪያ',
-      content: 'Learn how to keep your account safe, including two-factor authentication and secure payment habits.',
-      contentAm: 'ባለሁለት ደረጃ ማረጋገጫ (2FA) እና አስተማማኝ የክፍያ ልምዶችን ጨምሮ መለያዎን እንዴት ደህንነቱ የተጠበቀ ማድረግ እንደሚችሉ ይወቁ።'
-    },
-    'Help Center': {
-      am: 'እርዳታ ለማግኘት',
-      content: 'Our support team is available 24/7 to answer your questions and resolve any technical issues.',
-      contentAm: 'የደንበኞች ድጋፍ ቡድናችን ጥያቄዎችዎን ለመመለስ እና ቴክኒካዊ ችግሮችን ለመፍታት በቀን 24 ሰዓት በሳምንት 7 ቀን ዝግጁ ነው።'
-    }
+  // Toast helper
+  const triggerToast = (message: string, type: 'success' | 'info' = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
   };
 
-  const handleFooterClick = (slug: string) => {
-    // Check dynamic settings first
-    const dynamicInfo = landingSettings?.footerInfoMap?.[slug];
-    if (dynamicInfo) {
-      setActiveInfo({
-        title: slug,
-        titleAm: dynamicInfo.am,
-        content: dynamicInfo.content,
-        contentAm: dynamicInfo.contentAm
-      });
-      return;
+  // Smooth scroll helper
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-
-    const info = footerInfoMap[slug];
-    if (info) {
-      setActiveInfo({
-        title: slug,
-        titleAm: info.am,
-        content: info.content,
-        contentAm: info.contentAm
-      });
-    }
+    setMobileMenuOpen(false);
+    triggerToast(
+      language === 'am' ? `ወደ ${id} ዝርዝር እየተንሸራተቱ ነው` : `Scrolling smoothly to ${id} section`,
+      'info'
+    );
   };
 
-  // Map icons from string to Lucide components
-  const IconMap: Record<string, React.ReactNode> = {
-    'ShieldCheck': <ShieldCheck size={32} />,
-    'Zap': <Zap size={32} />,
-    'BarChart3': <BarChart3 size={32} />,
-    'Users': <Users size={32} />,
-    'Star': <Star size={32} />,
-    'Clock': <Clock size={32} />,
-    'TrendingUp': <TrendingUp size={32} />,
-    'Award': <Award size={32} />,
-    'Phone': <Phone size={32} />,
-    'Leaf': <Leaf size={32} />,
-    'Wallet': <Wallet size={32} />,
-    'Smartphone': <Smartphone size={32} />,
-    'Lock': <Lock size={32} />,
-    'Layers': <Layers size={32} />,
-    'Globe': <Globe size={32} />,
-    'FileText': <FileText size={32} />,
-    'Gift': <Gift size={32} />,
-    'UserPlus': <UserPlus size={32} />,
-    'LayoutGrid': <LayoutGrid size={32} />,
-    'History': <History size={32} />,
+  // Spin Lot simulator function
+  const handleSimulateDraw = () => {
+    if (spinning) return;
+    setSpinning(true);
+    setDrawResult(null);
+    triggerToast(
+      language === 'am' ? 'ዕጣው በግልፅ እየተሽከረከረ ነው...' : 'Draw is spinning transparently...',
+      'info'
+    );
+
+    const names = [
+      'ቤተልሔም ካሳሁን (Bethelhem K.)',
+      'ዮሐንስ አበበ (Yohannes A.)',
+      'ሰለሞን በቀለ (Solomon B.)',
+      'ኪያ ቶሎሳ (Kiya T.)',
+      'ራሔል ታደሰ (Rahel T.)',
+      'እንዳልካቸው መኮንን (Endalkachew M.)'
+    ];
+    
+    let counter = 0;
+    const interval = setInterval(() => {
+      setDrawResult(names[counter % names.length]);
+      counter++;
+    }, 100);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      const finalWinner = names[Math.floor(Math.random() * names.length)];
+      setDrawResult(finalWinner);
+      setSpinning(false);
+      triggerToast(
+        language === 'am' 
+          ? `🎉 እንኳን ደስ አላችሁ! የዚህ ዙር እጣ አሸናፊ: ${finalWinner}`
+          : `🎉 Congratulations! This round winner is: ${finalWinner}`,
+        'success'
+      );
+    }, 2800);
   };
-
-  const slides = landingSettings?.sliderImages?.length > 0 
-    ? landingSettings.sliderImages.map((img: string, idx: number) => ({
-        image: img,
-        titleAm: idx === 0 ? (landingSettings.heroTitleAm || "ዘመናዊ የዲጂታል እቁብ") : (landingSettings.heroTitleModernAm || "በጋራ ይቆጥቡ"),
-        titleEn: idx === 0 ? (landingSettings.heroTitle || "Digital Ekub Platform") : (landingSettings.heroTitleModern || "Save Together"),
-        descAm: landingSettings.heroSubtitleAm || "የተለመደውን የእቁብ አሰራር በዘመናዊ ቴክኖሎጂ አዘምነን አቅርበናል። በተንቀሳቃሽ ስልክዎ በቀላሉ ይቆጥቡ፣ ይከታተሉ።",
-        descEn: landingSettings.heroSubtitle || "We digitized the traditional Ekub system. Save and track your contributions easily from your phone."
-      }))
-    : [
-        {
-          image: "https://images.unsplash.com/photo-1531206715517-5c0ba140b2b8?ixlib=rb-4.0.3&auto=format&fit=crop&q=80&w=2000",
-          titleAm: "ዘመናዊ የዲጂታል እቁብ",
-          titleEn: "Digital Ekub Platform",
-          descAm: "የተለመደውን የእቁብ አሰራር በዘመናዊ ቴክኖሎጂ አዘምነን አቅርበናል። በተንቀሳቃሽ ስልክዎ በቀላሉ ይቆጥቡ፣ ይከታተሉ።",
-          descEn: "We digitized the traditional Ekub system. Save and track your contributions easily from your phone."
-        },
-        {
-          image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?ixlib=rb-4.0.3&auto=format&fit=crop&q=80&w=2000",
-          titleAm: "በጋራ ይቆጥቡ",
-          titleEn: "Save Together",
-          descEn: "Join saving circles and manage your contributions transparently with your community.",
-          descAm: "ከማህበረሰብ ጋር በመሆን እቁብ ይቆጥቡ። ግልፅ እና አስተማማኝ በሆነ አሰራር የፋይናንስ አቅምዎን ያሳድጉ።"
-        }
-      ];
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Secondary Dynamic Color handling
-  const primaryBg = landingSettings?.primaryColor ? `bg-${landingSettings.primaryColor.split('-')[0]}-600` : 'bg-emerald-800';
-  const primaryText = landingSettings?.primaryColor ? `text-${landingSettings.primaryColor.split('-')[0]}-800` : 'text-emerald-800';
-  const primaryShadow = landingSettings?.primaryColor ? `shadow-${landingSettings.primaryColor.split('-')[0]}-900/20` : 'shadow-emerald-900/20';
 
   return (
-    <div className={`flex flex-col min-h-[100dvh] bg-[#FAFAF8] font-sans selection:bg-emerald-200 selection:text-emerald-950 overflow-x-clip relative`}>
-      {/* Background Subtle Pattern */}
-      <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-0">
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans overflow-x-hidden relative selection:bg-indigo-500/20">
+      
+      {/* Dynamic Floating Toast Notifications */}
+      <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-3 max-w-sm w-full px-4 sm:px-0">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 30, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
+              className={`p-4 rounded-2xl shadow-xl border flex items-center gap-3 ${
+                toast.type === 'success' 
+                  ? 'bg-emerald-600 text-white border-emerald-500' 
+                  : 'bg-indigo-900 text-white border-indigo-800'
+              }`}
+            >
+              <div className="p-1.5 rounded-xl bg-white/10 shrink-0">
+                {toast.type === 'success' ? <CheckCircle2 size={18} /> : <Info size={18} />}
+              </div>
+              <p className="text-xs sm:text-sm font-black leading-snug">{toast.message}</p>
+              <button 
+                onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+                className="ml-auto p-1 text-white/60 hover:text-white transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
-      {/* Navigation */}
-      <nav className={`fixed top-0 w-full z-[100] transition-all duration-700 ${scrolled ? 'bg-[#FAFAF8]/95 border-b border-emerald-900/10 py-3 shadow-[0_4px_30px_rgba(0,0,0,0.03)]' : 'bg-transparent py-8'}`}>
-        <div className="max-w-[90rem] mx-auto px-6 sm:px-12 flex justify-between items-center">
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center transform group-hover:rotate-[15deg] transition-all duration-500 shadow-xl ${scrolled ? (landingSettings?.primaryColor ? `bg-${landingSettings.primaryColor.split('-')[0]}-800` : 'bg-emerald-800') : 'bg-white shadow-black/10'}`}>
-               <Leaf className={scrolled ? 'text-amber-400' : (landingSettings?.primaryColor ? `text-${landingSettings.primaryColor.split('-')[0]}-800` : 'text-emerald-800')} size={24} />
+
+      {/* HEADER NAVBAR */}
+      <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-full max-w-6xl px-4 no-flicker">
+        <div className="bg-white/90 backdrop-blur-xl border border-slate-200/60 shadow-[0_15px_45px_rgba(0,0,0,0.06)] rounded-[2rem] px-6 sm:px-8 py-3 flex items-center justify-between transition-all">
+          <Link to="/" className="flex items-center gap-2.5 group shrink-0">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-2xl flex items-center justify-center shadow-md border border-slate-100 overflow-hidden shrink-0 transition-transform group-hover:rotate-3">
+              <img src="/logo.png" className="w-full h-full object-contain p-0.5" alt="Logo" referrerPolicy="no-referrer" />
             </div>
             <div className="flex flex-col">
-              <span className={`text-2xl font-black tracking-tighter uppercase leading-none ${scrolled ? 'text-emerald-950' : 'text-white'}`}>Meliq Ekub</span>
-              <span className={`text-[10px] font-bold tracking-[0.3em] uppercase mt-1 ${scrolled ? 'text-emerald-600' : 'text-emerald-100'}`}>መሊቅ እቁብ</span>
+              <span className="text-base sm:text-lg font-black text-[#0c2340] tracking-tighter uppercase leading-none italic">
+                {language === 'am' ? 'መሊቅ እቁብ' : 'MELIK EKUB'}
+              </span>
+              <span className="text-[8px] font-bold text-indigo-600 uppercase tracking-[0.25em] mt-0.5">
+                {language === 'am' ? 'ለመለቅ እቁብ' : 'For Elite Savings'}
+              </span>
             </div>
           </Link>
-          
-          <div className="hidden md:flex items-center gap-12">
-            <div className="flex items-center gap-10">
-               {['Services', 'About', 'Contact'].map((item) => (
-                  <a key={item} href={`#${item.toLowerCase()}`} className={`text-[12px] font-bold uppercase tracking-[0.2em] transition-all hover:scale-110 ${scrolled ? 'text-slate-600 hover:text-emerald-700' : 'text-white/90 hover:text-white'}`}>
-                     {item}
-                  </a>
-               ))}
-            </div>
-            <div className={`h-4 w-px ${scrolled ? 'bg-emerald-900/10' : 'bg-white/30'}`} />
-            <Link to="/login" className={`text-[12px] font-bold uppercase tracking-[0.2em] transition-all ${scrolled ? 'text-emerald-900 hover:text-amber-500' : 'text-white hover:text-amber-300'}`}>
-              {language === 'am' ? 'ግባ' : 'Login'}
+
+          {/* Desktop Navigation Links */}
+          <div className="hidden md:flex items-center gap-7">
+            <button onClick={() => scrollToSection('home')} className="text-xs font-black uppercase tracking-wider text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer">
+              {language === 'am' ? 'ዋና ገጽ' : 'Home'}
+            </button>
+            <button onClick={() => scrollToSection('about')} className="text-xs font-black uppercase tracking-wider text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer">
+              {language === 'am' ? 'ስለ እኛ' : 'About Us'}
+            </button>
+            <button onClick={() => scrollToSection('how-it-works')} className="text-xs font-black uppercase tracking-wider text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer">
+              {language === 'am' ? 'እንዴት ይሰራል' : 'How it Works'}
+            </button>
+            <button onClick={() => scrollToSection('simulator')} className="text-xs font-black uppercase tracking-wider text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer">
+              {language === 'am' ? 'እቁብ ማስሊያ' : 'Calculator'}
+            </button>
+            <button onClick={() => scrollToSection('services')} className="text-xs font-black uppercase tracking-wider text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer">
+              {language === 'am' ? 'አገልግሎቶች' : 'Features'}
+            </button>
+          </div>
+
+          {/* Right Actions */}
+          <div className="flex items-center gap-3">
+            {/* Language Selector */}
+            <button 
+              onClick={() => {
+                setLanguage(language === 'am' ? 'en' : 'am');
+                triggerToast(
+                  language === 'am' ? 'Language changed to English' : 'ቋንቋ ወደ አማርኛ ተቀይሯል',
+                  'success'
+                );
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black uppercase tracking-widest transition-all cursor-pointer border border-slate-200/20"
+            >
+              <Globe size={14} className="text-slate-500" />
+              <span>{language === 'am' ? 'EN' : 'አማርኛ'}</span>
+            </button>
+
+            {/* CTA Signup Link */}
+            <Link 
+              to="/signup" 
+              onClick={() => triggerToast(language === 'am' ? 'የመመዝገቢያ ገጽ በመከፈት ላይ ነው...' : 'Opening Registration portal...', 'info')}
+              className="hidden sm:inline-flex bg-[#0c2340] hover:bg-indigo-900 text-white font-black text-xs uppercase tracking-widest py-3 px-6 rounded-xl shadow-lg active:scale-95 transition-all cursor-pointer"
+            >
+              {language === 'am' ? 'ለመመዝገብ / Join Now' : 'Join Now'}
             </Link>
-            <Link to="/signup" className={`px-10 py-4 rounded-full font-bold uppercase text-[11px] tracking-widest transition-all hover:scale-105 active:scale-95 ${scrolled ? 'bg-emerald-800 text-white shadow-[0_10px_30px_rgba(6,78,59,0.3)] hover:bg-emerald-900' : 'bg-white text-emerald-900 shadow-[0_10px_30px_rgba(0,0,0,0.1)] hover:bg-amber-400'}`}>
-              {language === 'am' ? 'ጀምር' : 'Get Started'}
-            </Link>
+
+            {/* Mobile Menu Toggle */}
+            <button 
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
+              className="md:hidden w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 transition-colors border border-slate-200/50"
+            >
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
         </div>
       </nav>
 
-      {/* Hero Slider Section */}
-      <section className="relative h-[95vh] min-h-[700px] w-full overflow-hidden bg-emerald-950 rounded-b-[3rem] lg:rounded-b-[5rem] shadow-2xl">
-        <div className="absolute inset-0 transition-opacity duration-1000 ease-in-out opacity-100">
-          <div className="absolute inset-0 bg-gradient-to-r from-emerald-950/90 via-emerald-950/60 to-transparent z-10" />
-          <div className="absolute inset-0 bg-gradient-to-t from-emerald-950 via-transparent to-transparent z-10" />
-          
-          <img 
-            src={slides[currentSlide]?.image} 
-            alt="Ethiopian Landscape" 
-            className="w-full h-full object-cover origin-center animate-slow-zoom"
-          />
-          
-          <div className="absolute inset-0 z-20 flex items-center">
-            <div className="max-w-[90rem] mx-auto px-6 sm:px-12 w-full pt-20">
-              <div className="max-w-3xl">
-                <div className="inline-flex items-center gap-3 px-6 py-2.5 bg-amber-500/20 rounded-full mb-8 border border-amber-500/30 animate-fade-in-up">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-[11px] font-black text-amber-200 uppercase tracking-[0.4em]">
-                    {language === 'am' ? 'ዲጂታል እቁብ' : 'Digital Ekub'}
-                  </span>
-                </div>
-
-                <h1 className={`text-[2.5rem] sm:text-5xl md:text-6xl lg:text-[7rem] text-white font-black tracking-tighter leading-[0.9] mb-6 drop-shadow-2xl ${language === 'am' ? 'font-am' : 'font-display'}`}>
-                  {language === 'am' ? slides[currentSlide]?.titleAm : slides[currentSlide]?.titleEn}
-                </h1>
-
-                <p className="text-xl md:text-2xl text-emerald-100/90 mb-12 leading-relaxed font-medium max-w-xl border-l-4 border-amber-500 pl-6">
-                  {language === 'am' ? slides[currentSlide]?.descAm : slides[currentSlide]?.descEn}
-                </p>
-
-                <div className="flex flex-col gap-10">
-                  <div className="flex flex-wrap gap-6">
-                      <Link to="/signup" className="group relative bg-amber-500 text-emerald-950 px-14 py-5 md:py-6 rounded-full text-[16px] md:text-[18px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-4 shadow-[0_0_40px_rgba(251,191,36,0.6)] border border-amber-300 hover:bg-amber-400 hover:scale-[1.03] transition-all ring-4 ring-amber-500/20">
-                          <span>{language === 'am' ? 'አሁኑኑ ጀምር' : 'Start Saving Now'}</span>
-                          <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform duration-500 bg-white/20 rounded-full p-1" />
-                          <div className="absolute inset-0 rounded-full border-2 border-white/20 scale-105 group-hover:scale-110 transition-transform duration-500 opacity-50" />
-                      </Link>
-                      
-                      <button className="flex items-center gap-4 px-10 py-5 text-white text-[14px] md:text-[15px] font-bold uppercase tracking-[0.2em] border-2 border-emerald-400/50 rounded-full hover:bg-emerald-500/30 transition-all hover:border-emerald-300">
-                        <span>{language === 'am' ? 'ተጨማሪ እወቅ' : 'Learn More'}</span>
-                      </button>
-                    </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Slide Indicators */}
-        <div className="absolute bottom-12 right-12 z-30 flex flex-col gap-4">
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentSlide(i)}
-              className={`w-1.5 transition-all duration-700 rounded-full ${currentSlide === i ? 'h-16 bg-amber-400' : 'h-6 bg-white/20 hover:bg-white/50'}`}
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* Value Proposition */}
-      <section id="services" className="py-40 relative z-10 -mt-20">
-        <div className="max-w-[90rem] mx-auto px-6 sm:px-12">
-          
-          <div className="grid lg:grid-cols-3 gap-8">
-            {(landingSettings?.customFeatures || [
-              { 
-                title: "Traditional Roots", 
-                titleAm: "ቁጠባ",
-                desc: "The traditional Ekub system modernized with digital tools.", 
-                descAm: "ባህላዊውን የእቁብ ስርዓት በዘመናዊ መንገድ አቅርበናል።",
-                color: "bg-emerald-600",
-                shadowColor: "shadow-emerald-600/30",
-                icon: "Leaf",
-                accent: "text-emerald-600"
-              },
-              { 
-                title: "Reliable Security", 
-                titleAm: "አስተማማኝ",
-                desc: "Modern money management tools designed for your peace of mind.", 
-                descAm: "ለእርስዎ በሚመች መልኩ የተዘጋጀ ደህንነቱ የተጠበቀ የገንዘብ አስተዳደር ስርዓት።",
-                color: "bg-amber-500",
-                shadowColor: "shadow-amber-500/40",
-                icon: "ShieldCheck",
-                accent: "text-amber-500"
-              },
-              { 
-                title: "Transparent", 
-                titleAm: "ግልፅ አሰራር",
-                desc: "Real-time tracking of savings and payouts for all members.", 
-                descAm: "የአባላት የቁጠባ ሒደት እና የእጣ አወጣጥ በግልጽ የሚታይበት አሰራር።",
-                color: "bg-rose-600",
-                shadowColor: "shadow-rose-600/30",
-                icon: "BarChart3",
-                accent: "text-rose-600"
-              }
-            ]).map((prop: any, i: number) => (
-              <div
-                key={i}
-                className="group relative"
-              >
-                <div className={`h-full p-10 lg:p-12 rounded-[2.5rem] bg-white border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.05)] overflow-hidden transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 relative z-10`}>
-                  <div className={`absolute -right-10 -top-10 w-40 h-40 ${prop.color} opacity-5 rounded-full group-hover:opacity-10 transition-opacity duration-700`} />
-                  
-                  <div className={`w-16 h-16 ${prop.color} rounded-2xl flex items-center justify-center text-white mb-8 shadow-xl ${prop.shadowColor} group-hover:scale-110 group-hover:rotate-6 transition-all duration-500`}>
-                    {IconMap[prop.icon] || <Zap size={32} />}
-                  </div>
-                  
-                  <h3 className={`text-2xl font-black text-emerald-950 mb-5 uppercase tracking-tight`}>
-                    {language === 'am' ? prop.titleAm : prop.title}
-                  </h3>
-                  
-                  <p className="text-slate-500 leading-relaxed font-medium">
-                    {language === 'am' ? prop.descAm : prop.desc}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* How it Works */}
-      <section className="py-32 bg-white relative border-b border-slate-100 overflow-hidden">
-        <div className="max-w-[90rem] mx-auto px-6 sm:px-12">
-          <div className="text-center mb-20">
-            <span className="text-amber-500 text-[12px] font-black uppercase tracking-[0.5em] mb-4 block">Simple Process</span>
-            <h2 className={`text-4xl md:text-6xl font-black text-emerald-950 tracking-tighter ${language === 'am' ? 'font-am' : ''}`}>
-              {language === 'am' ? 'መሊቅ እቁብ እንዴት ይሰራል?' : 'How Meliq Ekub Works'}
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {(landingSettings?.howItWorksSteps || [
-              {
-                title: "Register",
-                titleAm: "ተመዝገቡ",
-                desc: "Create your account gracefully and complete verification effortlessly.",
-                descAm: "በቀላሉ መለያዎን ይፍጠሩ እና ራስዎን ያረጋግጡ።",
-                icon: "UserPlus",
-                color: "bg-emerald-50 text-emerald-600 border-emerald-100"
-              },
-              {
-                title: "Join a Circle",
-                titleAm: "እቁብ ይምረጡ",
-                desc: "Find and join a vibrant saving circle that fits your financial goals.",
-                descAm: "ከዕቅድዎ እና ከአቅምዎ ሚያስማማ እቁብ ይምረጡ እና ይቀላቀሉ።",
-                icon: "Layers",
-                color: "bg-amber-50 text-amber-500 border-amber-100"
-              },
-              {
-                 title: "Contribute",
-                 titleAm: "ክፍያ ይፈፅሙ",
-                 desc: "Make your scheduled payments securely through our advanced platform.",
-                 descAm: "ክፍያዎን በየጊዜው ደህንነቱ በተጠበቀ መንገድ ይክፈሉ።",
-                 icon: "Wallet",
-                 color: "bg-rose-50 text-rose-500 border-rose-100"
-              },
-              {
-                 title: "Get Payout",
-                 titleAm: "እጣዎትን ይውሰዱ",
-                 desc: "Receive your accumulated pool when your turn arrives.",
-                 descAm: "እጣው የእርሶ ሲሆን ተራዎትን ይጠብቁ እና ብርዎን ይውሰዱ።",
-                 icon: "Gift",
-                 color: "bg-blue-50 text-blue-500 border-blue-100"
-              }
-            ]).map((step: any, i: number) => {
-               const Icons: any = { Zap, UserPlus, Layers, Wallet, Gift, ShieldCheck };
-               const Icon = Icons[step.icon] || Zap;
-               return (
-                  <div key={i} className={`bg-white p-8 rounded-[2.5rem] border ${step.color.split(' ')[2]} shadow-[0_15px_40px_rgba(0,0,0,0.03)] hover:shadow-2xl hover:-translate-y-2 transition-all group overflow-hidden relative`}>
-                    <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full ${step.color.split(' ')[0]} opacity-10 transition-all`} />
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-8 transition-transform group-hover:scale-110 group-hover:-rotate-3 shadow-lg ${step.color.split(' ')[0]} ${step.color.split(' ')[1]}`}>
-                       <Icon size={28} />
-                    </div>
-                    <h3 className="text-xl font-black text-emerald-950 mb-4 tracking-tight flex items-center gap-2">
-                      <span className="text-slate-300 font-serif text-sm">0{i+1}</span>
-                      {language === 'am' ? step.titleAm : step.title}
-                    </h3>
-                    <p className="text-slate-500 font-medium text-[15px] leading-relaxed relative z-10">
-                      {language === 'am' ? step.descAm : step.desc}
-                    </p>
-                  </div>
-               )
-            })}
-          </div>
-        </div>
-      </section>
-      <section className="py-32 bg-[#FAF9F5] relative overflow-hidden">
-        {/* Subtle decorative glowing background circles */}
-        <div className="absolute top-20 left-20 w-96 h-96 bg-emerald-400/10 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-amber-400/10 rounded-full blur-[120px] pointer-events-none" />
-
-        <div className="max-w-[90rem] mx-auto px-6 sm:px-12 relative z-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-24 gap-8">
-            <div className="max-w-2xl">
-              <span className="inline-block px-5 py-2.5 bg-amber-100 text-amber-900 rounded-full font-black uppercase tracking-[0.4em] text-xs sm:text-sm mb-6 border border-amber-200/50 shadow-sm">
-                {language === 'am' ? 'የቁጠባ ዓይነቶች' : 'Categories'}
-              </span>
-              <h2 className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-emerald-950 tracking-tighter leading-none ${language === 'am' ? 'font-am' : ''}`}>
-                {language === 'am' ? 'የእቁብ ዓይነቶች' : 'Ekub Categories'}
-              </h2>
-            </div>
-            <p className="max-w-xl text-slate-700 font-semibold text-lg sm:text-xl lg:text-2xl border-l-4 border-amber-500 pl-6 leading-relaxed">
-              {language === 'am' 
-                ? 'ለተለያዩ የቁጠባ ዓላማዎች የተዘጋጁ የእቁብ አማራጮችን ይመልከቱ። ዝርዝር መረጃ ለማግኘት ካርዶቹን ይጫኑ።'
-                : 'Explore different Ekub options tailored for various saving goals. Click on the cards to see more details.'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {[
-              {
-                title: "Housing Equb",
-                titleAm: "የቤት እቁብ",
-                tag: "Real Estate",
-                tagAm: "ቤት ግዢ",
-                desc: "Save together to build or purchase a home.",
-                descAm: "ቤት ለመግዛት ወይም ለመስራት የሚሆን ገንዘብ በጋራ ለመቆጠብ።",
-                details: "This circle brings members together who are aiming to gather capital for home acquisitions or construction, avoiding bank loans.",
-                detailsAm: "ይህ የእቁብ ዘርፍ የመኖሪያ ቤት ለመግዛት፣ ለመገንባት፣ ወይም ቦታዎችን ለመግዛት የገንዘብ አቅም ለማሳደግ ለሚፈልጉ አባላት የተዘጋጀ ነው።",
-                img: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800",
-                icon: <Home size={22} />,
-                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(16,185,129,0.35)]",
-                borderColor: "border-emerald-200/55 group-hover:border-emerald-500/60",
-                accentColor: "text-emerald-700",
-                badgeBg: "bg-emerald-500/10 text-emerald-800 border-emerald-500/20",
-                iconBg: "bg-emerald-50 text-emerald-700",
-                stats: [
-                  { labelAm: "ክፍያ", labelEn: "Cycles", value: "Monthly" },
-                  { labelAm: "ዓይነት", labelEn: "Category", value: "Property" }
-                ],
-                tagColor: "from-emerald-600 to-teal-500",
-                targetGroupEn: "Families and real estate buyers",
-                targetGroupAm: "ቤተሰቦች እና የቤት ፈላጊዎች",
-                safetyEn: "Saving pool is secured in transparent accounts.",
-                safetyAm: "ማንነታቸው የተረጋገጠ አባላት ያሉበት ደህንነቱ የተጠበቀ ክፍያ።",
-                benefitsEn: [
-                  "Access to structured capital packages",
-                  "Verified members and secure record keeping",
-                  "Guarantor support options available"
-                ],
-                benefitsAm: [
-                  "ያለ ባንክ ወለድ የገንዘብ አቅም ማሳደግ",
-                  "አስተማማኝ የክፍያ እና የመረጃ አያያዝ",
-                  "በሚያስፈልግ ጊዜ የዋስ አሰራር አማራጭ"
-                ]
-              },
-              {
-                title: "Business Growth",
-                titleAm: "የንግድ እቁብ",
-                tag: "Business",
-                tagAm: "ንግድ አቅም",
-                desc: "Equb intended to gather capital for business operations.",
-                descAm: "ለንግድ ስራ ማስፋፊያ፣ ጥሬ እቃ መግዣ ወይም ለአዲስ ስራዎች መጀመሪያ ፈጣን ካፒታል ማሰባሰቢያ እቁብ።",
-                details: "Created for business owners who need immediate liquid capital to purchase raw inventory, scale operational equipment, or start a new venture.",
-                detailsAm: "ለንግድዎ ስራ ማስፋፊያ፣ ጥሬ እቃ መግዣ ወይም ለአዳዲስ የንግድ ህልሞችዎ መጀመሪያ ካፒታል ማሰባሰቢያ እቁብ። ያለ ባንክ ወለድ የፋይናንስ ምንጭ ያግኙ።",
-                img: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=800",
-                icon: <Briefcase size={22} />,
-                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(245,158,11,0.4)]",
-                borderColor: "border-amber-200/55 group-hover:border-amber-500/60",
-                accentColor: "text-amber-700",
-                badgeBg: "bg-amber-500/10 text-amber-800 border-amber-500/20",
-                iconBg: "bg-amber-50 text-amber-700",
-                stats: [
-                  { labelAm: "ክፍያ", labelEn: "Cycles", value: "Bi-weekly" },
-                  { labelAm: "ዓይነት", labelEn: "Category", value: "Commercial" }
-                ],
-                tagColor: "from-amber-500 to-orange-400",
-                targetGroupEn: "Shop owners, startups, and traders",
-                targetGroupAm: "ነጋዴዎች እና ጀማሪ የንግድ ስራዎች",
-                safetyEn: "Requires formal trade licenses or guarantee.",
-                safetyAm: "የሚሰራ የንግድ ፈቃድ ወይም ዋስትና ያስፈልገዋል።",
-                benefitsEn: [
-                  "Bi-weekly short-duration payouts",
-                  "Zero-interest funding",
-                  "Clear cycle tracking"
-                ],
-                benefitsAm: [
-                  "በየሁለት ሳምንቱ የሚካሄድ የእጣ ዙርያ",
-                  "ከወለድ ነፃ የሆነ የካፒታል ማግኛ ዕድል",
-                  "ግልጽ የዙር ክትትል"
-                ]
-              },
-              {
-                title: "Vehicle Equb",
-                titleAm: "የመኪና እቁብ",
-                tag: "Transport",
-                tagAm: "ተሽከርካሪ",
-                desc: "Save up to buy a personal or commercial vehicle.",
-                descAm: "የመኪና ባለቤት ለመሆን ወይም ለድርጅት የትራንስፖርት ተሽከርካሪዎችን ለመግዛት የሚረዳ።",
-                details: "Designed specifically to help purchase personal automobiles, delivery vans, or commercial vehicles jointly with community members.",
-                detailsAm: "የግል ወይም የድርጅት ተሽከርካሪዎችን፣ የጭነት መኪናዎችን፣ ወይም የትርፍ ሰዓት ስራ የትራንስፖርት መኪናዎችን ለመግዛት የተመቻቸ እቁብ።",
-                img: "https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&q=80&w=800",
-                icon: <Layers size={22} />,
-                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(59,130,246,0.35)]",
-                borderColor: "border-blue-200/55 group-hover:border-blue-500/60",
-                accentColor: "text-blue-700",
-                badgeBg: "bg-blue-500/10 text-blue-800 border-blue-500/20",
-                iconBg: "bg-blue-50 text-blue-700",
-                stats: [
-                  { labelAm: "ክፍያ", labelEn: "Cycles", value: "Monthly" },
-                  { labelAm: "ዓይነት", labelEn: "Category", value: "Vehicle" }
-                ],
-                tagColor: "from-blue-600 to-cyan-500",
-                targetGroupEn: "Drivers and family planners",
-                targetGroupAm: "አሽከርካሪዎች፣ የትራንስፖርት ድርጅቶች፣ እና ቤተሰቦች",
-                safetyEn: "Provides structured community trust.",
-                safetyAm: "በግልፅ ደንብ የተደገፈ እቁብ።",
-                benefitsEn: [
-                  "Helps buy a car without bank interest",
-                  "Clear monthly cycles",
-                  "Transparent payment system"
-                ],
-                benefitsAm: [
-                  "ያለ ባንክ ወለድ መኪና ለመግዛት",
-                  "ግልፅ ወርሃዊ የእቁብ ዙሮች",
-                  "አስተማማኝ የክፍያ ስርዓት"
-                ]
-              },
-              {
-                title: "Lifestyle Equb",
-                titleAm: "የዕለት ኑሮ እቁብ",
-                tag: "Micro Savings",
-                tagAm: "በአነስተኛ",
-                desc: "For event planning, school tuition, weddings, or emergency funds.",
-                descAm: "ለዝግጅቶች፣ ለልጆች ትምህርት ቤት፣ ለሰርግ ወይም ለአይነተኛ ጉዳዮች።",
-                details: "A savings plan focusing on personal life priorities like school tuitions, medical backups, festive holidays, or personal use.",
-                detailsAm: "ለጥቃቅን ዝግጅቶች፣ የልጆች ትምህርት፣ ሰርግ፣ በዓላት ወይም ለራስዎ ጉዳዮች የተዘጋጀ እቁብ። አነስተኛ ክፍያዎችን በየሳምንቱ እየቆጠቡ የሚያስቀመጡበት ነው።",
-                img: "https://images.unsplash.com/photo-1512909006721-3d6018887383?auto=format&fit=crop&q=80&w=800",
-                icon: <Sparkles size={22} />,
-                glowColor: "group-hover:shadow-[0_30px_60px_-10px_rgba(168,85,247,0.35)]",
-                borderColor: "border-purple-200/55 group-hover:border-purple-500/60",
-                accentColor: "text-purple-700",
-                badgeBg: "bg-purple-500/10 text-purple-800 border-purple-500/20",
-                iconBg: "bg-purple-50 text-purple-700",
-                stats: [
-                  { labelAm: "ክፍያ", labelEn: "Cycles", value: "Weekly" },
-                  { labelAm: "ዓይነት", labelEn: "Category", value: "Lifestyle" }
-                ],
-                tagColor: "from-purple-600 to-pink-500",
-                targetGroupEn: "Students, couples, and fast savers",
-                targetGroupAm: "ተማሪዎች፣ ቤተሰብ እና ጥቃቅን ቆጣቢዎች",
-                safetyEn: "Simple and digital processes.",
-                safetyAm: "ቀላል እና ዲጂታል አሰራር።",
-                benefitsEn: [
-                  "Lower entry barrier",
-                  "Weekly fast payouts",
-                  "Easy payment options via mobile money"
-                ],
-                benefitsAm: [
-                  "አነስተኛ መግቢያ መጠን",
-                  "በየሳምንቱ የሚወጣ ዕጣ",
-                  "በሞባይል ባንኪንግ በቀላሉ ክፍያ መፈፀም"
-                ]
-              }
-            ].map((plan: any, idx: number) => (
-              <div 
-                key={idx}
-                onClick={() => setSelectedPlan(plan)}
-                className="group relative cursor-pointer"
-              >
-                {/* Visual hover color backglow */}
-                <div className={`absolute inset-0 rounded-[2.5rem] opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-white z-0 ${plan.glowColor}`} />
-
-                {/* Main Card container */}
-                <div className={`h-full bg-white relative rounded-[2.5rem] border-2 ${plan.borderColor} p-8 shadow-[0_15px_40px_rgba(0,0,0,0.02)] transition-all duration-500 hover:-translate-y-2.5 z-10 flex flex-col justify-between overflow-hidden`}>
-                  
-                  <div>
-                    {/* Picture Header with Gradient Overlay */}
-                    <div className="relative h-56 w-full rounded-[2rem] overflow-hidden mb-6 shadow-sm">
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent z-10" />
-                      <img 
-                        src={plan.img} 
-                        alt={plan.title} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
-                        referrerPolicy="no-referrer"
-                      />
-                      {/* Colorful Floating Badge Tag */}
-                      <span className={`absolute top-4 left-4 z-20 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest text-white bg-gradient-to-r shadow-md ${plan.tagColor}`}>
-                        {language === 'am' ? plan.tagAm : plan.tag}
-                      </span>
-                    </div>
-
-                    {/* Icon + Title Block */}
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${plan.iconBg} font-black shadow-md`}>
-                        {plan.icon}
-                      </div>
-                      <h3 className={`text-2xl font-black text-emerald-950 tracking-tight leading-tight`}>
-                        {language === 'am' ? plan.titleAm : plan.title}
-                      </h3>
-                    </div>
-
-                    {/* Description */}
-                    <p className="text-slate-600 text-base sm:text-[17px] font-bold leading-relaxed mb-6">
-                      {language === 'am' ? plan.descAm : plan.desc}
-                    </p>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="border-t-2 border-slate-100 pt-6 mt-auto">
-                    {/* Stats Layout */}
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      {plan.stats.map((stat: any, sIdx: number) => (
-                        <div key={sIdx} className="bg-slate-50/70 rounded-2xl p-4 border border-slate-100 flex flex-col justify-center shadow-inner">
-                          <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
-                            {language === 'am' ? stat.labelAm : stat.labelEn}
-                          </span>
-                          <span className={`text-[13px] sm:text-sm font-black ${plan.accentColor}`}>
-                            {stat.value}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Highly interactive visual link indicating action */}
-                    <div className="flex items-center justify-between mt-2 pt-2">
-                      <span className="text-[12px] sm:text-sm font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-amber-600 transition-colors">
-                        {language === 'am' ? 'ዝርዝር እይ' : 'Explore Scheme'}
-                      </span>
-                      <div className={`w-10 h-10 rounded-full ${plan.iconBg} flex items-center justify-center group-hover:scale-110 group-hover:translate-x-2 transition-all shadow-md`}>
-                        <ArrowRight size={16} />
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Digital Advantage (Bento Items) */}
-      <section id="about" className="py-32 bg-slate-50 relative overflow-hidden">
-        <div className="max-w-[90rem] mx-auto px-6 sm:px-12 relative z-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-20 gap-8">
-             <div className="max-w-2xl">
-                <span className="inline-block px-5 py-2 bg-emerald-100 text-emerald-800 rounded-full font-black uppercase tracking-[0.4em] text-[10px] mb-6 border border-emerald-200/50">Our Edge</span>
-                <h2 className={`text-4xl md:text-6xl font-black text-emerald-950 tracking-tighter leading-tight ${language === 'am' ? 'font-am' : ''}`}>
-                   {language === 'am' ? 'ለምን መሊቅ እቁብን ይመርጣሉ?' : 'The Digital Ekub Advantage'}
-                </h2>
-             </div>
-             <p className="max-w-lg text-slate-700 font-semibold text-lg sm:text-xl lg:text-2xl border-l-4 border-emerald-500 pl-6 leading-relaxed">
-                {language === 'am' 
-                  ? 'ቴክኖሎጂን ከባህል ጋር አቀናጅተን ለሁላችሁም ተደራሽ እና እምነት የሚጣልበት የእቁብ አገልግሎት እናቀርባለን።'
-                  : 'We blend deep-rooted tradition with cutting-edge technology to create a seamless saving experience for everyone.'}
-             </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-             {(landingSettings?.footerInfoItems || [
-               { title: "Instant Payouts", titleAm: "ፈጣን ክፍያ", icon: "Zap", color: "from-amber-400 to-amber-600", slug: 'Payments' },
-               { title: "Member Verification", titleAm: "አባላት ማረጋገጫ", icon: "ShieldCheck", color: "from-emerald-400 to-emerald-600", slug: 'Security Guide' },
-               { title: "Smart Analytics", titleAm: "ብልህ ትንተና", icon: "BarChart3", color: "from-blue-400 to-blue-600", slug: 'Stories' },
-               { title: "Auto-Reminders", titleAm: "አውቶማቲክ ማሳሰቢያ", icon: "Clock", color: "from-rose-400 to-rose-600", slug: 'Help Center' },
-               { title: "Low Fees", titleAm: "ዝቅተኛ ክፍያ", icon: "Award", color: "from-purple-400 to-purple-600", slug: 'About Us' },
-               { title: "Dedicated Support", titleAm: "የማይቋረጥ ድጋፍ", icon: "Phone", color: "from-indigo-400 to-indigo-600", slug: 'Help Center' }
-             ]).map((card: any, i: number) => (
-               <div key={i} className="group relative cursor-pointer" onClick={() => handleFooterClick(card.slug || card.title)}>
-                  <div className={`h-full p-10 rounded-[3rem] bg-white border border-slate-100 shadow-[0_15px_40px_rgba(0,0,0,0.04)] hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 overflow-hidden`}>
-                     <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${card.color || 'from-emerald-400 to-emerald-600'} flex items-center justify-center text-white mb-8 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500`}>
-                        {IconMap[card.icon] || <Zap size={32} />}
-                     </div>
-                     <h3 className={`text-2xl font-black text-emerald-950 mb-4 tracking-tight ${language === 'am' ? 'font-am' : ''}`}>
-                        {language === 'am' ? (card.titleAm || card.am) : card.title}
-                     </h3>
-                     <p className="text-slate-600 font-bold text-base sm:text-lg leading-relaxed">The best digital tools to manage your Ekub cycles efficiently and securely. (እቁብዎን በሰላም ለማስተዳደር ምርጡ የዲጂታል ቴክኖሎጂ መፍትሄ።)</p>
-                  </div>
-               </div>
-             ))}
-          </div>
-
-          <div className="mt-24 order-1 lg:order-2 grid lg:grid-cols-2 gap-24 items-center">
-             <div className="relative z-10 w-full">
-                <span className="inline-flex items-center gap-3 px-5 py-2 bg-emerald-50 rounded-full mb-8 border border-emerald-100 font-black uppercase tracking-[0.3em] text-emerald-700 text-[11px]">
-                   {language === 'am' ? 'ከባህል የመነጨ' : 'Rooted in Tradition'}
-                </span>
-                <h2 className={`text-4xl md:text-5xl lg:text-6xl font-black text-emerald-950 mb-8 tracking-tighter leading-[1.2] ${language === 'am' ? 'font-am' : ''}`}>
-                  {language === 'am' ? 'የአባቶቻችንን የቁጠባ ጥበብ፣ በዘመናዊ ገጽታ አስውበን አቅርበናል' : 'Honoring the Past, Building the Future'}
-                </h2>
-                <p className="text-lg md:text-xl text-slate-600 leading-relaxed font-medium">
-                  {language === 'am' 
-                    ? 'የኢትዮጵያን ባህላዊ የእቁብ ስርዓት ወስደን በዘመናዊ ቴክኖሎጂ አማካኝነት ደህንነቱ የተጠበቀ፣ ግልጽ እና ምቹ አድርገን አቅርበናል።'
-                    : 'We took the traditional Ethiopian Ekub system and modernized it to deliver a highly secure, completely transparent, and beautifully convenient saving experience.'}
-                </p>
-             </div>
-
-             <div className="relative bg-[#081a12] p-8 md:p-10 rounded-[3rem] shadow-xl text-white">
-                <div className="space-y-4">
-                    {[
-                        { en: 'New Member Registered', am: 'አዲስ አባል ተመዘገቡ', info: 'Just now' },
-                        { en: 'Safe Transaction', am: 'አስተማማኝ ክፍያ', info: 'Bank integration' }
-                    ].map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-5 p-5 rounded-2xl bg-emerald-950/40 border border-emerald-800/40">
-                            <div className="w-12 h-12 bg-emerald-900 rounded-full flex items-center justify-center text-amber-500 ring-1 ring-emerald-800">
-                                <Award size={20} />
-                            </div>
-                            <div className="flex-1">
-                                <h5 className="text-white font-bold text-[15px]">{language === 'am' ? item.am : item.en}</h5>
-                                <p className="text-emerald-500 text-[12px] uppercase">{item.info}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-32 relative flex items-center justify-center m-6 lg:m-12 rounded-[3rem] lg:rounded-[4rem] bg-emerald-900 overflow-hidden shadow-lg">
-         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
-            <h2 className={`text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black text-white tracking-tighter leading-[1.1] mb-8 md:mb-12 ${language === 'am' ? 'font-am' : ''}`}>
-               {language === 'am' ? 'ዛሬውኑ ይቀላቀሉን' : 'READY TO START YOUR JOURNEY?'}
-            </h2>
-            <p className="text-xl md:text-2xl text-emerald-100 mb-16 max-w-2xl mx-auto font-medium">
-               {language === 'am' ? 'ቁጠባዎን በማሳደግ የነገ ህልምዎን እውን ያድርጉ።' : 'Join thousands of members who are already building their financial future with Meliq Ekub.'}
-            </p>
-            <Link to="/signup" className="inline-flex items-center gap-6 bg-amber-400 text-emerald-950 px-14 py-6 rounded-full text-[14px] font-black uppercase tracking-[0.3em] shadow-lg hover:scale-105 transition-all">
-               <span>{language === 'am' ? 'አሁን ይቀላቀሉ' : 'Join Now'}</span>
-               <ArrowRight size={22} className="bg-emerald-950/20 rounded-full p-1" />
-            </Link>
-         </div>
-      </section>
-
-      {/* Footer */}
-      <footer id="contact" className="bg-[#0f2118] pt-20 pb-10 text-emerald-50 mt-12 relative border-t-8 border-amber-500 shadow-xl overflow-hidden">
-         <div className="max-w-[90rem] mx-auto px-6 sm:px-12 relative z-10">
-            <div className="grid md:grid-cols-12 gap-16 mb-20">
-               <div className="col-span-12 lg:col-span-4">
-                  <div className="flex items-center gap-4 mb-8">
-                     <div className="w-16 h-16 bg-emerald-800 rounded-3xl flex items-center justify-center text-amber-500 shadow-xl ring-1 ring-emerald-700">
-                        <Leaf size={32} />
-                     </div>
-                     <div className="flex flex-col">
-                        <span className="text-4xl font-black tracking-tighter uppercase text-white">
-                           {landingSettings?.footerBrandName || 'Meliq Ekub'}
-                        </span>
-                        <span className="text-xs font-bold tracking-[0.3em] text-emerald-500 uppercase">Premium Savings</span>
-                     </div>
-                  </div>
-                  <p className="text-xl text-emerald-100/60 font-medium leading-relaxed mb-10 max-w-md">
-                     {language === 'am' 
-                        ? (landingSettings?.footerDescriptionAm || 'የአባቶቻችንን የቁጠባ ባህል ወደ ዲጂታል ዓለም በማሸጋገር ማህበረሰባችንን በአስተማማኝ መሠረት ላይ እናበለጽጋለን።')
-                        : (landingSettings?.footerDescription || 'Revolutionizing the traditional culture of saving through digital excellence and unparalleled community trust.')}
-                  </p>
-                  
-                  <div className="flex gap-4">
-                     {(landingSettings?.socialLinks || [
-                        { platform: 'Facebook', url: '#' },
-                        { platform: 'Twitter', url: '#' },
-                        { platform: 'Instagram', url: '#' },
-                        { platform: 'LinkedIn', url: '#' }
-                     ]).map((link: any, i: number) => {
-                        const IconMap: any = { Facebook, Twitter, Instagram, LinkedIn: Linkedin, GitHub: Github, Youtube: Youtube, TikTok: Music };
-                        const Icon = IconMap[link.platform] || Globe;
-                        return (
-                          <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" className="w-14 h-14 rounded-2xl bg-emerald-900 flex items-center justify-center text-emerald-400 hover:bg-amber-400 hover:text-emerald-950 transition-all shadow-lg ring-1 ring-emerald-800">
-                            <Icon size={20} />
-                          </a>
-                        );
-                     })}
-                  </div>
-               </div>
-               
-               <div className="col-span-12 lg:col-span-8 flex flex-wrap gap-12 gap-y-20 lg:justify-between">
-                  {(landingSettings?.footerSections || [
-                    {
-                      title: 'Quick Links',
-                      titleAm: 'ፈጣን አገናኞች',
-                      links: [
-                        { am: 'ስለ እኛ', label: 'About Us', slug: 'About Us' },
-                        { am: 'አገልግሎቶቻችን', label: 'Services', slug: 'Services' },
-                        { am: 'የደንበኞች አስተያየት', label: 'Stories', slug: 'Stories' },
-                        { am: 'የክፍያ አማራጮች', label: 'Payments', slug: 'Payments' }
-                      ]
-                    },
-                    {
-                      title: 'Resources',
-                      titleAm: 'ጠቃሚ መረጃዎች',
-                      links: [
-                        { am: 'የግላዊነት መመሪያ', label: 'Privacy Policy', slug: 'Privacy Policy' },
-                        { am: 'ውልና ደንቦች', label: 'Terms & Conditions', slug: 'Terms & Conditions' },
-                        { am: 'የደህንነት መመሪያ', label: 'Security Guide', slug: 'Security Guide' },
-                        { am: 'እርዳታ ለማግኘት', label: 'Help Center', slug: 'Help Center' }
-                      ]
-                    }
-                  ]).map((section: any, sIdx: number) => (
-                    <div key={sIdx} className="min-w-[160px]">
-                      <h4 className="text-sm font-black text-white uppercase tracking-[0.4em] mb-8 pb-4 border-b border-emerald-800">
-                         {language === 'am' ? section.titleAm : section.title}
-                      </h4>
-                      <ul className="space-y-6">
-                        {section.links.map((link: any, lIdx: number) => (
-                           <li key={lIdx}>
-                              <button 
-                                onClick={() => handleFooterClick(link.slug || link.label)}
-                                className="text-emerald-100/50 hover:text-amber-400 transition-all font-bold text-lg flex items-center gap-2 group"
-                              >
-                                 <ChevronRight size={16} className="text-amber-500 opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-                                 {language === 'am' ? link.am : link.label}
-                              </button>
-                           </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-
-                  <div className="min-w-[240px]">
-                    <h4 className="text-sm font-black text-white uppercase tracking-[0.4em] mb-8 pb-4 border-b border-emerald-800">
-                       {language === 'am' ? 'ያግኙን' : 'Contact Us'}
-                    </h4>
-                    <div className="space-y-6">
-                       {(() => {
-                           // If null, use default. If undefined, use default. If "", use "".
-                           const emailVal = landingSettings === null ? 'support@melikekub.com' : (landingSettings.footerEmail !== undefined ? landingSettings.footerEmail : 'support@melikekub.com');
-                           if (!emailVal) return null;
-                           return (
-                             <a href={`mailto:${emailVal}`} className="flex items-start gap-4 group">
-                                <div className="w-12 h-12 rounded-xl bg-emerald-900 flex items-center justify-center text-amber-500 group-hover:bg-amber-400 group-hover:text-emerald-950 transition-all flex-shrink-0">
-                                   <Mail size={18} />
-                                </div>
-                                <div>
-                                   <p className="text-emerald-100/40 text-xs font-black uppercase mb-1">Email Us</p>
-                                   <p className="text-emerald-50 font-bold">{emailVal}</p>
-                                </div>
-                             </a>
-                           );
-                       })()}
-                       {(() => {
-                           const phoneVal = landingSettings === null ? '' : (landingSettings.footerPhone !== undefined ? landingSettings.footerPhone : '');
-                           if (!phoneVal) return null;
-                           return (
-                             <a href={`tel:${phoneVal}`} className="flex items-start gap-4 group">
-                                <div className="w-12 h-12 rounded-xl bg-emerald-900 flex items-center justify-center text-amber-500 group-hover:bg-amber-400 group-hover:text-emerald-950 transition-all flex-shrink-0">
-                                   <Phone size={18} />
-                                </div>
-                                <div>
-                                   <p className="text-emerald-100/40 text-xs font-black uppercase mb-1">Call Us</p>
-                                   <p className="text-emerald-50 font-bold">{phoneVal}</p>
-                                </div>
-                             </a>
-                           );
-                       })()}
-                    </div>
-                  </div>
-               </div>
-            </div>
-            
-            <div className="pt-10 border-t border-emerald-800 flex flex-col md:flex-row justify-between items-center gap-8">
-               <p className="text-emerald-100/30 text-sm font-medium">
-                  © {new Date().getFullYear()} {landingSettings?.footerBrandName || 'Meliq Ekub'}. All rights reserved under Ethiopian Law.
-               </p>
-               <div className="flex items-center gap-8">
-                  <Heart className="text-rose-500 animate-pulse" size={16} />
-                  <span className="text-emerald-100/30 text-sm font-medium tracking-widest uppercase">Built with Pride in Addis</span>
-               </div>
-            </div>
-         </div>
-      </footer>
-
-      {/* Info Modal */}
-      {activeInfo && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-emerald-950/80 backdrop-blur-md" onClick={() => setActiveInfo(null)} />
-          <div className="relative bg-[#FAFAF8] w-full max-w-lg rounded-[3rem] p-10 shadow-2xl border border-emerald-900/10 animate-scale-in">
-            <button onClick={() => setActiveInfo(null)} className="absolute top-8 right-8 text-slate-400 hover:text-emerald-900"><ArrowRight className="rotate-45" size={24} /></button>
-            <div className="mb-8 items-center flex gap-4">
-               <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-800"><Leaf size={28} /></div>
-               <div>
-                  <h4 className="text-xs font-black uppercase tracking-[0.3em] text-amber-600 mb-1">Information Guide</h4>
-                  <h3 className={`text-2xl font-black text-emerald-950 tracking-tight ${language === 'am' ? 'font-am' : ''}`}>
-                    {language === 'am' ? activeInfo.titleAm : activeInfo.title}
-                  </h3>
-               </div>
-            </div>
-            <p className={`text-lg text-slate-600 leading-relaxed font-medium mb-10 ${language === 'am' ? 'font-am leading-loose' : ''}`}>
-              {language === 'am' ? activeInfo.contentAm : activeInfo.content}
-            </p>
-            <button onClick={() => setActiveInfo(null)} className="w-full bg-emerald-800 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-emerald-900 transition-all">
-              {language === 'am' ? 'ዝጋ' : 'Close Guide'}
+      {/* Mobile Drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-[99] md:hidden bg-slate-950/40 backdrop-blur-md">
+          <div className="absolute top-24 left-4 right-4 bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 flex flex-col gap-3 animate-scale-in">
+            <button onClick={() => scrollToSection('home')} className="text-left py-2.5 px-4 rounded-xl hover:bg-slate-50 font-black text-slate-700">
+              {language === 'am' ? 'ዋና ገጽ' : 'Home'}
             </button>
+            <button onClick={() => scrollToSection('about')} className="text-left py-2.5 px-4 rounded-xl hover:bg-slate-50 font-black text-slate-700">
+              {language === 'am' ? 'ስለ እኛ' : 'About Us'}
+            </button>
+            <button onClick={() => scrollToSection('how-it-works')} className="text-left py-2.5 px-4 rounded-xl hover:bg-slate-50 font-black text-slate-700">
+              {language === 'am' ? 'እንዴት ይሰራል' : 'How It Works'}
+            </button>
+            <button onClick={() => scrollToSection('simulator')} className="text-left py-2.5 px-4 rounded-xl hover:bg-slate-50 font-black text-slate-700">
+              {language === 'am' ? 'እቁብ ማስሊያ' : 'Calculator'}
+            </button>
+            <button onClick={() => scrollToSection('services')} className="text-left py-2.5 px-4 rounded-xl hover:bg-slate-50 font-black text-slate-700">
+              {language === 'am' ? 'አገልግሎቶች' : 'Features'}
+            </button>
+            <div className="h-px bg-slate-100 my-2" />
+            <Link 
+              to="/signup" 
+              className="w-full bg-[#0c2340] text-white text-center font-black py-4 rounded-2xl shadow-lg"
+            >
+              {language === 'am' ? 'ለመመዝገብ / Join Now' : 'Join Now'}
+            </Link>
+            <Link 
+              to="/login" 
+              className="w-full bg-slate-100 text-slate-700 text-center font-black py-4 rounded-2xl"
+            >
+              {language === 'am' ? 'ግባ' : 'Login'}
+            </Link>
           </div>
         </div>
       )}
 
-      {/* Dynamic Detailed Equb Scheme Modal */}
-      {selectedPlan && (
-        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 sm:p-6 md:p-10">
-          <div className="absolute inset-0 bg-emerald-950/85 backdrop-blur-xl" onClick={() => setSelectedPlan(null)} />
-          <div className="relative bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] p-6 sm:p-10 md:p-12 shadow-2xl border border-emerald-900/15 animate-scale-in z-10 select-none">
-            <button 
-              onClick={() => setSelectedPlan(null)} 
-              className="absolute top-6 right-6 sm:top-8 sm:right-8 w-12 h-12 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 hover:text-emerald-900 hover:shadow-md hover:scale-105 transition-all"
-            >
-              <ArrowRight className="rotate-45" size={24} />
-            </button>
-
-            {/* Glowing background highlights */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-amber-400/5 rounded-full blur-[100px] pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-400/5 rounded-full blur-[100px] pointer-events-none" />
-
-            {/* Modal Body */}
-            <div>
-              {/* Top Meta info */}
-              <div className={`inline-flex items-center gap-3 px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest text-white bg-gradient-to-r shadow-md mb-6 relative z-10 ${selectedPlan.tagColor}`}>
-                {language === 'am' ? selectedPlan.tagAm : selectedPlan.tag}
+      {/* HERO SECTION - Matching the exact solid deep Navy Blue design with wave boundary */}
+      <section id="home" className="relative bg-[#0c2340] text-white pt-36 sm:pt-44 pb-28 md:pb-40 px-4 sm:px-8 overflow-hidden">
+        {/* Subtle grid pattern for texture */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+        
+        <div className="max-w-6xl mx-auto z-10 relative">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+            
+            {/* Left Column (Text & Buttons) */}
+            <div className="lg:col-span-6 flex flex-col text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white/10 text-amber-400 rounded-full font-black text-[10px] uppercase tracking-widest mb-6 border border-white/10 self-center lg:self-start">
+                <Sparkles size={11} className="animate-pulse" />
+                <span>{language === 'am' ? 'የማህበረሰብ ቁጠባ መድረክ' : 'Decentralized Community Platform'}</span>
               </div>
 
-              {/* Header Title with Custom Icon */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-5 mb-8">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${selectedPlan.iconBg} font-black shadow-md flex-shrink-0`}>
-                  {selectedPlan.icon}
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15] mb-6">
+                {language === 'am' ? (
+                  <>
+                    <span className="text-amber-400 font-serif font-black block mb-2">ለመሊቅ እቁብ:</span>
+                    የማህበረሰብ ቁጠባ መንገድ!
+                  </>
+                ) : (
+                  <>
+                    <span className="text-amber-400 font-serif font-black block mb-2">Melik Equb:</span>
+                    The Elite Way to Save!
+                  </>
+                )}
+              </h1>
+
+              <p className="text-sm sm:text-base md:text-lg text-slate-300 font-medium mb-8 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                {language === 'am' ? (
+                  'የጋራ እድገትና ፋይናንሳዊ ነፃነትን የሚያረጋግጥ ዘመናዊ የእቁብ ስርዓት። ቴክኖሎጂን በመጠቀም ባህላዊ እቁብን አስተማማኝ እና ምቹ አድርገናል። ዛሬውኑ ይቀላቀሉን!'
+                ) : (
+                  'A modern savings system securing shared growth and financial independence. Combining technology with cultural heritage for safety, ease, and transparency. Join today!'
+                )}
+              </p>
+
+              {/* Action buttons */}
+              <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
+                <Link 
+                  to="/signup" 
+                  onClick={() => triggerToast(language === 'am' ? 'ቁጠባ ለመጀመር ምዝገባ እየተከፈተ ነው...' : 'Getting ready to start saving...', 'success')}
+                  className="w-full sm:w-auto px-10 py-4.5 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-[0.15em] rounded-2xl shadow-xl shadow-amber-400/10 active:scale-95 transition-all text-center group cursor-pointer"
+                >
+                  <span>{language === 'am' ? 'አሁኑኑ ይጀምሩ / Start Saving Now' : 'Start Saving Now'}</span>
+                  <ArrowRight size={15} className="inline-block ml-2 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                
+                <button 
+                  onClick={() => {
+                    scrollToSection('simulator');
+                    triggerToast(language === 'am' ? 'ቁጠባዎን ማስላት ይችላሉ' : 'Try our interactive simulator below!', 'info');
+                  }}
+                  className="w-full sm:w-auto px-10 py-4.5 bg-white/10 hover:bg-white/20 text-white font-black text-xs uppercase tracking-wider rounded-2xl border border-white/20 transition-all text-center cursor-pointer"
+                >
+                  {language === 'am' ? 'ዕጣ ማስሊያ' : 'Calculate Return'}
+                </button>
+              </div>
+            </div>
+
+            {/* Right Column - Stunning generated illustration of celebrating Ethiopian group */}
+            <div className="lg:col-span-6 flex justify-center relative">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="relative w-full max-w-[500px] aspect-[4/3] rounded-[2.5rem] overflow-hidden border-4 border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.4)]"
+              >
+                {/* Background backglow decoration inside container */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0c2340]/90 via-transparent to-transparent z-10" />
+                
+                {/* Generated Image displaying Habesha Group and Mesob */}
+                <img 
+                  src={heroImg} 
+                  alt="Ethiopian Equb Celebration" 
+                  className="w-full h-full object-cover relative z-0 hover:scale-105 transition-transform duration-700" 
+                  referrerPolicy="no-referrer"
+                />
+
+                {/* Sparkling floating visual badges inside image overlay */}
+                <div className="absolute top-4 left-4 z-20 bg-emerald-500 text-white px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-lg shadow-emerald-500/30">
+                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
+                  <span>{language === 'am' ? '100% ግልፅ ስርዓት' : '100% Transparent'}</span>
+                </div>
+
+                <div className="absolute bottom-4 right-4 z-20 bg-amber-400 text-slate-900 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wider shadow-lg flex items-center gap-1.5">
+                  <Award size={13} />
+                  <span>{language === 'am' ? 'ባህላዊ እና ዘመናዊ' : 'Heritage & Tech'}</span>
+                </div>
+              </motion.div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Elegant curvy wave bottom cutout separator */}
+        <div className="absolute bottom-0 left-0 right-0 w-full overflow-hidden leading-none z-10">
+          <svg viewBox="0 0 1200 120" preserveAspectRatio="none" className="relative block w-full h-12 sm:h-20 text-slate-50 fill-current">
+            <path d="M0,0 C150,90 350,120 600,100 C850,80 1050,110 1200,120 L1200,120 L0,120 Z" />
+          </svg>
+        </div>
+      </section>
+
+      {/* THREE INTERACTIVE FEATURES SECTIONS - Overlapping Hero exactly like image mock */}
+      <section className="relative px-4 sm:px-8 max-w-6xl mx-auto z-20 -mt-16 md:-mt-24 mb-24">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* Card 1: Easy & Fast Registration */}
+          <div 
+            onClick={() => {
+              setActiveFeatureModal({
+                title: language === 'am' ? 'ቀላል እና ፈጣን ምዝገባ' : 'Easy & Fast Registration',
+                desc: language === 'am' 
+                  ? 'በጥቂት ሰከንዶች ውስጥ በስልክ ቁጥርዎ ይመዝገቡ። ማንነትዎን በፍጥነት በማረጋገጥ ወዲያውኑ የሚፈልጉትን የእቁብ አይነት መምረጥ ወይም የራስዎን መፍጠር ይችላሉ።'
+                  : 'Register in seconds using just your phone number. Instant identity verification lets you choose an active Equb pool or create your own circle immediately.',
+                icon: 'reg'
+              });
+              triggerToast(language === 'am' ? 'የምዝገባ ዝርዝር መረጃ ተከፍቷል' : 'Opened Easy Registration details', 'info');
+            }}
+            className="bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-[0_15px_40px_rgba(0,0,0,0.03)] hover:shadow-[0_25px_50px_rgba(12,35,64,0.08)] hover:-translate-y-1.5 transition-all duration-300 flex flex-col items-center text-center cursor-pointer group"
+          >
+            {/* Custom SVG Icon matching mockup (ID + Check icon with yellow background plate) */}
+            <div className="w-20 h-20 rounded-2xl bg-amber-50 group-hover:bg-amber-100 flex items-center justify-center mb-6 shadow-inner border border-amber-100/30 shrink-0 relative">
+              <svg viewBox="0 0 100 100" className="w-12 h-12 text-[#0c2340]">
+                {/* ID Card outline */}
+                <rect x="22" y="32" width="44" height="34" rx="4" fill="none" stroke="currentColor" strokeWidth="4" />
+                <circle cx="36" cy="46" r="6" fill="currentColor" />
+                <line x1="28" y1="58" x2="44" y2="58" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                <line x1="48" y1="44" x2="60" y2="44" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                <line x1="48" y1="50" x2="58" y2="50" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                {/* Document checklist inside frame */}
+                <rect x="52" y="48" width="28" height="32" rx="3" fill="#ffffff" stroke="currentColor" strokeWidth="3" className="drop-shadow-sm" />
+                <path d="M58 64 L64 70 L74 60" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+              <div className="absolute -bottom-1 -right-1 bg-amber-400 text-slate-950 p-1 rounded-full shadow-md">
+                <Check size={10} strokeWidth={4} />
+              </div>
+            </div>
+
+            <h3 className="text-lg font-black text-slate-900 mb-2 font-serif">
+              {language === 'am' ? 'ቀላል እና ፈጣን ምዝገባ' : 'Easy Registration'}
+            </h3>
+            <span className="text-xs font-bold text-indigo-600 mb-2 uppercase tracking-widest">{language === 'am' ? 'የተቀላጠፈ' : 'STREAMLINED'}</span>
+            <p className="text-xs text-slate-500 font-bold leading-relaxed">
+              {language === 'am' ? 'ቀላል የምዝገባ ሂደት፣ ፈጣን ፎቶና መታወቂያ ማረጋገጫ በጥቂት ሰከንዶች ውስጥ!' : 'Easy, fully-secured paperless signup with your phone number and instant verification.'}
+            </p>
+          </div>
+
+          {/* Card 2: Safe & Secure */}
+          <div 
+            onClick={() => {
+              setActiveFeatureModal({
+                title: language === 'am' ? 'ደህንነቱ አስተማማኝ የሆነ ቁጠባ' : 'Safe & Secure Savings',
+                desc: language === 'am' 
+                  ? 'የእያንዳንዱ አባል ቁጠባ በታመኑ ባንኮችና በህጋዊ ውል የተጠበቀ ነው። የላቀ የኢንክሪፕሽን ቴክኖሎጂን በመጠቀም የገንዘብዎ እና የዳታዎ አስተማማኝነት ሙሉ በሙሉ የተረጋገጠ ነው።'
+                  : 'Every single ETB deposited in Melik Equb is backed by trusted banking institutions and legally enforceable agreements. Safeguarded with end-to-end industry encryption.',
+                icon: 'secure'
+              });
+              triggerToast(language === 'am' ? 'የደህንነት ዝርዝር መረጃ ተከፍቷል' : 'Opened Security details', 'info');
+            }}
+            className="bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-[0_15px_40px_rgba(0,0,0,0.03)] hover:shadow-[0_25px_50px_rgba(12,35,64,0.08)] hover:-translate-y-1.5 transition-all duration-300 flex flex-col items-center text-center cursor-pointer group"
+          >
+            {/* Custom SVG Icon with padlock and green shield plate */}
+            <div className="w-20 h-20 rounded-2xl bg-emerald-50 group-hover:bg-emerald-100 flex items-center justify-center mb-6 shadow-inner border border-emerald-100/30 shrink-0 relative">
+              <svg viewBox="0 0 100 100" className="w-12 h-12 text-[#0c2340]">
+                {/* Padlock */}
+                <rect x="25" y="40" width="34" height="26" rx="4" fill="none" stroke="currentColor" strokeWidth="4" />
+                <path d="M32 40 V30 C32 20, 48 20, 48 30 V40" fill="none" stroke="currentColor" strokeWidth="4" />
+                <circle cx="42" cy="50" r="3" fill="currentColor" />
+                <line x1="42" y1="53" x2="42" y2="59" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                {/* Green Shield overlay */}
+                <path d="M52 42 C52 42, 62 38, 72 44 C72 60, 62 72, 52 76 C42 72, 32 60, 32 44" fill="#10b981" stroke="#ffffff" strokeWidth="3" strokeLinejoin="round" className="drop-shadow-sm" />
+                <path d="M42 58 L48 64 L62 50" fill="none" stroke="#ffffff" strokeWidth="3.5" strokeLinecap="round" />
+              </svg>
+            </div>
+
+            <h3 className="text-lg font-black text-slate-900 mb-2 font-serif">
+              {language === 'am' ? 'ደህንነቱ የተጠበቀ' : 'Secure Savings'}
+            </h3>
+            <span className="text-xs font-bold text-emerald-600 mb-2 uppercase tracking-widest">{language === 'am' ? 'የታመነ' : 'FULLY INSURED'}</span>
+            <p className="text-xs text-slate-500 font-bold leading-relaxed">
+              {language === 'am' ? 'ከታመኑ የአካባቢ ባንኮች ጋር የተቆራኘ፣ የተጠበቀ እና በህግ የተደገፈ አስተማማኝ ቁጠባ!' : 'Linked with trusted commercial banks and governed by legal framework.'}
+            </p>
+          </div>
+
+          {/* Card 3: Transparent Draw */}
+          <div 
+            onClick={() => {
+              setShowDrawModal(true);
+              triggerToast(language === 'am' ? 'የእጣ ማውጫ አስመሳይ ተከፍቷል' : 'Opened Draw simulator modal', 'info');
+            }}
+            className="bg-white p-8 rounded-[2rem] border-2 border-slate-100 shadow-[0_15px_40px_rgba(0,0,0,0.03)] hover:shadow-[0_25px_50px_rgba(12,35,64,0.08)] hover:-translate-y-1.5 transition-all duration-300 flex flex-col items-center text-center cursor-pointer group"
+          >
+            {/* Custom SVG Icon with lottery wheel and gold coins */}
+            <div className="w-20 h-20 rounded-2xl bg-amber-50 group-hover:bg-amber-100 flex items-center justify-center mb-6 shadow-inner border border-amber-100/30 shrink-0 relative">
+              <svg viewBox="0 0 100 100" className="w-12 h-12 text-[#0c2340]">
+                {/* Lottery Spinner Wheel */}
+                <circle cx="50" cy="45" r="22" fill="none" stroke="currentColor" strokeWidth="4" />
+                <circle cx="50" cy="45" r="14" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="6 4" />
+                <path d="M50 23 L50 67 M28 45 H72 M34 29 L66 61 M34 61 L66 29" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <circle cx="50" cy="45" r="4" fill="currentColor" />
+                {/* Hand and Coin */}
+                <path d="M50 62 C58 62, 72 65, 78 72 C80 75, 75 80, 70 80 H45" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="42" cy="74" r="8" fill="#f59e0b" stroke="currentColor" strokeWidth="3" className="drop-shadow-sm" />
+                <text x="42" y="79" fill="#92400e" fontSize="13" fontWeight="black" textAnchor="middle">$</text>
+              </svg>
+            </div>
+
+            <h3 className="text-lg font-black text-slate-900 mb-2 font-serif">
+              {language === 'am' ? 'ግልፅ የዕጣ ማውጣት' : 'Transparent Draw'}
+            </h3>
+            <span className="text-xs font-bold text-amber-600 mb-2 uppercase tracking-widest">{language === 'am' ? 'ቅጽበታዊ ዕጣ' : 'FAIR DRAW'}</span>
+            <p className="text-xs text-slate-500 font-bold leading-relaxed">
+              {language === 'am' ? 'ግልፅና ታማኝ የዕጣ ማውጣት ሂደት በየዙሩ! ውጤቱ በአባላት ፊት ወዲያውኑ ይገለፃል::' : 'Provably fair and automated digital draw algorithm showing live transparency.'}
+            </p>
+          </div>
+
+        </div>
+      </section>
+
+      {/* INTERACTIVE SHIELD / SECURITY STATS COUNTERS */}
+      <section className="py-12 bg-slate-100/50 border-y border-slate-200/50 z-10 relative">
+        <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+          <div className="flex flex-col items-center">
+            <div className="p-3 bg-white rounded-2xl shadow-sm mb-3">
+              <Users className="text-[#0c2340]" size={22} />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-[#0c2340] font-serif">15,000+</p>
+            <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mt-1">{language === 'am' ? 'ቁጠባ አባላት' : 'ACTIVE MEMBERS'}</p>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="p-3 bg-white rounded-2xl shadow-sm mb-3">
+              <CheckCircle2 className="text-emerald-600" size={22} />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-emerald-600 font-serif">100%</p>
+            <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mt-1">{language === 'am' ? 'የታመነ ደህንነት' : 'TRUST RATE'}</p>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="p-3 bg-white rounded-2xl shadow-sm mb-3">
+              <Zap className="text-amber-500" size={22} />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-amber-500 font-serif">2.5M+</p>
+            <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mt-1">{language === 'am' ? 'የተከፈለ ዕጣ (ብር)' : 'TOTAL DISBURSED (ETB)'}</p>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="p-3 bg-white rounded-2xl shadow-sm mb-3">
+              <Globe className="text-indigo-600" size={22} />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-indigo-600 font-serif">24/7</p>
+            <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mt-1">{language === 'am' ? 'ቅጽበታዊ ድጋፍ' : 'CUSTOMER SUPPORT'}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS SECTION */}
+      <section id="how-it-works" className="py-24 px-4 sm:px-8 max-w-6xl mx-auto z-10 relative">
+        <div className="text-center mb-16">
+          <span className="text-indigo-600 text-xs font-black uppercase tracking-[0.3em] block mb-3">
+            {language === 'am' ? 'ቀላል የቁጠባ ጉዞ' : 'EASY PROCESS'}
+          </span>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight font-serif">
+            {language === 'am' ? 'ቁጠባ በ 3 ቀላል ደረጃዎች' : 'How it Works'}
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+          
+          {/* Step 1 */}
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-[0_10px_30px_rgba(0,0,0,0.01)] flex flex-col items-center relative group hover:border-indigo-100 transition-all">
+            <div className="w-12 h-12 bg-amber-400 text-slate-950 rounded-full flex items-center justify-center font-black text-lg shadow-md mb-6">
+              1
+            </div>
+            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-indigo-600 mb-6 group-hover:bg-indigo-50 transition-colors">
+              <Smartphone size={28} />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-2 font-serif">
+              {language === 'am' ? 'ይመዝገቡ' : 'Sign Up'}
+            </h3>
+            <p className="text-xs text-slate-500 font-bold text-center leading-relaxed">
+              {language === 'am' ? 'በስልክ ቁጥርዎ ይመዝገቡ፣ በጥቂት ሰከንዶች ውስጥ መታወቂያዎን ያረጋግጡ::' : 'Sign up using your mobile number and pass rapid automatic KYC.'}
+            </p>
+            <button 
+              onClick={() => {
+                triggerToast(language === 'am' ? 'የመመዝገቢያ ፎርም ለመክፈት አሁኑኑ ይመዝገቡን ይጫኑ' : 'Click Join Now at top to sign up!', 'info');
+              }}
+              className="mt-6 text-xs font-black uppercase text-indigo-600 hover:text-indigo-700 tracking-wider flex items-center gap-1.5"
+            >
+              <span>{language === 'am' ? 'ለመመዝገብ' : 'Learn registration'}</span>
+              <ArrowRight size={12} />
+            </button>
+          </div>
+
+          {/* Step 2 */}
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-[0_10px_30px_rgba(0,0,0,0.01)] flex flex-col items-center relative group hover:border-indigo-100 transition-all">
+            <div className="w-12 h-12 bg-amber-400 text-slate-950 rounded-full flex items-center justify-center font-black text-lg shadow-md mb-6">
+              2
+            </div>
+            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-indigo-600 mb-6 group-hover:bg-indigo-50 transition-colors">
+              <Layers size={28} />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-2 font-serif">
+              {language === 'am' ? 'እቁብ ይምረጡ' : 'Choose Equb'}
+            </h3>
+            <p className="text-xs text-slate-500 font-bold text-center leading-relaxed">
+              {language === 'am' ? 'ለምሳሌ 200ሺህ ወይም 100ሺህ እጣ ያለውን የአባላት ቡድን ይቀላቀሉ::' : 'Select or join a savings group like 200k or 100k pools with customizable duration.'}
+            </p>
+            <button 
+              onClick={() => {
+                scrollToSection('simulator');
+                triggerToast(language === 'am' ? 'እዚህ ማስሊያ ላይ መምረጥ ይችላሉ' : 'Try setting values in calculator below!', 'info');
+              }}
+              className="mt-6 text-xs font-black uppercase text-indigo-600 hover:text-indigo-700 tracking-wider flex items-center gap-1.5"
+            >
+              <span>{language === 'am' ? 'ቡድኖችን እይ' : 'Explore pools'}</span>
+              <ArrowRight size={12} />
+            </button>
+          </div>
+
+          {/* Step 3 */}
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-[0_10px_30px_rgba(0,0,0,0.01)] flex flex-col items-center relative group hover:border-indigo-100 transition-all">
+            <div className="w-12 h-12 bg-amber-400 text-slate-950 rounded-full flex items-center justify-center font-black text-lg shadow-md mb-6">
+              3
+            </div>
+            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-indigo-600 mb-6 group-hover:bg-indigo-50 transition-colors">
+              <Gift size={28} />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-2 font-serif">
+              {language === 'am' ? 'ዕጣዎን ያግኙ' : 'Collect Payout'}
+            </h3>
+            <p className="text-xs text-slate-500 font-bold text-center leading-relaxed">
+              {language === 'am' ? 'እጣው ለእርስዎ ሲደርስ በቀጥታ በባንክ አካውንትዎ ወይም በቴሌብር ይቀበሉ::' : 'On your rotating winning turn, collect the accumulated cash payout safely.'}
+            </p>
+            <button 
+              onClick={() => {
+                setShowDrawModal(true);
+                triggerToast(language === 'am' ? 'የእጣ አወጣጥ አስመሳይ ተከፍቷል' : 'Opened transparent draw simulator', 'info');
+              }}
+              className="mt-6 text-xs font-black uppercase text-indigo-600 hover:text-indigo-700 tracking-wider flex items-center gap-1.5"
+            >
+              <span>{language === 'am' ? 'ዕጣውን ሞክር' : 'Simulate draw'}</span>
+              <ArrowRight size={12} />
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      {/* INTERACTIVE SIMULATOR WIDGET SECTION - Amazing User Engagement! */}
+      <section id="simulator" className="py-20 bg-[#0c2340] text-white relative overflow-hidden">
+        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+        <div className="max-w-4xl mx-auto px-6 relative z-10">
+          
+          <div className="text-center mb-12">
+            <span className="text-amber-400 text-xs font-black uppercase tracking-[0.3em] block mb-3">
+              {language === 'am' ? 'ይሞክሩት እና ያቅዱ' : 'INTERACTIVE ESTIMATOR'}
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-black font-serif tracking-tight">
+              {language === 'am' ? 'የቁጠባና የዕጣ ማስሊያ' : 'Equb Savings Estimator'}
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 font-bold mt-2 max-w-lg mx-auto">
+              {language === 'am' ? 'የመዋጮ መጠንዎን እና የአባላት ብዛት በመቀየር ምን ያህል ማግኘት እንደሚችሉ ይወቁ::' : 'Drag sliders to calculate payout cycles and potential pool prizes.'}
+            </p>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-[2.5rem] p-6 sm:p-10 shadow-2xl">
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+              
+              {/* Sliders Area */}
+              <div className="space-y-6">
+                
+                {/* Contribution amount */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs sm:text-sm font-black text-slate-200 uppercase tracking-wider">
+                      {language === 'am' ? 'የመዋጮ መጠን' : 'Contribution Amount'}
+                    </label>
+                    <span className="text-lg font-black text-amber-400 font-serif">
+                      {calcContribution.toLocaleString()} {language === 'am' ? 'ብር' : 'ETB'}
+                    </span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="500" 
+                    max="50000" 
+                    step="500"
+                    value={calcContribution} 
+                    onChange={(e) => {
+                      setCalcContribution(Number(e.target.value));
+                      triggerToast(
+                        language === 'am' 
+                          ? `መዋጮ ወደ ${Number(e.target.value).toLocaleString()} ብር ተቀይሯል`
+                          : `Contribution adjusted to ${Number(e.target.value).toLocaleString()} ETB`,
+                        'info'
+                      );
+                    }}
+                    className="w-full accent-amber-400 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400 font-extrabold mt-1">
+                    <span>500 ብር</span>
+                    <span>50,000 ብር</span>
+                  </div>
+                </div>
+
+                {/* Number of Members */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs sm:text-sm font-black text-slate-200 uppercase tracking-wider">
+                      {language === 'am' ? 'የአባላት ብዛት' : 'Number of Members'}
+                    </label>
+                    <span className="text-lg font-black text-amber-400 font-serif">
+                      {calcMembers} {language === 'am' ? 'አባላት' : 'Members'}
+                    </span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="5" 
+                    max="50" 
+                    step="1"
+                    value={calcMembers} 
+                    onChange={(e) => {
+                      setCalcMembers(Number(e.target.value));
+                      triggerToast(
+                        language === 'am' 
+                          ? `የአባላት ቁጥር ወደ ${e.target.value} ተቀይሯል`
+                          : `Members adjusted to ${e.target.value}`,
+                        'info'
+                      );
+                    }}
+                    className="w-full accent-amber-400 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400 font-extrabold mt-1">
+                    <span>5 አባላት</span>
+                    <span>50 አባላት</span>
+                  </div>
+                </div>
+
+                {/* Interval Buttons */}
+                <div>
+                  <label className="text-xs sm:text-sm font-black text-slate-200 block mb-3 uppercase tracking-wider">
+                    {language === 'am' ? 'የቁጠባ ዑደት' : 'Contribution Interval'}
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => {
+                        setCalcInterval('monthly');
+                        triggerToast(language === 'am' ? 'ዑደት ወደ በየወሩ ተቀይሯል' : 'Interval set to Monthly', 'success');
+                      }}
+                      className={`py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all border ${
+                        calcInterval === 'monthly' 
+                          ? 'bg-amber-400 text-slate-950 border-amber-400' 
+                          : 'bg-white/5 text-white border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      {language === 'am' ? 'በየወሩ' : 'Monthly'}
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setCalcInterval('weekly');
+                        triggerToast(language === 'am' ? 'ዑደት ወደ በየሳምንቱ ተቀይሯል' : 'Interval set to Weekly', 'success');
+                      }}
+                      className={`py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all border ${
+                        calcInterval === 'weekly' 
+                          ? 'bg-amber-400 text-slate-950 border-amber-400' 
+                          : 'bg-white/5 text-white border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      {language === 'am' ? 'በየሳምንቱ' : 'Weekly'}
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Calculator Results Display */}
+              <div className="bg-[#0a1e36] rounded-3xl p-6 sm:p-8 border border-white/5 text-center flex flex-col justify-between h-full min-h-[280px]">
+                
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                    {language === 'am' ? 'ጠቅላላ የዕጣ መጠን' : 'TOTAL PAYOUT POOL'}
+                  </p>
+                  <h3 className="text-3xl sm:text-4xl font-black font-serif text-amber-400 tracking-tight">
+                    {(calcContribution * calcMembers).toLocaleString()} <span className="text-lg">{language === 'am' ? 'ብር' : 'ETB'}</span>
+                  </h3>
+                  <div className="w-16 h-1 bg-amber-400/20 mx-auto my-4 rounded-full" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 my-4 text-left">
+                  <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'የዑደት ርዝመት' : 'CYCLE LENGTH'}</p>
+                    <p className="text-xs sm:text-sm font-black text-white mt-1">
+                      {calcMembers} {calcInterval === 'monthly' ? (language === 'am' ? 'ወራት' : 'Months') : (language === 'am' ? 'ሳምንታት' : 'Weeks')}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'የአሸናፊነት ዕድል' : 'WIN CHANCE'}</p>
+                    <p className="text-xs sm:text-sm font-black text-emerald-400 mt-1">
+                      {(100 / calcMembers).toFixed(1)}% {language === 'am' ? 'በየዙሩ' : '/round'}
+                    </p>
+                  </div>
+                </div>
+
+
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* ABOUT SECTION */}
+      <section id="about" className="py-24 bg-white border-y border-slate-100 relative z-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            
+            {/* Left Column (Illustration / Feature Grid) */}
+            <div className="lg:col-span-6 grid grid-cols-2 gap-4">
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex flex-col items-center text-center shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 shrink-0 shadow-inner">
+                  <CheckCircle2 size={24} />
+                </div>
+                <h4 className="text-sm font-black text-slate-900 mb-1">{t('landing.trust_points.1')}</h4>
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex flex-col items-center text-center shadow-sm mt-8">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 shrink-0 shadow-inner">
+                  <Zap size={24} />
+                </div>
+                <h4 className="text-sm font-black text-slate-900 mb-1">{t('landing.trust_points.2')}</h4>
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex flex-col items-center text-center shadow-sm -mt-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4 shrink-0 shadow-inner">
+                  <Lock size={24} />
+                </div>
+                <h4 className="text-sm font-black text-slate-900 mb-1">{t('landing.trust_points.3')}</h4>
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex flex-col items-center text-center shadow-sm mt-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 shrink-0 shadow-inner">
+                  <Users size={24} />
+                </div>
+                <h4 className="text-sm font-black text-slate-900 mb-1">{language === 'am' ? 'ቁጠባ ማህበረሰብ' : 'Community'}</h4>
+              </div>
+            </div>
+
+            {/* Right Column (Content) */}
+            <div className="lg:col-span-6">
+              <span className="text-indigo-600 text-xs font-black uppercase tracking-[0.3em] block mb-3">
+                {language === 'am' ? 'ስለ መሊቅ እቁብ ምንነት' : 'ABOUT OUR SYSTEM'}
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight mb-6 font-serif">
+                {language === 'am' ? 'ባህላዊ እሴቶቻችን በዘመናዊ ቴክኖሎጂ' : 'Preserving Culture with Modern Security'}
+              </h2>
+              <p className="text-sm sm:text-base text-slate-600 font-medium leading-relaxed mb-8">
+                {language === 'am' ? (
+                  'እቁብ የረጅም ዘመናት ታሪክ ያለው የማህበረሰብ የጋራ ቁጠባና የገንዘብ መረዳጃ ባህላዊ ማህበር ነው። መሊቅ እቁብ ይህንን ውድ ባህል በቴክኖሎጂ በማዘመን እጅግ ግልፅ፣ ደህንነቱ የተጠበቀና ምቹ የዲጂታል እቁብ መድረክ አድርጎ አቅርቧል።'
+                ) : (
+                  'Equb is a traditional Ethiopian savings and credit association. Members periodically contribute a fixed amount of money, which is then given to one member at a time on a rotating basis. Meliq Equb modernizes this beautiful system with absolute transparent technology.'
+                )}
+              </p>
+
+              <div 
+                onClick={() => {
+                  setShowVideoModal(true);
+                  triggerToast(language === 'am' ? 'የመግቢያ መረጃ ፓነል ተከፍቷል' : 'Opened Video/Introduction info panel', 'info');
+                }}
+                className="bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-100 p-6 rounded-2xl flex items-start gap-4 mb-8 cursor-pointer transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                  <Play size={16} fill="currentColor" />
                 </div>
                 <div>
-                  <h3 className={`text-2xl sm:text-3xl md:text-4xl font-extrabold text-emerald-950 tracking-tight`}>
-                    {language === 'am' ? selectedPlan.titleAm : selectedPlan.title}
-                  </h3>
-                  <p className="text-amber-600 font-extrabold text-xs sm:text-sm uppercase tracking-widest mt-1">
-                    {language === 'am' ? 'የእቅድ ዝርዝር ማብራሪያ' : 'Exquisite Savings Scheme'}
+                  <h4 className="text-sm font-black text-slate-900 mb-1">{language === 'am' ? 'መግቢያ ቪዲዮ እይ' : 'How It Works (Demo Video)'}</h4>
+                  <p className="text-xs font-bold text-slate-500 leading-normal">
+                    {language === 'am' ? 'ለመመዝገብ፣ መዋጮ ለመክፈልና እጣ ለመውጣት የሚከተሉትን ቀላል መንገዶች የሚያሳይ አጭር ማብራሪያ::' : 'Learn how to easily register, contribute, and track your Equb rounds.'}
                   </p>
                 </div>
               </div>
 
-              {/* Visual Split Layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                
-                {/* Left Side: Photo + Quick Stats */}
-                <div className="lg:col-span-5 space-y-6">
-                  <div className="relative h-64 rounded-3xl overflow-hidden shadow-lg border border-slate-100">
-                    <img 
-                      src={selectedPlan.img} 
-                      alt={selectedPlan.title} 
-                      className="w-full h-full object-cover" 
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-
-                  {/* High Contrast Key Info Grid */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-100 flex flex-col justify-center">
-                      <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">
-                        {language === 'am' ? 'ዑደት / ጊዜ' : 'Saving Cycle'}
-                      </span>
-                      <span className="text-base sm:text-lg font-extrabold text-emerald-950">
-                        {language === 'am' ? (selectedPlan.stats[0].value === 'Monthly' ? 'የወር ቆጣቢ' : selectedPlan.stats[0].value === 'Bi-weekly' ? 'የሁለት ሳምንት' : 'የሳምንት ቆጣቢ') : selectedPlan.stats[0].value}
-                      </span>
-                    </div>
-
-                    <div className="bg-amber-50/50 rounded-2xl p-4 border border-amber-100/60 flex flex-col justify-center">
-                      <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">
-                        {language === 'am' ? 'የእቅድ ዘርፍ' : 'Key Classification'}
-                      </span>
-                      <span className="text-base sm:text-lg font-extrabold text-emerald-950">
-                        {language === 'am' ? selectedPlan.tagAm : selectedPlan.stats[1].value}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Target Group */}
-                  <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
-                    <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                      {language === 'am' ? 'ለእነማን ተመራጭ ነው' : 'Target Audience'}
-                    </h5>
-                    <p className="text-slate-700 font-bold text-sm sm:text-base leading-relaxed">
-                      {language === 'am' ? selectedPlan.targetGroupAm : selectedPlan.targetGroupEn}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Right Side: Elaborate Details and Checklist */}
-                <div className="lg:col-span-7 space-y-8">
-                  
-                  {/* Detailed Description Paragraph */}
-                  <div>
-                    <h4 className="text-xs font-black uppercase text-emerald-800 tracking-[0.2em] mb-3">
-                      {language === 'am' ? 'ስለ እቅዱ' : 'Overview & Philosophy'}
-                    </h4>
-                    <p className="text-slate-600 font-bold text-base sm:text-lg leading-relaxed">
-                      {language === 'am' ? selectedPlan.detailsAm : selectedPlan.details}
-                    </p>
-                  </div>
-
-                  {/* Key Benefits Bulletpoints */}
-                  <div>
-                    <h4 className="text-xs font-black uppercase text-amber-600 tracking-[0.2em] mb-4">
-                      {language === 'am' ? 'ዋና ዋና ጥቅሞችና ዋስትናዎች' : 'Core Value & Safeguards'}
-                    </h4>
-                    <ul className="space-y-3">
-                      {(language === 'am' ? selectedPlan.benefitsAm : selectedPlan.benefitsEn).map((benefit: string, idx: number) => (
-                        <li key={idx} className="flex items-start gap-3">
-                          <CheckCircle2 size={18} className="text-emerald-600 mt-1 flex-shrink-0" />
-                          <span className="text-slate-700 font-bold text-sm sm:text-base">
-                            {benefit}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Security Highlights */}
-                  <div className="p-4 bg-emerald-50/45 rounded-2xl border border-emerald-100 flex items-start gap-3">
-                    <ShieldCheck size={20} className="text-emerald-700 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <h4 className="text-xs font-black uppercase text-emerald-800 tracking-wider mb-1">
-                        {language === 'am' ? 'የደህንነት እና የታማኝነት ዋስትና' : 'Secured Financial Guarantee'}
-                      </h4>
-                      <p className="text-slate-600 font-bold text-[13px] sm:text-sm leading-relaxed">
-                        {language === 'am' ? selectedPlan.safetyAm : selectedPlan.safetyEn}
-                      </p>
-                    </div>
-                  </div>
-
-                </div>
-
-              </div>
-
-              {/* Footer CTA Action Buttons */}
-              <div className="mt-10 pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
-                <p className="text-slate-400 font-bold text-[13px] sm:text-sm text-center sm:text-left">
-                  {language === 'am' 
-                    ? 'ለመመዝገብ መታወቂያ እና ተያያዥ ማረጋገጫዎች በእጅዎ ሊኖር ይገባል' 
-                    : 'A valid National ID is required during registration setup.'}
-                </p>
-                <div className="flex flex-wrap gap-4 w-full sm:w-auto">
-                  <button 
-                    onClick={() => setSelectedPlan(null)} 
-                    className="flex-1 sm:flex-none px-6 py-4 rounded-xl font-black text-xs uppercase tracking-widest text-slate-500 hover:text-emerald-950 hover:bg-slate-50 transition-all text-center border border-slate-200"
-                  >
-                    {language === 'am' ? 'ዝጋ' : 'Close Details'}
-                  </button>
-                  <Link 
-                    to="/signup" 
-                    className="flex-1 sm:flex-none px-10 py-4 rounded-xl bg-emerald-800 text-amber-300 font-black text-xs uppercase tracking-widest hover:bg-emerald-900 transition-all text-center shadow-lg hover:shadow-emerald-900/20"
-                  >
-                    {language === 'am' ? 'ይህንን እቁብ ጀምር' : 'Join This Scheme'}
-                  </Link>
-                </div>
-              </div>
-
+              <Link 
+                to="/signup" 
+                onClick={() => triggerToast(language === 'am' ? 'መመዝገቢያ ገጽ ተከፍቷል' : 'Directing to Sign Up', 'success')}
+                className="inline-flex items-center gap-2 px-8 py-4 bg-indigo-600 hover:bg-[#0c2340] text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg transition-colors"
+              >
+                <span>{language === 'am' ? 'አሁኑኑ ይመዝገቡ / Join Now' : 'Join Now'}</span>
+                <ArrowRight size={14} />
+              </Link>
             </div>
+
           </div>
         </div>
-      )}
+      </section>
+
+      {/* ADDITIONAL RICH DETAILS & FAQ */}
+      <section className="py-24 px-4 sm:px-8 max-w-6xl mx-auto z-10 relative">
+        <div className="text-center mb-16">
+          <span className="text-indigo-600 text-xs font-black uppercase tracking-[0.3em] block mb-3">
+            {language === 'am' ? 'ተደጋጋሚ ጥያቄዎች' : 'COMMON QUESTIONS'}
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 font-serif tracking-tight">
+            {language === 'am' ? 'እውቂያ እና ጥያቄዎች' : 'FAQ & Support'}
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          
+          <div className="space-y-4">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm hover:border-indigo-100 transition-colors">
+              <h4 className="text-base font-black text-slate-900 mb-2 flex items-center gap-2">
+                <HelpCircle size={18} className="text-indigo-600" />
+                <span>{language === 'am' ? 'ለመሊቅ እቁብ ህጋዊ ነው?' : 'Is Melik Equb legally backed?'}</span>
+              </h4>
+              <p className="text-xs text-slate-500 font-bold leading-relaxed">
+                {language === 'am' 
+                  ? 'አዎ፣ እያንዳንዱ የእቁብ ቡድን በህጋዊ ውል የታሰረ ሲሆን እጣውን የማያገባ አባል ቢኖር እንኳን በዋስትና ስምምነት መሰረት የቁጠባ ዋስትናው ሙሉ በሙሉ የተጠበቀ ነው።'
+                  : 'Absolutely. Every Equb cycle operates under a strict legal contract signed digitally, and all members are verified to protect the savings integrity.'
+                }
+              </p>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm hover:border-indigo-100 transition-colors">
+              <h4 className="text-base font-black text-slate-900 mb-2 flex items-center gap-2">
+                <HelpCircle size={18} className="text-indigo-600" />
+                <span>{language === 'am' ? 'ዕጣ እንዴት ነው የሚወጣው?' : 'How is the draw calculated?'}</span>
+              </h4>
+              <p className="text-xs text-slate-500 font-bold leading-relaxed">
+                {language === 'am' 
+                  ? 'ዕጣው ሙሉ በሙሉ በአውቶሜትድ ዲጂታል ሲስተም የሚወጣ ሲሆን በየዙሩ በሁሉም አባላት ፊት በግልፅ የሚሽከረከርና የሚታወቅ ነው።'
+                  : 'The rotating draw is fully automated through a secure algorithm, ensuring equal chance and complete visibility to every participating user.'
+                }
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm hover:border-indigo-100 transition-colors">
+              <h4 className="text-base font-black text-slate-900 mb-2 flex items-center gap-2">
+                <HelpCircle size={18} className="text-indigo-600" />
+                <span>{language === 'am' ? 'መዋጮዎችን እንዴት ነው የምከፍለው?' : 'How do I pay my contributions?'}</span>
+              </h4>
+              <p className="text-xs text-slate-500 font-bold leading-relaxed">
+                {language === 'am' 
+                  ? 'መዋጮዎችን በታመኑ የኢትዮጵያ ባንኮች (ለምሳሌ CBE Birr, Telebirr, Awash Birr, ወዘተ) በመጠቀም በቀላሉ በስልክዎ መክፈል ይችላሉ::'
+                  : 'You can contribute via Telebirr, CBE Birr, Awash, or standard digital banking tools connected directly inside your account.'
+                }
+              </p>
+            </div>
+
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* SIMPLIFIED FOOTER - Cleaner, high-contrast, modern layout requested by user */}
+      <footer className="bg-[#0a1523] text-slate-400 py-12 border-t border-slate-800">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-8">
+          
+          {/* Logo Brand */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl border border-slate-700 bg-white flex items-center justify-center overflow-hidden shrink-0">
+              <img src="/logo.png" className="w-full h-full object-contain p-0.5" alt="Logo" referrerPolicy="no-referrer" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-black text-white tracking-tighter uppercase leading-none italic">
+                {language === 'am' ? 'መሊቅ እቁብ' : 'MELIK EKUB'}
+              </span>
+              <span className="text-[7px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                {language === 'am' ? 'ለመለቅ እቁብ' : 'For Elite Savings'}
+              </span>
+            </div>
+          </div>
+
+          {/* Quick links */}
+          <div className="flex flex-wrap justify-center gap-6 text-xs font-black uppercase tracking-wider">
+            <button onClick={() => scrollToSection('home')} className="hover:text-white transition-colors cursor-pointer">{language === 'am' ? 'ዋና ገጽ' : 'Home'}</button>
+            <button onClick={() => scrollToSection('about')} className="hover:text-white transition-colors cursor-pointer">{language === 'am' ? 'ስለ እኛ' : 'About'}</button>
+            <button onClick={() => scrollToSection('how-it-works')} className="hover:text-white transition-colors cursor-pointer">{language === 'am' ? 'እንዴት ይሰራል' : 'How It Works'}</button>
+            <button onClick={() => scrollToSection('simulator')} className="hover:text-white transition-colors cursor-pointer">{language === 'am' ? 'ዕጣ ማስሊያ' : 'Calculator'}</button>
+          </div>
+
+          {/* Copyright */}
+          <div className="text-center sm:text-right text-[11px] font-bold text-slate-500">
+            <p>© {new Date().getFullYear()} Melik Equb. {language === 'am' ? 'መብቱ በህግ የተጠበቀ ነው::' : 'All rights reserved.'}</p>
+            <p className="mt-1 text-slate-600">Made for Elite Savers in Addis Ababa</p>
+          </div>
+
+        </div>
+      </footer>
+
+      {/* --- INTERACTIVE MODALS & PORTALS (Every Button Action feedback) --- */}
+
+      {/* 1. Feature Detail Popup Modal */}
+      <AnimatePresence>
+        {activeFeatureModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[150] bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2.5rem] max-w-md w-full p-8 border border-slate-100 shadow-2xl relative"
+            >
+              <button 
+                onClick={() => {
+                  setActiveFeatureModal(null);
+                  triggerToast(language === 'am' ? 'ፓነሉ ተዘግቷል' : 'Closed feature details', 'info');
+                }}
+                className="absolute top-6 right-6 w-9 h-9 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+
+              <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-6">
+                {activeFeatureModal.icon === 'reg' ? <Smartphone size={24} /> : <ShieldCheck size={24} />}
+              </div>
+
+              <h3 className="text-2xl font-black text-slate-900 font-serif mb-3">
+                {activeFeatureModal.title}
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 font-semibold leading-relaxed mb-6">
+                {activeFeatureModal.desc}
+              </p>
+
+              <div className="flex gap-3">
+                <Link 
+                  to="/signup"
+                  onClick={() => {
+                    setActiveFeatureModal(null);
+                    triggerToast(language === 'am' ? 'ምዝገባ በመከፈት ላይ ነው' : 'Opening registration form...', 'success');
+                  }}
+                  className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest text-center rounded-xl shadow-lg transition-all"
+                >
+                  {language === 'am' ? 'አሁን ተቀላቀል' : 'Join Now'}
+                </Link>
+                <button 
+                  onClick={() => {
+                    setActiveFeatureModal(null);
+                    triggerToast(language === 'am' ? 'እሺ' : 'Dismissed', 'info');
+                  }}
+                  className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider text-center rounded-xl transition-all"
+                >
+                  {language === 'am' ? 'ተመለስ' : 'Close'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 2. Interactive Transparency Draw Lottery Simulator Modal */}
+      <AnimatePresence>
+        {showDrawModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[150] bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.92, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, y: 15 }}
+              className="bg-[#0a1523] text-white rounded-[2.5rem] max-w-lg w-full p-8 border border-white/10 shadow-2xl relative"
+            >
+              <button 
+                onClick={() => {
+                  setShowDrawModal(false);
+                  triggerToast(language === 'am' ? 'የእጣ አስመሳይ ተዘግቷል' : 'Closed draw simulator', 'info');
+                }}
+                className="absolute top-6 right-6 w-9 h-9 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+
+              <div className="flex items-center gap-2 mb-6 text-amber-400">
+                <Sparkles size={18} className="animate-spin duration-3000" />
+                <span className="text-xs font-black uppercase tracking-wider">DEMO SPINNER WIDGET</span>
+              </div>
+
+              <h3 className="text-xl sm:text-2xl font-black font-serif mb-2 text-white">
+                {language === 'am' ? 'ግልፅ የዕጣ ማውጫ አስመሳይ' : 'Transparent Draw Lottery'}
+              </h3>
+              <p className="text-xs text-slate-400 font-bold mb-6">
+                {language === 'am' 
+                  ? 'የመሊቅ እቁብ ዲጂታል ዕጣ አወጣጥ ሂደት እንዴት ሙሉ በሙሉ ግልፅና ፍትሃዊ እንደሆነ በተግባር ይሞክሩ::' 
+                  : 'See how our provably fair rotating slot spinner randomly draws winners.'
+                }
+              </p>
+
+              {/* Spin Display Slot Plate */}
+              <div className="bg-[#0e1d2f] border border-white/5 p-6 rounded-3xl flex flex-col items-center justify-center min-h-[140px] mb-6 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-[#0a1523]/80 via-transparent to-[#0a1523]/80 pointer-events-none" />
+                
+                {drawResult ? (
+                  <motion.div 
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="text-center relative z-10"
+                  >
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-1">
+                      {spinning ? (language === 'am' ? 'ዕጣው እየወጣ ነው...' : 'SPINNING NOW...') : (language === 'am' ? 'የዕጣው አሸናፊ!' : 'WINNER DRAWN!')}
+                    </p>
+                    <h4 className="text-lg sm:text-xl font-black text-white px-4 py-2 bg-white/5 rounded-2xl border border-white/10">
+                      {drawResult}
+                    </h4>
+                  </motion.div>
+                ) : (
+                  <p className="text-xs font-black text-slate-400 text-center uppercase tracking-widest relative z-10">
+                    {language === 'am' ? 'ሲስተሙ ዝግጁ ነው! "ዕጣ አውጣ" የሚለውን ይጫኑ' : 'System Ready! Click "Spin Draw" to begin.'}
+                  </p>
+                )}
+              </div>
+
+              {/* Action */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button 
+                  onClick={handleSimulateDraw}
+                  disabled={spinning}
+                  className={`flex-1 py-4 text-xs font-black uppercase tracking-widest text-center rounded-2xl shadow-lg transition-all ${
+                    spinning 
+                      ? 'bg-slate-700 text-slate-400 cursor-not-allowed' 
+                      : 'bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-slate-950 font-black'
+                  }`}
+                >
+                  {spinning ? (language === 'am' ? 'በመሽከርከር ላይ...' : 'Spinning...') : (language === 'am' ? 'ዕጣ አውጣ / Spin Draw' : 'Spin Draw')}
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowDrawModal(false);
+                    triggerToast(language === 'am' ? 'ተመለስ' : 'Closed', 'info');
+                  }}
+                  className="py-4 px-6 bg-white/5 hover:bg-white/10 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all"
+                >
+                  {language === 'am' ? 'ዝጋ' : 'Close'}
+                </button>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. Demo Introduction Information modal */}
+      <AnimatePresence>
+        {showVideoModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[150] bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 15 }}
+              className="bg-white rounded-[2.5rem] max-w-md w-full p-8 border border-slate-100 shadow-2xl relative"
+            >
+              <button 
+                onClick={() => {
+                  setShowVideoModal(false);
+                  triggerToast(language === 'am' ? 'የመረጃ ሰሌዳው ተዘግቷል' : 'Closed info portal', 'info');
+                }}
+                className="absolute top-6 right-6 w-9 h-9 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-6">
+                <Play size={20} fill="currentColor" />
+              </div>
+
+              <h3 className="text-xl sm:text-2xl font-black font-serif text-slate-900 mb-2">
+                {language === 'am' ? 'ስለ አገልግሎታችን ማብራሪያ' : 'How Melik Equb Works'}
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 font-semibold leading-relaxed mb-6">
+                {language === 'am' 
+                  ? 'መሊቅ እቁብ እያንዳንዱን መዋጮና ዕጣ በህግ በተደገፉ ውሎች ያስተሳስራል። መተግበሪያውን በመክፈት ማንኛውም አባል ያለ ምንም ችግር በየዙሩ መዋጮዎችን መክፈልና አሸናፊውን በቀጥታ በቴሌብር ማየት ይችላል::' 
+                  : 'Melik Equb pairs financial rotation with strict automated smart algorithms. Users can monitor contributions and track them on the mobile application instantly.'
+                }
+              </p>
+
+              <button 
+                onClick={() => {
+                  setShowVideoModal(false);
+                  triggerToast(language === 'am' ? 'ስለ እቁቡ ተጨማሪ ለመማር ይመዝገቡ' : 'Sign up to read the complete rules!', 'success');
+                }}
+                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest text-center rounded-xl shadow-lg transition-all"
+              >
+                {language === 'am' ? 'አሁን ተቀላቀል' : 'Join Now'}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
-};
-
-export default Landing;
+}

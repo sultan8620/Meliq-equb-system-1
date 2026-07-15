@@ -11785,33 +11785,21 @@ export default function AdminDashboard() {
                 className="bg-white p-6 rounded-[2rem] border-2 border-slate-50 relative overflow-hidden shadow-sm mx-auto max-w-sm"
               >
                 {/* Watermark Logo bg */}
-                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.06] pointer-events-none">
-                  <svg viewBox="0 0 500 500" className="w-[85%] h-[85%] -rotate-12 stroke-current text-slate-900">
-                    <circle cx="250" cy="250" r="230" fill="none" strokeWidth="3" strokeDasharray="12 12" />
-                    <circle cx="250" cy="250" r="220" fill="none" strokeWidth="2" />
-                    <circle cx="250" cy="250" r="210" fill="none" strokeWidth="1" />
-                    <circle cx="250" cy="250" r="195" fill="none" strokeWidth="8" strokeDasharray="3 20" strokeLinecap="round" />
-                    <circle cx="250" cy="250" r="185" fill="none" strokeWidth="1" />
-                    <g transform="translate(0, -10)">
-                      <path d="M250 120 Q260 120 260 150 Q260 190 280 230 Q310 270 310 310 Q310 360 250 360 Q190 360 190 310 Q190 270 220 230 Q240 190 240 150 Q240 120 250 120 Z" fill="none" strokeWidth="6" strokeLinejoin="round" />
-                      <path d="M250 120 L250 90 M235 90 L265 90" strokeWidth="6" strokeLinecap="round" />
-                      <path d="M190 290 Q130 290 150 220 Q170 160 230 210" fill="none" strokeWidth="6" strokeLinecap="round" />
-                      <path d="M305 250 Q370 230 370 180 Q370 160 350 150" fill="none" strokeWidth="6" strokeLinecap="round" />
-                      <circle cx="340" cy="140" r="5" fill="currentColor" stroke="none" />
-                      <path d="M230 360 L210 395 L290 395 L270 360 Z" fill="none" strokeWidth="6" strokeLinejoin="round" />
-                      <path d="M170 440 Q250 490 330 440 M190 420 Q250 460 310 420 M210 405 Q250 430 290 405" fill="none" strokeWidth="3" strokeLinecap="round" />
-                    </g>
-                    <text x="250" y="480" textAnchor="middle" fontSize="38" fontWeight="900" fontFamily="sans-serif" fill="currentColor" stroke="none" letterSpacing="12">እቁብ</text>
-                    <text x="250" y="50" textAnchor="middle" fontSize="22" fontWeight="800" fontFamily="sans-serif" fill="currentColor" stroke="none" letterSpacing="16">ETHIOPIA</text>
-                  </svg>
+                <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.04] pointer-events-none select-none">
+                  <img src="/logo.png" className="w-[85%] h-[85%] object-contain -rotate-12" alt="" referrerPolicy="no-referrer" />
                 </div>
 
-                <div className="flex justify-between items-start mb-6 pb-4 border-b border-slate-100 relative z-10">
-                  <div>
-                    <h1 className="text-xl font-black text-slate-900 tracking-tighter mb-0.5">{language === 'am' ? 'መሊቅ እቁብ' : 'MELIQ EKUB'}</h1>
-                    <p className="text-[7px] font-black text-indigo-500 uppercase tracking-[0.2em]">{language === 'am' ? 'ህጋዊ ደረሰኝ' : 'Official Payment Receipt'}</p>
+                <div className="flex justify-between items-start mb-6 pb-4 border-b border-slate-100 relative z-10 w-full overflow-hidden">
+                  <div className="flex items-center gap-2.5 max-w-[70%]">
+                    <div className="w-10 h-10 rounded-xl border border-slate-100 bg-white shadow-sm flex items-center justify-center overflow-hidden shrink-0">
+                      <img src="/logo.png" className="w-full h-full object-contain p-0.5" alt="" referrerPolicy="no-referrer" />
+                    </div>
+                    <div className="truncate">
+                      <h1 className="text-xl font-black text-slate-900 tracking-tighter mb-0.5 truncate">{language === 'am' ? 'መሊቅ እቁብ' : 'MELIQ EKUB'}</h1>
+                      <p className="text-[7px] font-black text-indigo-500 uppercase tracking-[0.2em] truncate">{language === 'am' ? 'ህጋዊ ደረሰኝ' : 'Official Payment Receipt'}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
                     <p className="text-[10px] font-black text-slate-900 font-mono">#{selectedPayment.receiptId || selectedPayment.id.slice(0, 8).toUpperCase()}</p>
                   </div>

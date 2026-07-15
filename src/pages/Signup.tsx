@@ -1092,8 +1092,8 @@ export default function Signup() {
         className="w-full max-w-[320px] sm:max-w-[360px] relative z-10"
       >
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-emerald-600/20 rotate-3 transform hover:rotate-0 transition-transform duration-500">
-            <ShieldIcon size={32} strokeWidth={2.5} />
+          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-slate-900/5 rotate-3 transform hover:rotate-0 transition-transform duration-500 border border-slate-100 overflow-hidden">
+            <img src="/logo.png" className="w-full h-full object-contain p-1" alt="Logo" referrerPolicy="no-referrer" />
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-tight mb-2">
             {t('common.appName')}
@@ -1220,15 +1220,7 @@ export default function Signup() {
                      {language === 'am' ? 'የይለፍ ቃል ቢያንስ 8 ፊደላት፣ አቢይ ሆሄ፣ ቁጥር እና ልዩ ምልክት (@$!%*?&) ሊኖረው ይገባል።' : 'Password must be at least 8 characters with a capital letter, number & special char (@$!%*?&)'}
                   </p>
                   
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-                    <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest"><span className="bg-white px-4 text-slate-300">{t('common.or')}</span></div>
-                  </div>
 
-                  <button onClick={handleGoogleSignup} type="button" className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 py-4 rounded-2xl font-black text-slate-600 text-[12px] uppercase tracking-wider transition-all hover:bg-slate-50 shadow-sm active:scale-[0.98]">
-                    <Chrome className="w-5 h-5 text-emerald-600" />
-                    {language === 'am' ? 'በጎግል ይመዝገቡ' : 'Sign up with Google'}
-                  </button>
 
                   {/* Dynamic Custom Fields */}
                   {systemSettings.signupCustomFields?.map((field: any) => (

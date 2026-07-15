@@ -5,10 +5,12 @@ import './index.css';
 
 // Suppress ResizeObserver and benign WebSocket errors from triggering error overlays
 window.addEventListener('error', (e) => {
+  const msg = e.message || '';
   if (
-    e.message.includes('ResizeObserver') || 
-    e.message === 'Script error.' ||
-    e.message.toLowerCase().includes('websocket')
+    msg.includes('ResizeObserver') || 
+    msg === 'Script error.' ||
+    msg.toLowerCase().includes('websocket') ||
+    msg.includes('Cannot set property fetch')
   ) {
     e.stopImmediatePropagation();
     e.preventDefault();
@@ -17,7 +19,10 @@ window.addEventListener('error', (e) => {
 
 window.addEventListener('unhandledrejection', (e) => {
   const reasonStr = e.reason ? String(e.reason.message || e.reason) : '';
-  if (reasonStr.toLowerCase().includes('websocket')) {
+  if (
+    reasonStr.toLowerCase().includes('websocket') ||
+    reasonStr.includes('Cannot set property fetch')
+  ) {
     e.stopImmediatePropagation();
     e.preventDefault();
   }
