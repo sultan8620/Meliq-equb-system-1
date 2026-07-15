@@ -159,6 +159,7 @@ export default function Signup() {
     fullName: '', phone: '', password: '', confirmPassword: '',
     birthCountry: 'ኢትዮጵያ', birthRegion: 'አዲስ አበባ', birthZone: '', birthWoreda: '', birthKebele: '',
     birthYear: '1990', birthMonth: '1', birthDay: '1', calendarType: 'GC',
+    ethBirthYear: '1982', ethBirthMonth: '4', ethBirthDay: '23',
     jobTitle: '',
     ekubType: '',
     addressCountry: 'ኢትዮጵያ', addressRegion: 'አዲስ አበባ', addressZone: '', addressWoreda: '', addressKebele: '', addressHouseNumber: '',
@@ -341,52 +342,89 @@ export default function Signup() {
   const totalPayoutPerSlot = finalAmount * multiplier * formData.memberLimit;
   const totalCyclePayment = totalPerSlot * multiplier * formData.memberLimit * formData.slots;
 
-  // Age and Ethiopian Date Calculation
+  // Age and Ethiopian Date Calculation (Fully synchronized)
   const birthInfo = useMemo(() => {
-    const y = parseInt(formData.birthYear);
-    const m = parseInt(formData.birthMonth);
-    const d = parseInt(formData.birthDay);
+    const gcY = parseInt(formData.birthYear);
+    const gcM = parseInt(formData.birthMonth);
+    const gcD = parseInt(formData.birthDay);
 
-    if (isNaN(y) || isNaN(m) || isNaN(d)) return { age: 0, ethDate: '', gcDate: '' };
+    const ecY = parseInt(formData.ethBirthYear);
+    const ecM = parseInt(formData.ethBirthMonth);
+    const ecD = parseInt(formData.ethBirthDay);
+
+    if (isNaN(gcY) || isNaN(gcM) || isNaN(gcD)) return { age: 0, ethDate: '', gcDate: '' };
 
     const today = new Date();
     let age = 0;
-    let ethDateStr = '';
-    let gcDateStr = '';
-
-    if (formData.calendarType === 'GC') {
-      // GC Calculation
-      const birth = new Date(y, m - 1, d);
-      if (isNaN(birth.getTime())) return { age: 0, ethDate: '', gcDate: '' };
-      
+    
+    // Calculate age using GC for absolute precision
+    const birth = new Date(gcY, gcM - 1, gcD);
+    if (!isNaN(birth.getTime())) {
       age = today.getFullYear() - birth.getFullYear();
       const monthDiff = today.getMonth() - birth.getMonth();
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
-      
-      gcDateStr = birth.toISOString().split('T')[0];
-      try {
-        const eth = ethDateTime.fromEuropeanDate(birth);
-        ethDateStr = `${eth.date}/${eth.month}/${eth.year}`;
-      } catch (e) {
-        ethDateStr = 'ስህተት';
-      }
-    } else {
-      // EC Calculation
-      try {
-        const todayEth = ethDateTime.fromEuropeanDate(today);
-        age = todayEth.year - y;
-        if (todayEth.month < m || (todayEth.month === m && todayEth.date < d)) age--;
-        
-        ethDateStr = `${d}/${m}/${y}`;
-        const gc = ethDateTime.toEuropeanDate(y, m, d);
-        gcDateStr = gc.toISOString().split('T')[0];
-      } catch (e) {
-        return { age: 0, ethDate: 'ስህተት', gcDate: '' };
-      }
     }
 
+    const ethDateStr = !isNaN(ecY) && !isNaN(ecM) && !isNaN(ecD) ? `${ecD}/${ecM}/${ecY}` : '';
+    const gcDateStr = !isNaN(gcY) && !isNaN(gcM) && !isNaN(gcD) ? `${gcY}-${String(gcM).padStart(2, '0')}-${String(gcD).padStart(2, '0')}` : '';
+
     return { age, ethDate: ethDateStr, gcDate: gcDateStr };
-  }, [formData.birthYear, formData.birthMonth, formData.birthDay, formData.calendarType]);
+  }, [formData.birthYear, formData.birthMonth, formData.birthDay, formData.ethBirthYear, formData.ethBirthMonth, formData.ethBirthDay]);
+
+  const updateECDate = (field: 'year' | 'month' | 'day', value: string) => {
+    setFormData(prev => {
+      const next = { ...prev };
+      if (field === 'year') next.ethBirthYear = value;
+      if (field === 'month') next.ethBirthMonth = value;
+      if (field === 'day') next.ethBirthDay = value;
+
+      const y = parseInt(next.ethBirthYear);
+      const m = parseInt(next.ethBirthMonth);
+      const d = parseInt(next.ethBirthDay);
+
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        try {
+          const gc = ethDateTime.toEuropeanDate(y, m, d);
+          if (gc && !isNaN(gc.getTime())) {
+            next.birthYear = String(gc.getFullYear());
+            next.birthMonth = String(gc.getMonth() + 1);
+            next.birthDay = String(gc.getDate());
+          }
+        } catch (e) {
+          console.error("Error converting EC to GC:", e);
+        }
+      }
+      return next;
+    });
+  };
+
+  const updateGCDate = (field: 'year' | 'month' | 'day', value: string) => {
+    setFormData(prev => {
+      const next = { ...prev };
+      if (field === 'year') next.birthYear = value;
+      if (field === 'month') next.birthMonth = value;
+      if (field === 'day') next.birthDay = value;
+
+      const y = parseInt(next.birthYear);
+      const m = parseInt(next.birthMonth);
+      const d = parseInt(next.birthDay);
+
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        try {
+          const birth = new Date(y, m - 1, d);
+          if (!isNaN(birth.getTime())) {
+            const eth = ethDateTime.fromEuropeanDate(birth);
+            next.ethBirthYear = String(eth.year);
+            next.ethBirthMonth = String(eth.month);
+            next.ethBirthDay = String(eth.date);
+          }
+        } catch (e) {
+          console.error("Error converting GC to EC:", e);
+        }
+      }
+      return next;
+    });
+  };
 
   // Sync birthDate for backend
   useEffect(() => {
@@ -396,55 +434,7 @@ export default function Signup() {
   }, [birthInfo.gcDate]);
 
   const toggleCalendarType = (targetType: 'GC' | 'EC') => {
-    if (targetType === formData.calendarType) return;
-
-    const y = parseInt(formData.birthYear);
-    const m = parseInt(formData.birthMonth);
-    const d = parseInt(formData.birthDay);
-
-    if (isNaN(y) || isNaN(m) || isNaN(d)) {
-      setFormData(prev => ({ ...prev, calendarType: targetType }));
-      return;
-    }
-
-    if (targetType === 'EC') {
-      // Convert current GC values to EC
-      try {
-        const birth = new Date(y, m - 1, d);
-        if (!isNaN(birth.getTime())) {
-          const eth = ethDateTime.fromEuropeanDate(birth);
-          setFormData(prev => ({
-            ...prev,
-            calendarType: 'EC',
-            birthYear: String(eth.year),
-            birthMonth: String(eth.month),
-            birthDay: String(eth.date)
-          }));
-        } else {
-          setFormData(prev => ({ ...prev, calendarType: 'EC' }));
-        }
-      } catch (e) {
-        setFormData(prev => ({ ...prev, calendarType: 'EC' }));
-      }
-    } else {
-      // Convert current EC values to GC
-      try {
-        const gc = ethDateTime.toEuropeanDate(y, m, d);
-        if (gc && !isNaN(gc.getTime())) {
-          setFormData(prev => ({
-            ...prev,
-            calendarType: 'GC',
-            birthYear: String(gc.getFullYear()),
-            birthMonth: String(gc.getMonth() + 1),
-            birthDay: String(gc.getDate())
-          }));
-        } else {
-          setFormData(prev => ({ ...prev, calendarType: 'GC' }));
-        }
-      } catch (e) {
-        setFormData(prev => ({ ...prev, calendarType: 'GC' }));
-      }
-    }
+    setFormData(prev => ({ ...prev, calendarType: targetType }));
   };
 
   const groupCreationInstance = useRef<string>('');
@@ -1231,29 +1221,57 @@ export default function Signup() {
 
               {stepConfig[step - 1]?.id === 'birthplace' && (
                 <div className="space-y-6">
-                  <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl">
-                    <button onClick={() => toggleCalendarType('GC')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.calendarType === 'GC' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>International (GC)</button>
-                    <button onClick={() => toggleCalendarType('EC')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.calendarType === 'EC' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>Ethiopian (EC)</button>
+                  {/* Ethiopian Calendar Date Selection */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-emerald-700 uppercase tracking-wider ml-1">
+                      {language === 'am' ? 'የኢትዮጵያ ዘመን አቆጣጠር (Ethiopian Calendar)' : 'Ethiopian Calendar (EC)'}
+                    </label>
+                    <div className="grid grid-cols-3 gap-3 p-5 bg-emerald-50/40 border border-emerald-100/50 rounded-2xl">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ቀን' : 'Day'}</label>
+                        <select value={formData.ethBirthDay} onChange={(e) => updateECDate('day', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
+                          {Array.from({length: formData.ethBirthMonth === '13' ? 6 : 30}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2 col-span-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ወር' : 'Month'}</label>
+                        <select value={formData.ethBirthMonth} onChange={(e) => updateECDate('month', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
+                          {MONTHS_ETH.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ዓመት' : 'Year'}</label>
+                        <select value={formData.ethBirthYear} onChange={(e) => updateECDate('year', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
+                          {Array.from({length: 100}, (_, i) => 2017 - i).map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 p-6 bg-slate-50 border border-slate-100 rounded-[2rem]">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ቀን' : 'Day'}</label>
-                       <select value={formData.birthDay} onChange={(e) => setFormData({...formData, birthDay: e.target.value})} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
-                         {Array.from({length: (formData.calendarType === 'EC' && formData.birthMonth === '13') ? 6 : 31}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
-                       </select>
-                    </div>
-                    <div className="space-y-2 col-span-1">
-                       <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ወር' : 'Month'}</label>
-                       <select value={formData.birthMonth} onChange={(e) => setFormData({...formData, birthMonth: e.target.value})} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
-                         {(formData.calendarType === 'GC' ? MONTHS_GC : MONTHS_ETH).map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                       </select>
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ዓመት' : 'Year'}</label>
-                       <select value={formData.birthYear} onChange={(e) => setFormData({...formData, birthYear: e.target.value})} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
-                         {Array.from({length: 100}, (_, i) => (formData.calendarType === 'GC' ? 2024 : 2017) - i).map(y => <option key={y} value={y}>{y}</option>)}
-                       </select>
+                  {/* Gregorian Calendar Date Selection */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-700 uppercase tracking-wider ml-1">
+                      {language === 'am' ? 'የፈረንጆች ዘመን አቆጣጠር (Gregorian Calendar)' : 'Gregorian Calendar (GC)'}
+                    </label>
+                    <div className="grid grid-cols-3 gap-3 p-5 bg-slate-50 border border-slate-100 rounded-2xl">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ቀን' : 'Day'}</label>
+                        <select value={formData.birthDay} onChange={(e) => updateGCDate('day', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
+                          {Array.from({length: 31}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2 col-span-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ወር' : 'Month'}</label>
+                        <select value={formData.birthMonth} onChange={(e) => updateGCDate('month', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
+                          {MONTHS_GC.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ዓመት' : 'Year'}</label>
+                        <select value={formData.birthYear} onChange={(e) => updateGCDate('year', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
+                          {Array.from({length: 100}, (_, i) => 2024 - i).map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </div>
                     </div>
                   </div>
                   
