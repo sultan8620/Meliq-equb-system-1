@@ -6,7 +6,7 @@ import { User, Mail, Lock, MapPin, Phone, Calendar, DollarSign, FileText, CheckC
 import { auth, db } from '../firebase';
 import { useLanguage } from '../lib/LanguageContext';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, increment, addDoc, orderBy, serverTimestamp, onSnapshot, deleteDoc } from 'firebase/firestore';
-import { ethDateTime } from 'ethiopian-date';
+import ethiopianDate from 'ethiopian-date';
 
 const calculateDuration = (memberLimit: number, frequency: string, language: string) => {
   let multiplier = 1;
@@ -384,11 +384,11 @@ export default function Signup() {
 
       if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
         try {
-          const gc = ethDateTime.toEuropeanDate(y, m, d);
-          if (gc && !isNaN(gc.getTime())) {
-            next.birthYear = String(gc.getFullYear());
-            next.birthMonth = String(gc.getMonth() + 1);
-            next.birthDay = String(gc.getDate());
+          const gc = ethiopianDate.toGregorian(y, m, d);
+          if (gc && gc.length === 3) {
+            next.birthYear = String(gc[0]);
+            next.birthMonth = String(gc[1]);
+            next.birthDay = String(gc[2]);
           }
         } catch (e) {
           console.error("Error converting EC to GC:", e);
