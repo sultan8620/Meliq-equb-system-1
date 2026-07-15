@@ -951,10 +951,10 @@ export default function Dashboard() {
 
   const handleSendPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentBank || !paymentCode || !paymentPayerName || !paymentPayerAccount || (receiptImages.length === 0)) {
+    if (!paymentBank || (!paymentCode && receiptImages.length === 0)) {
       triggerError(
         language === 'am' ? 'ያልተሟላ መረጃ' : 'Incomplete Info',
-        language === 'am' ? 'ባንክ፣ ኮድ፣ የከፋይ ስም፣ የከፋይ ሂሳብ ቁጥር እና የደረሳኝ ፎቶ መሞላት አለባቸው።' : 'Please provide all details including payer name and account.'
+        language === 'am' ? 'እባክዎ መጀመሪያ ባንክ ይምረጡ፤ ከዚያም የክፍያ ደረሰኝ ፎቶ ይስቀሉ ወይም የክፍያ ሊንክ ያስገቡ።' : 'Please select a bank, and either upload a receipt photo or enter a payment link.'
       );
       return;
     }
@@ -971,10 +971,10 @@ export default function Dashboard() {
         groupName: group?.name || 'Unknown Group',
         amount: calculatedAmount,
         bank: paymentBank,
-        payerName: paymentPayerName,
-        payerAccount: paymentPayerAccount,
-        transactionCode: paymentCode,
-        receiptImages: receiptImages,
+        payerName: '',
+        payerAccount: '',
+        transactionCode: paymentCode || '',
+        receiptImages: receiptImages || [],
         status: 'pending',
         createdAt: serverTimestamp()
       });
@@ -1662,10 +1662,10 @@ export default function Dashboard() {
   const handleContribute = async () => {
     if (!user || !userData || !group) return;
     
-    if (!receiptImage || !paymentCode || !paymentBank || !paymentPayerName || !paymentPayerAccount) {
+    if (!paymentBank || (!receiptImage && !paymentCode)) {
       triggerError(
         language === 'am' ? 'ያልተሟላ መረጃ' : 'Incomplete Info',
-        language === 'am' ? 'እባክዎ የክፍያ ፎቶ፣ ኮድ፣ ባንክ እና የከፋይ መረጃ ያስገቡ።' : 'Please upload receipt, enter code, bank and payer details.'
+        language === 'am' ? 'እባክዎ መጀመሪያ ባንክ ይምረጡ፤ ከዚያም የክፍያ ደረሰኝ ፎቶ ይስቀሉ ወይም የክፍያ ሊንክ ያስገቡ።' : 'Please select a bank, and either upload a receipt photo or enter a payment link.'
       );
       return;
     }
@@ -1685,10 +1685,10 @@ export default function Dashboard() {
         status: systemSettings.autoApprove ? 'approved' : 'pending',
         type: 'contribution',
         bank: paymentBank,
-        payerName: paymentPayerName,
-        payerAccount: paymentPayerAccount,
-        receiptImage: receiptImage,
-        transactionCode: paymentCode,
+        payerName: '',
+        payerAccount: '',
+        receiptImage: receiptImage || '',
+        transactionCode: paymentCode || '',
         receiptId: generatedReceiptId,
         createdAt: serverTimestamp()
       });
@@ -2385,38 +2385,16 @@ export default function Dashboard() {
                  </select>
               </div>
 
-              <div className="mb-4">
-                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{language === 'am' ? 'የከፋይ ስም' : 'Payer Name'}</label>
-                 <input 
-                   type="text"
-                   value={paymentPayerName}
-                   onChange={(e) => setPaymentPayerName(e.target.value)}
-                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
-                   placeholder={language === 'am' ? 'ስም ያስገቡ...' : 'Enter name...'}
-                 />
-              </div>
-
-              <div className="mb-4">
-                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{language === 'am' ? 'የከፋይ ሂሳብ ቁጥር' : 'Payer Account Number'}</label>
-                 <input 
-                   type="text"
-                   value={paymentPayerAccount}
-                   onChange={(e) => setPaymentPayerAccount(e.target.value)}
-                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
-                   placeholder={language === 'am' ? 'ሂሳብ ቁጥር...' : 'Enter account...'}
-                 />
-              </div>
-
-              <div className="mb-6">
-                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{language === 'am' ? 'ትራንዛክሽን ኮድ' : 'Transaction Code'}</label>
-                 <input 
-                   type="text"
-                   value={paymentCode}
-                   onChange={(e) => setPaymentCode(e.target.value)}
-                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
-                   placeholder={language === 'am' ? 'ኮድ ያስገቡ...' : 'Enter code...'}
-                 />
-              </div>
+                             <div className="mb-6">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{language === 'am' ? 'የከፈሉበት ሊንክ ወይም ኮድ (ከተገኘ)' : 'Payment Link or Code (Optional if uploading receipt)'}</label>
+                  <input 
+                    type="text"
+                    value={paymentCode}
+                    onChange={(e) => setPaymentCode(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder={language === 'am' ? 'የክፍያ ሊንክ ወይም የማስተላለፊያ ኮድ...' : 'Enter payment link URL or code...'}
+                  />
+               </div>
 
               <div className="mb-8">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('dashboard.receipt_label')}</label>
@@ -4046,46 +4024,19 @@ export default function Dashboard() {
                     </div>
                  </div>
                  
-                 {/* Transaction Code */}
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">{language === 'am' ? 'ትራንዛክሽን ኮድ' : 'Transaction Code'}</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={paymentCode}
-                      onChange={(e) => setPaymentCode(e.target.value)}
-                      placeholder={language === 'am' ? 'ትራንዛክሽን ኮድ ያስገቡ' : 'Enter transaction code'}
-                      className="w-full h-14 bg-slate-50 border border-slate-200 rounded-2xl px-5 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-slate-200 outline-none" 
-                    />
-                 </div>
+                                   {/* Payment Link or Code */}
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">{language === 'am' ? 'የክፍያ ሊንክ ወይም ኮድ (ከተገኘ)' : 'Payment Link or Code (Optional if uploading receipt)'}</label>
+                     <input 
+                       type="text" 
+                       value={paymentCode}
+                       onChange={(e) => setPaymentCode(e.target.value)}
+                       placeholder={language === 'am' ? 'የክፍያ ሊንክ ወይም የማስተላለፊያ ኮድ ያስገቡ' : 'Enter payment link URL or transaction code'}
+                       className="w-full h-14 bg-slate-50 border border-slate-200 rounded-2xl px-5 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-slate-200 outline-none" 
+                     />
+                  </div>
 
-                 {/* Payer Account Name */}
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">{language === 'am' ? 'የከፋይ ስም' : 'Payer Name'}</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={paymentPayerName}
-                      onChange={(e) => setPaymentPayerName(e.target.value)}
-                      placeholder={language === 'am' ? 'የከፋይ ስም ያስገቡ' : 'Enter payer name'}
-                      className="w-full h-14 bg-slate-50 border border-slate-200 rounded-2xl px-5 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-slate-200 outline-none" 
-                    />
-                 </div>
-
-                 {/* Payer Account Number */}
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">{language === 'am' ? 'የከፋይ ሂሳብ ቁጥር' : 'Payer Account Number'}</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={paymentPayerAccount}
-                      onChange={(e) => setPaymentPayerAccount(e.target.value)}
-                      placeholder={language === 'am' ? 'የከፋይ ሂሳብ ቁጥር ያስገቡ' : 'Enter payer account number'}
-                      className="w-full h-14 bg-slate-50 border border-slate-200 rounded-2xl px-5 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-slate-200 outline-none" 
-                    />
-                 </div>
-
-                 {/* Screenshot / File Upload */}
+                  {/* Screenshot / File Upload */}
                  <div className="space-y-4">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">{language === 'am' ? 'የክፍያ ማረጋገጫ ፎቶዎች' : 'Payment Receipt Screenshots'}</label>
                     <div className="flex flex-wrap gap-4">
