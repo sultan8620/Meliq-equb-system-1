@@ -5,7 +5,7 @@ import Marketplace from '../components/Marketplace';
 import { jsPDF } from 'jspdf';
 import * as htmlToImage from 'html-to-image';
 import { useAuth } from '../components/FirebaseProvider';
-import { signOut, updatePassword } from 'firebase/auth';
+import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import QRCode from 'react-qr-code';
 import Barcode from 'react-barcode';
 import { auth, db, handleFirestoreError as logFirestoreError, OperationType, FirestoreErrorInfo } from '../firebase';
@@ -622,13 +622,17 @@ export default function Dashboard() {
   const [showDeletionRequestModal, setShowDeletionRequestModal] = useState(false);
   const [deletionReason, setDeletionReason] = useState('financial');
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
-  const [changePasswordForm, setChangePasswordForm] = useState({ newPassword: '', confirmPassword: '' });
+  const [changePasswordForm, setChangePasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [upcomingDraws, setUpcomingDraws] = useState<any[]>([]);
   const [drawWinners, setDrawWinners] = useState<any[]>([]);
 
   const handleUpdatePassword = async () => {
     if (!auth.currentUser) return;
+    if (!changePasswordForm.currentPassword) {
+      triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'እባክዎ የአሁኑን የይለፍ ቃል ያስገቡ' : 'Please enter your current password');
+      return;
+    }
     if (changePasswordForm.newPassword !== changePasswordForm.confirmPassword) {
       triggerError(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'የይለፍ ቃሎቹ አይመሳሰሉም' : 'Passwords do not match');
       return;
@@ -638,14 +642,25 @@ export default function Dashboard() {
       return;
     }
     try {
+      const userEmail = auth.currentUser.email;
+      if (userEmail) {
+        const credential = EmailAuthProvider.credential(userEmail, changePasswordForm.currentPassword);
+        await reauthenticateWithCredential(auth.currentUser, credential);
+      }
       await updatePassword(auth.currentUser, changePasswordForm.newPassword);
       triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የይለፍ ቃል ተቀይሯል። እባክዎ እንደገና ይግቡ' : 'Password updated. Please log in again.');
+      setChangePasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowChangePasswordModal(false);
       setTimeout(async () => {
         await signOut(auth);
         window.location.href = '/login';
       }, 2000);
     } catch (error: any) {
-      triggerError(language === 'am' ? 'ስህተት' : 'Error', error.message || (language === 'am' ? 'የይለፍ ቃል መቀየር አልተሳካም' : 'Failed to update password'));
+      let errorMessage = error.message;
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = language === 'am' ? 'የገባው የአሁኑ የይለፍ ቃል የተሳሳተ ነው' : 'The current password you entered is incorrect';
+      }
+      triggerError(language === 'am' ? 'ስህተት' : 'Error', errorMessage || (language === 'am' ? 'የይለፍ ቃል መቀየር አልተሳካም' : 'Failed to update password'));
     }
   };
 
@@ -2212,12 +2227,23 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-6 mb-10">
                   <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">{language === 'am' ? 'የአሁኑ የይለፍ ቃል' : 'Current Password'}</label>
+                    <input 
+                      type="password" 
+                      value={changePasswordForm.currentPassword} 
+                      onChange={(e) => setChangePasswordForm({...changePasswordForm, currentPassword: e.target.value})} 
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                      placeholder={language === 'am' ? 'የአሁኑን የይለፍ ቃል ያስገቡ...' : 'Enter current password...'}
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">{language === 'am' ? 'አዲስ የይለፍ ቃል' : 'New Password'}</label>
                     <input 
                       type="password" 
                       value={changePasswordForm.newPassword} 
                       onChange={(e) => setChangePasswordForm({...changePasswordForm, newPassword: e.target.value})} 
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                      placeholder={language === 'am' ? 'አዲስ የይለፍ ቃል ያስገቡ...' : 'Enter new password...'}
                     />
                   </div>
                   <div className="space-y-2">
@@ -2227,6 +2253,7 @@ export default function Dashboard() {
                       value={changePasswordForm.confirmPassword} 
                       onChange={(e) => setChangePasswordForm({...changePasswordForm, confirmPassword: e.target.value})} 
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                      placeholder={language === 'am' ? 'አዲሱን የይለፍ ቃል ያረጋግጡ...' : 'Confirm new password...'}
                     />
                   </div>
                 </div>
