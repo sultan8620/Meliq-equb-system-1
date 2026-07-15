@@ -679,7 +679,6 @@ export default function Dashboard() {
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [changePasswordForm, setChangePasswordForm] = useState({ newPassword: '', confirmPassword: '' });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [unreadChat, setUnreadChat] = useState(false);
   const [upcomingDraws, setUpcomingDraws] = useState<any[]>([]);
   const [drawWinners, setDrawWinners] = useState<any[]>([]);
 
@@ -725,7 +724,8 @@ export default function Dashboard() {
 
   const [isOnline, setIsOnline] = useState(true);
   const [showContributeModal, setShowContributeModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [activeTab, setActiveTab] = useState<string>('overview'); 
+ const [chatSubTab, setChatSubTab] = useState<'group' | 'admin'>('group');
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [membersFilter, setMembersFilter] = useState<'all' | 'winners' | 'active'>('all');
   const [showGuarantorInfoModal, setShowGuarantorInfoModal] = useState(false);
@@ -810,7 +810,6 @@ export default function Dashboard() {
   }, [messages, user?.uid, language]);
 
   const [newMessage, setNewMessage] = useState('');
-  const [chatSubTab, setChatSubTab] = useState<'group' | 'admin'>('group');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -828,7 +827,7 @@ export default function Dashboard() {
   }, [drawWinners]);
 
   const activeMessages = useMemo(() => {
-    if (chatSubTab === 'group') {
+    if (false) {
       return messages.filter(m => m.groupId === userData?.groupId || m.targetType === 'all');
     } else {
       return messages.filter(m => m.targetType === 'private' && (m.targetUserId === user?.uid || m.senderId === user?.uid));
@@ -1064,7 +1063,6 @@ export default function Dashboard() {
   };
   useEffect(() => {
     if (activeTab === 'chat') {
-      setUnreadChat(false);
       setTimeout(() => {
         if (chatEndRef.current) {
           chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -1567,7 +1565,6 @@ export default function Dashboard() {
               }
               // Check if unread
               if (snapshot.docChanges().some(change => change.type === 'added') && activeTab !== 'chat') {
-                 setUnreadChat(true);
               }
 
               setMessages(msgs.sort((a: any, b: any) => {
@@ -1873,12 +1870,6 @@ export default function Dashboard() {
     { 
       group: language === 'am' ? 'ግንኙነት' : 'Communication', 
       items: [
-        { 
-          id: 'chat', 
-          label: language === 'am' ? 'የቡድን ውይይት' : t('menu.user.chat'), 
-          icon: MessageCircle,
-          description: language === 'am' ? 'ከአባላት ጋ መወያያ' : 'Group chat / discussion'
-        },
         { 
           id: 'notifications', 
           label: language === 'am' ? 'ማሳወቂያዎች' : t('menu.user.notifications'), 
@@ -2189,14 +2180,10 @@ export default function Dashboard() {
                   return (
                     <div key={tab.id}>
                       <button 
-                        onClick={() => { setActiveTab(tab.id as any); if(tab.id === 'chat') setUnreadChat(false); }}
                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all relative group ${isActive ? 'bg-slate-900 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
                       >
                         <Icon size={18} className={isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-indigo-500'} />
                         <span className="text-[15px] md:text-[16px] font-black uppercase tracking-wide hidden md:block truncate flex-1 text-left">{tab.label}</span>
-                        {tab.id === 'chat' && unreadChat && !isActive && (
-                          <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-rose-500 shadow-[0_0_8px_rgba(225,29,72,0.8)] rounded-full animate-pulse" />
-                        )}
                         {tab.badge !== undefined && (
                           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md hidden md:block ${isActive ? 'bg-indigo-500 text-white' : 'bg-gold-500 text-white animate-pulse'}`}>
                             {tab.badge}
@@ -3076,7 +3063,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-2 bg-slate-50/50 rounded-[2rem] border border-slate-100/50">
+                   <div className="grid grid-cols-3 lg:grid-cols-3 gap-4 p-2 bg-slate-50/50 rounded-[2rem] border border-slate-100/50">
                      <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                         <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><DollarSign size={16} /></div>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'መክፈያ መጠን' : 'Base Amount'}</p>
@@ -3102,19 +3089,12 @@ export default function Dashboard() {
               </div>
               
               {/* Quick Actions */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 lg:grid-cols-3 gap-4">
                  <button onClick={() => setActiveTab('members')} className="bg-white hover:-translate-y-1 transition-all p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 group text-slate-500 hover:text-indigo-600 border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-xl hover:shadow-indigo-500/10 cursor-pointer">
                     <div className="w-14 h-14 rounded-[1rem] bg-indigo-50/50 flex items-center justify-center text-indigo-500 group-hover:scale-110 group-hover:bg-indigo-100 transition-all">
                        <Users size={24} strokeWidth={2.5} />
                     </div>
                     <span className="text-xs font-black tracking-widest uppercase">{language === 'am' ? 'አባላት' : 'Members'}</span>
-                 </button>
-                 <button onClick={() => setActiveTab('chat')} className="bg-white hover:-translate-y-1 transition-all p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 group text-slate-500 hover:text-rose-600 border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-xl hover:shadow-rose-500/10 cursor-pointer">
-                    <div className="w-14 h-14 rounded-[1rem] bg-rose-50/50 flex items-center justify-center text-rose-500 group-hover:scale-110 group-hover:bg-rose-100 transition-all relative">
-                       <MessageCircle size={24} strokeWidth={2.5} />
-                       {unreadChat && <span className="absolute top-2 right-2 w-3 h-3 bg-rose-500 rounded-full border-2 border-white" />}
-                    </div>
-                    <span className="text-xs font-black tracking-widest uppercase">{language === 'am' ? 'ውይይት' : 'Chat'}</span>
                  </button>
                  <button onClick={() => setActiveTab('payments')} className="bg-white hover:-translate-y-1 transition-all p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 group text-slate-500 hover:text-emerald-600 border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-xl hover:shadow-emerald-500/10 cursor-pointer">
                     <div className="w-14 h-14 rounded-[1rem] bg-emerald-50/50 flex items-center justify-center text-emerald-500 group-hover:scale-110 group-hover:bg-emerald-100 transition-all">
@@ -4856,262 +4836,6 @@ export default function Dashboard() {
             </motion.div>
           )}
 
-          {activeTab === 'chat' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[700px] relative max-w-4xl mx-auto"
-            >
-              {/* Header */}
-              <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-slate-50 relative overflow-hidden shrink-0 gap-4">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px] -translate-x-1/2 -translate-y-1/2" />
-                <div className="flex items-center gap-5 relative z-10 w-full sm:w-auto overflow-x-auto no-scrollbar pb-2 sm:pb-0">
-                  <button 
-                    onClick={() => setChatSubTab('group')}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all whitespace-nowrap min-w-max ${
-                      chatSubTab === 'group' 
-                        ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 shadow-inner' 
-                        : 'bg-white hover:bg-slate-100 text-slate-500 border border-slate-200'
-                    }`}
-                  >
-                    <MessageSquare size={18} />
-                    <div>
-                      <h3 className={`text-base font-black tracking-tight leading-none mb-1 ${chatSubTab === 'group' ? 'text-white' : 'text-slate-700'}`}>
-                        {language === 'am' ? 'የቡድን ውይይት' : 'Group Chat'}
-                      </h3>
-                      <p className={`text-[9px] font-black uppercase tracking-widest ${chatSubTab === 'group' ? 'text-indigo-200' : 'text-slate-400'}`}>
-                        {userData?.groupId ? 'Group ' + userData.groupId : (language === 'am' ? 'ከአባላት ጋር' : 'With members')}
-                      </p>
-                    </div>
-                  </button>
-                  
-                  <button 
-                    onClick={() => setChatSubTab('admin')}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all whitespace-nowrap min-w-max ${
-                      chatSubTab === 'admin' 
-                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20 shadow-inner' 
-                        : 'bg-white hover:bg-slate-100 text-slate-500 border border-slate-200'
-                    }`}
-                  >
-                    <ShieldCheck size={18} />
-                    <div>
-                      <h3 className={`text-base font-black tracking-tight leading-none mb-1 ${chatSubTab === 'admin' ? 'text-white' : 'text-slate-700'}`}>
-                        {language === 'am' ? 'ለአድሚን መልዕክት' : 'Admin Chat'}
-                      </h3>
-                      <p className={`text-[9px] font-black uppercase tracking-widest ${chatSubTab === 'admin' ? 'text-rose-200' : 'text-slate-400'}`}>
-                        {language === 'am' ? 'ከአድሚን ጋር የብቻ' : 'Direct Message'}
-                      </p>
-                    </div>
-                  </button>
-                </div>
-                <div className="relative z-10 flex items-center gap-2 self-end sm:self-auto shrink-0 mt-[-20px] sm:mt-0">
-                   <div className="px-3 py-2 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-2 shadow-sm">
-                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                     <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{language === 'am' ? 'በመስመር ላይ' : 'Online'}</span>
-                   </div>
-                </div>
-              </div>
-
-              {/* Chat Area */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar bg-slate-50/50">
-                {activeMessages.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center opacity-40">
-                    <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                      <MessageCircle size={32} className="text-slate-400" />
-                    </div>
-                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">
-                      {language === 'am' ? 'ምንም መልእክት የለም' : 'No messages'}
-                    </h4>
-                    <p className="text-xs text-slate-500 font-medium max-w-[200px]">
-                      {language === 'am' ? 'የመጀመሪያውን መልእክት አሁን ይላኩ።' : 'Be the first to send a message.'}
-                    </p>
-                  </div>
-                ) : (
-                  activeMessages.map((msg, idx) => {
-                    const isMe = msg.senderId === user?.uid;
-                    const isAdmin = msg.senderRole === 'admin' || msg.senderRole === 'super_admin';
-                    
-                    return (
-                      <motion.div 
-                        key={msg.id} 
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                      >
-                        <div className={`flex flex-col mb-1.5 px-2 w-full ${isMe ? 'items-end' : 'items-start'}`}>
-                           {!isMe && (
-                             <div className={`text-[9px] font-black uppercase flex items-center gap-1 mt-2 tracking-widest ${isAdmin ? 'text-indigo-600' : 'text-slate-400'}`}>
-                               {isAdmin ? <ShieldCheck size={10} className="inline mr-0.5" /> : null}
-                               {isAdmin ? 'Admin' : msg.senderName}
-                               {msg.targetType === 'all' && <span className="bg-rose-500 text-white px-1.5 py-0.5 rounded-md text-[7px] ml-1 shadow-sm">All</span>}
-                               {msg.targetType === 'private' && <span className="bg-indigo-500 text-white px-1.5 py-0.5 rounded-md text-[7px] ml-1 shadow-sm">Private</span>}
-                             </div>
-                           )}
-                           <div className={`flex items-center gap-2 ${isMe ? 'justify-end w-full' : ''}`}>
-                             {!isMe && (
-                               <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                 {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleTimeString('am-ET', {hour: '2-digit', minute:'2-digit'}) : ''}
-                                 {msg.isEdited && <span className="text-slate-300">(Edited)</span>}
-                               </span>
-                             )}
-                             {isMe && (
-                               <div className="flex items-center gap-2">
-                                 <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mr-1">
-                                   {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleTimeString('am-ET', {hour: '2-digit', minute:'2-digit'}) : ''}
-                                   {msg.isEdited && <span className="text-slate-300 ml-1">(Edited)</span>}
-                                 </span>
-                                 {!msg.audioUrl && (
-                                   <button 
-                                     onClick={() => { setEditingMessageId(msg.id); setNewMessage(msg.text || ''); }} 
-                                     className="flex items-center gap-1 p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-indigo-500 transition-colors shadow-sm"
-                                     title={language === 'am' ? 'ያስተካክሉ' : 'Edit'}
-                                   >
-                                     <Edit size={12} /> <span className="text-[9px] font-bold hidden sm:block uppercase">{language === 'am' ? 'ያስተካክሉ' : 'Edit'}</span>
-                                   </button>
-                                 )}
-                                 <button 
-                                   onClick={() => handleDeleteMessage(msg.id)} 
-                                   className="flex items-center gap-1 p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-rose-500 transition-colors shadow-sm"
-                                   title={language === 'am' ? 'ያጥፉ' : 'Delete'}
-                                 >
-                                   <Trash2 size={12} /> <span className="text-[9px] font-bold hidden sm:block uppercase">{language === 'am' ? 'ያጥፉ' : 'Delete'}</span>
-                                 </button>
-                               </div>
-                             )}
-                           </div>
-                        </div>
-
-                        <div className={`max-w-[85%] md:max-w-[75%] p-4 rounded-[1.5rem] text-[13px] leading-relaxed transition-all shadow-sm relative group/msg ${
-                          isMe 
-                            ? 'bg-slate-900 text-white rounded-tr-sm shadow-slate-900/10' 
-                            : isAdmin 
-                              ? 'bg-indigo-50 border border-indigo-100 text-indigo-900 rounded-tl-sm shadow-indigo-500/5' 
-                              : 'bg-white border border-slate-100 text-slate-700 rounded-tl-sm'
-                        }`}>
-                          {msg.audioUrl ? (
-                            <div className="flex items-center gap-3 min-w-[180px]">
-                               <button 
-                                 onClick={(e) => { 
-                                   const audio = e.currentTarget.parentElement?.querySelector('audio'); 
-                                   if (audio) audio.paused ? audio.play() : audio.pause(); 
-                                 }} 
-                                 className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                                   isMe ? 'bg-white/20 hover:bg-white/30' : 'bg-indigo-100 hover:bg-indigo-200 text-indigo-600'
-                                 }`}
-                               >
-                                 <Play size={14} fill="currentColor" />
-                               </button>
-                               <div className="flex-1 space-y-1">
-                                 <div className={`h-1.5 rounded-full w-full ${isMe ? 'bg-white/20' : 'bg-indigo-100'}`}>
-                                   <div className={`h-full rounded-full w-1/3 ${isMe ? 'bg-white' : 'bg-indigo-500'}`}></div>
-                                 </div>
-                                 <p className={`text-[8px] font-black uppercase tracking-widest ${isMe ? 'text-white/60' : 'text-indigo-400'}`}>Audio Message</p>
-                               </div>
-                               <audio src={msg.audioUrl} className="hidden" />
-                            </div>
-                          ) : msg.imageUrl ? (
-                            <div className="flex flex-col gap-2">
-                               <img src={msg.imageUrl} alt="Attachment" className="max-w-full h-auto rounded-xl max-h-48 object-cover border-2 border-white/10 cursor-pointer" onClick={() => setShowImagePreview(msg.imageUrl)} />
-                               <a href={msg.imageUrl} download={msg.fileName || 'image'} className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${isMe ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700'}`}>
-                                  <FileDown size={14} />
-                                  {language === 'am' ? 'አውርድ' : 'Download'}
-                               </a>
-                               {msg.text && msg.text !== '📸 ፎቶ (Image)' && <p className="font-medium whitespace-pre-wrap mt-2 pt-2 border-t border-white/10">{msg.text}</p>}
-                            </div>
-                          ) : msg.fileUrl ? (
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-3 min-w-[180px]">
-                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isMe ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-600'}`}>
-                                   <FileText size={18} />
-                                 </div>
-                                 <div className="flex-1 overflow-hidden">
-                                   <p className={`text-xs font-bold truncate ${isMe ? 'text-white' : 'text-slate-800'}`}>{msg.fileName || 'Document'}</p>
-                                   <p className={`text-[9px] uppercase tracking-widest mt-0.5 ${isMe ? 'text-white/60' : 'text-slate-500'}`}>File Attachment</p>
-                                 </div>
-                                 <a href={msg.fileUrl} download={msg.fileName || 'file'} className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isMe ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600'}`}>
-                                    <FileDown size={14} />
-                                 </a>
-                              </div>
-                              {msg.text && msg.text !== '📄 ፋይል (File)' && <p className="font-medium whitespace-pre-wrap mt-2 pt-2 border-t border-white/10">{msg.text}</p>}
-                            </div>
-                          ) : (
-                            <p className="font-medium whitespace-pre-wrap">{msg.text}</p>
-                          )}
-                        </div>
-                      </motion.div>
-                    );
-                  })
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              {/* Input Area */}
-              <form onSubmit={handleSendMessage} className="p-4 md:p-6 bg-white border-t border-slate-100 shrink-0 z-10">
-                <div className="flex gap-2 mb-3 px-1">
-                   <div className="relative">
-                     <input type="file" accept="image/*" onChange={(e) => handleFileSelect(e, 'image')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title={language === 'am' ? 'ፎቶ ላክ' : 'Send Image'} />
-                     <button type="button" className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors tooltip-trigger" title={language === 'am' ? 'ፎቶ' : 'Photo'}>
-                       <ImageIcon size={14} />
-                     </button>
-                   </div>
-                   <div className="relative">
-                     <input type="file" accept=".pdf,.doc,.docx,.txt" onChange={(e) => handleFileSelect(e, 'file')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title={language === 'am' ? 'ፋይል ላክ' : 'Send File'} />
-                     <button type="button" className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors tooltip-trigger" title={language === 'am' ? 'ፋይል' : 'Document'}>
-                       <Paperclip size={14} />
-                     </button>
-                   </div>
-                   <button type="button" onClick={() => triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ይህ አገልግሎት በቅርቡ ይመጣል' : 'Feature coming soon')} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors ml-auto tooltip-trigger" title={language === 'am' ? 'ድምጽ ጥሪ' : 'Voice Call'}>
-                     <PhoneCall size={14} />
-                   </button>
-                   <button type="button" onClick={() => triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ይህ አገልግሎት በቅርቡ ይመጣል' : 'Feature coming soon')} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors tooltip-trigger" title={language === 'am' ? 'ቪዲዮ ጥሪ' : 'Video Call'}>
-                     <VideoCall size={14} />
-                   </button>
-                </div>
-                <div className="bg-slate-50 p-2 rounded-2xl flex items-center gap-2 border border-slate-200 shadow-sm focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
-                    <button 
-                      type="button" 
-                      onMouseDown={() => { setIsRecording(true); startRecording(); }} 
-                      onMouseUp={() => { setIsRecording(false); stopRecording(); }}
-                      onTouchStart={() => { setIsRecording(true); startRecording(); }}
-                      onTouchEnd={() => { setIsRecording(false); stopRecording(); }}
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 ${
-                        isRecording 
-                          ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-110' 
-                          : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-100 hover:text-slate-600'
-                      }`}
-                    >
-                      <Mic size={18} className={isRecording ? 'animate-pulse' : ''} />
-                    </button>
-                    
-                    {editingMessageId && (
-                      <button 
-                        type="button" 
-                        onClick={() => { setEditingMessageId(null); setNewMessage(''); }} 
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-rose-500 border border-rose-100 bg-rose-50 hover:bg-rose-100 transition-colors shrink-0"
-                      >
-                        <XCircle size={18} />
-                      </button>
-                    )}
-                    
-                    <input 
-                      type="text" 
-                      value={newMessage} 
-                      onChange={(e) => setNewMessage(e.target.value)} 
-                      placeholder={editingMessageId ? (language === 'am' ? "መልእክት ያርሙ..." : "Edit message...") : (language === 'am' ? "መልእክት ይጻፉ..." : "Type a message...")} 
-                      className="flex-1 bg-transparent border-none px-3 py-2 text-sm font-medium text-slate-800 focus:outline-none placeholder:text-slate-400 placeholder:font-medium" 
-                    />
-                    
-                    <button 
-                      type="submit" 
-                      disabled={!newMessage.trim()} 
-                      className="w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed bg-slate-900 text-white hover:bg-slate-800 hover:shadow-lg hover:shadow-slate-900/20"
-                    >
-                      <Send size={16} className={`transform ${newMessage.trim() ? 'translate-x-0.5 -translate-y-0.5' : ''} transition-transform`} />
-                    </button>
-                </div>
-              </form>
-            </motion.div>
-          )}
           {activeTab === 'market' && (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -5930,7 +5654,6 @@ export default function Dashboard() {
           { id: 'home', icon: Home, label: language === 'am' ? 'ቤት' : 'Home' },
           { id: 'draws', icon: Zap, label: language === 'am' ? 'እጣ' : 'Draws' },
           { id: 'pay', icon: CreditCard, label: language === 'am' ? 'ክፍያ' : 'Pay' },
-          { id: 'chat', icon: MessageSquare, label: language === 'am' ? 'ወሬ' : 'Chat' },
           { id: 'menu', icon: Menu, label: language === 'am' ? 'ዝርዝር' : 'Menu' }
         ].map((item) => {
           const isActive = activeTab === item.id || (item.id === 'menu' && isMobileMenuOpen);
@@ -5943,16 +5666,12 @@ export default function Dashboard() {
                   setIsMobileMenuOpen(true);
                 } else {
                   setActiveTab(item.id as any);
-                  if (item.id === 'chat') setUnreadChat(false);
                 }
               }}
               className={`flex flex-col items-center justify-center gap-1.5 w-14 h-12 transition-all relative ${isActive ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600 active:scale-95'}`}
             >
               <div className={`relative flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-300 ${isActive ? 'bg-indigo-50 text-indigo-600 scale-110 shadow-sm' : 'bg-transparent text-slate-400'}`}>
                 <Icon size={isActive ? 20 : 22} strokeWidth={isActive ? 2.5 : 2} />
-                {item.id === 'chat' && unreadChat && !isActive && (
-                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-rose-500 border-2 border-white rounded-full animate-pulse shadow-sm" />
-                )}
               </div>
               <span className={`text-[9px] font-black tracking-widest transition-all ${isActive ? 'opacity-100' : 'opacity-0 scale-75 absolute -bottom-4 visible'}`}>{item.label}</span>
             </button>
