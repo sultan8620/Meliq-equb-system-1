@@ -131,7 +131,6 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
   const { t, language } = useLanguage();
   const [activeDrawTab, setActiveDrawTab] = useState<'upcoming' | 'history'>('upcoming');
   const [selectedDraw, setSelectedDraw] = useState<any>(null);
-  const [countdown, setCountdown] = useState({ days: '00', hours: '00', mins: '00', secs: '00' });
 
   const totalDistributed = winners.reduce((acc, curr) => acc + (parseInt(curr.amount) || 0), 0);
 
@@ -319,40 +318,7 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
                      </div>
                   </div>
                </div>
-               {group?.nextDrawDate ? (
-                 <motion.div 
-                   whileHover={{ scale: 1.05 }}
-                   onClick={() => setSelectedDraw({ 
-                     title: language === 'am' ? 'ባለ እድለኛ እንቆቅልሽ' : 'Drawing Algorithm', 
-                     details: language === 'am' ? 'የእኛ የእጣ አወጣጥ ሲስተም በዘመናዊ እና ግልጽነት ባለው መልኩ የተገነባ በመሆኑ ለማንም አያዳላም።' : 'Our drawing algorithm is built on provably fair digital selection, ensuring zero human bias.',
-                     status: 'Active',
-                     date: 'LIVE'
-                   })}
-                   className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[3rem] p-10 text-center min-w-[280px] shadow-2xl relative group/timer cursor-pointer"
-                 >
-                    <div className="absolute inset-0 bg-gold-500/5 opacity-0 group-hover/timer:opacity-100 transition-all rounded-[3rem]" />
-                    <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-6 relative z-10">
-                      {language === 'am' ? 'ቀጣዩ እጣ የሚወጣው' : 'Next Draw In'}
-                    </p>
-                    <div className="flex items-center justify-center gap-4 mb-6 relative z-10">
-                       <div className="text-4xl font-display font-black text-gold-400 tracking-tighter">
-                         {countdown.hours} : {countdown.mins} : {countdown.secs}
-                       </div>
-                    </div>
-                    <div className="flex justify-center gap-10 text-[8px] font-bold text-white/30 uppercase tracking-widest relative z-10">
-                       <div className="flex flex-col gap-1"><span>{language === 'am' ? 'ባለ' : 'Hrs'}</span><span className="text-gold-500/50 text-[10px]">{language === 'am' ? 'ሰዓት' : 'Hours'}</span></div>
-                       <div className="flex flex-col gap-1"><span>{language === 'am' ? 'ደቂቃ' : 'Mins'}</span><span className="text-gold-500/50 text-[10px]">{language === 'am' ? 'ደቂቃዎች' : 'Minutes'}</span></div>
-                       <div className="flex flex-col gap-1"><span>{language === 'am' ? 'ሰኮንድ' : 'Secs'}</span><span className="text-gold-500/50 text-[10px]">{language === 'am' ? 'ሰኮንዶች' : 'Seconds'}</span></div>
-                    </div>
-                 </motion.div>
-               ) : (
-                 <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[3rem] p-10 text-center min-w-[280px] shadow-2xl relative flex flex-col items-center justify-center">
-                    <ShieldCheck size={32} className="text-white/30 mb-4" />
-                    <p className="text-[10px] font-black text-white/50 uppercase tracking-widest leading-relaxed">
-                      {language === 'am' ? 'ቀጣይ እጣ አልተቆረጠም' : 'No Draw Scheduled'}
-                    </p>
-                 </div>
-               )}
+
             </div>
           </div>
 
