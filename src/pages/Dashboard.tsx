@@ -134,39 +134,6 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
 
   const totalDistributed = winners.reduce((acc, curr) => acc + (parseInt(curr.amount) || 0), 0);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      // Use set nextDrawDate if available, otherwise default to tonight at 8 PM
-      const nextDraw = group?.nextDrawDate ? new Date(group.nextDrawDate) : new Date();
-      if (!group?.nextDrawDate) {
-        nextDraw.setHours(20, 0, 0, 0);
-        if (now > nextDraw) nextDraw.setDate(nextDraw.getDate() + 1);
-      }
-      
-      const diff = nextDraw.getTime() - now.getTime();
-      
-      if (diff <= 0) {
-        setCountdown({ days: '00', hours: '00', mins: '00', secs: '00' });
-        return;
-      }
-
-      const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const s = Math.floor((diff % (1000 * 60)) / 1000);
-
-      setCountdown({
-        days: d.toString().padStart(2, '0'),
-        hours: h.toString().padStart(2, '0'),
-        mins: m.toString().padStart(2, '0'),
-        secs: s.toString().padStart(2, '0')
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [group]);
-
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-10 pb-20 relative">
       {/* Modal Detail */}
@@ -573,28 +540,40 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
               </div>
            </div>
 
-           <div className="space-y-4">
-              {[
-                { user: 'Sefadin K.', action: language === 'am' ? 'የቅርብ ጊዜ ክፍያ አጠናቋል' : 'Confirmed monthly contribution', time: '2m ago' },
-                { user: 'Abenezer M.', action: language === 'am' ? 'ለቀጣይ እጣ ተመዝግቧል' : 'Registered for upcoming draw', time: '15m ago' },
-                { user: 'Biniam T.', action: language === 'am' ? 'ባለፈው ሳምንት እጣ አሸንፏል' : 'Won previous weekly session', time: '1h ago' }
-              ].map((activity, i) => (
-                <div key={i} className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all cursor-default">
-                   <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-[10px] font-bold text-gold-400 border border-white/10">
-                      {activity.user.split(' ').map(n => n[0]).join('') }
+                       <div className="space-y-4">
+               {winners && winners.length > 0 ? (
+                 winners.slice(0, 5).map((winner, i) => (
+                   <div key={winner.id || i} className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all cursor-default">
+                      <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-[10px] font-bold text-gold-400 border border-white/10">
+                         {winner.name ? winner.name.split(' ').map((n) => n[0]).join('') : 'W'}
+                      </div>
+                      <div className="flex-1">
+                         <p className="text-[11px] font-black">{winner.name}</p>
+                         <p className="text-[10px] text-slate-400">
+                           {language === 'am'
+                             ? `ሳምንት #${winner.week || '---'} እጣ አሸንፏል - ${winner.amount ? winner.amount.toLocaleString() : '50,000'} ETB`
+                             : `Won Week #${winner.week || '---'} draw - ${winner.amount ? winner.amount.toLocaleString() : '50,000'} ETB`}
+                         </p>
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-500">{winner.date || (language === 'am' ? 'በቅርቡ' : 'recently')}</span>
                    </div>
-                   <div className="flex-1">
-                      <p className="text-[11px] font-black">{activity.user}</p>
-                      <p className="text-[10px] text-slate-400">{activity.action}</p>
-                   </div>
-                   <span className="text-[9px] font-bold text-slate-500">{activity.time}</span>
-                </div>
-              ))}
-           </div>
+                 ))
+               ) : (
+                 <p className="text-xs text-slate-400 text-center py-6">
+                   {language === 'am' ? 'ምንም የቅርብ ጊዜ እጣ እንቅስቃሴ የለም' : 'No recent draw activity found'}
+                 </p>
+               )}
+            </div>
 
-           <button className="w-full mt-8 py-4 bg-white/10 hover:bg-white border border-white/10 hover:text-slate-900 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all">
-              {language === 'am' ? 'ሁሉንም እንቅስቃሴዎች አሳይ' : 'View Full Audit Trail'}
-           </button>
+            <button 
+               onClick={() => {
+                 setActiveDrawTab('history');
+                 window.scrollTo({ top: 0, behavior: 'smooth' });
+               }}
+               className="w-full mt-8 py-4 bg-white/10 hover:bg-white border border-white/10 hover:text-slate-900 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all"
+            >
+               {language === 'am' ? 'ሁሉንም እንቅስቃሴዎች አሳይ' : 'View Full Audit Trail'}
+            </button>
         </div>
       </div>
     </motion.div>
