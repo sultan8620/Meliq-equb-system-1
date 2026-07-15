@@ -54,6 +54,10 @@ const MONTHS_GC = [
   'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const MONTHS_GC_AM = [
+  'ጃንዋሪ (January)', 'ፌብሩዋሪ (February)', 'ማርች (March)', 'ኤፕሪል (April)', 'ሜይ (May)', 'ጁን (June)', 'ጁላይ (July)', 'ኦገስት (August)', 'ሴፕቴምበር (September)', 'ኦክቶበር (October)', 'ኖቬምበር (November)', 'ዲሴምበር (December)'
+];
+
 const InputField = ({ icon: Icon, ...props }: any) => (
   <div className="space-y-2">
     {props.placeholder && (
@@ -1263,7 +1267,7 @@ export default function Signup() {
                       <div className="space-y-2 col-span-1">
                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ወር' : 'Month'}</label>
                         <select value={formData.birthMonth} onChange={(e) => updateGCDate('month', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
-                          {MONTHS_GC.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                          {(language === 'am' ? MONTHS_GC_AM : MONTHS_GC).map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                         </select>
                       </div>
                       <div className="space-y-2">
