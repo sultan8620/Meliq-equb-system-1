@@ -1228,7 +1228,7 @@ export default function Signup() {
                   {/* Ethiopian Calendar Date Selection */}
                   <div className="space-y-2">
                     <label className="text-xs font-black text-emerald-700 uppercase tracking-wider ml-1">
-                      {language === 'am' ? 'የኢትዮጵያ ዘመን አቆጣጠር (Ethiopian Calendar)' : 'Ethiopian Calendar (EC)'}
+                      {language === 'am' ? 'የትውልድ ቀን በኢትዮጵያ ዘመን አቆጣጠር' : 'Date of Birth (Ethiopian Calendar)'}
                     </label>
                     <div className="grid grid-cols-3 gap-3 p-5 bg-emerald-50/40 border border-emerald-100/50 rounded-2xl">
                       <div className="space-y-2">
@@ -1247,33 +1247,6 @@ export default function Signup() {
                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ዓመት' : 'Year'}</label>
                         <select value={formData.ethBirthYear} onChange={(e) => updateECDate('year', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
                           {Array.from({length: 100}, (_, i) => 2017 - i).map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Gregorian Calendar Date Selection */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-700 uppercase tracking-wider ml-1">
-                      {language === 'am' ? 'የፈረንጆች ዘመን አቆጣጠር (Gregorian Calendar)' : 'Gregorian Calendar (GC)'}
-                    </label>
-                    <div className="grid grid-cols-3 gap-3 p-5 bg-slate-50 border border-slate-100 rounded-2xl">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ቀን' : 'Day'}</label>
-                        <select value={formData.birthDay} onChange={(e) => updateGCDate('day', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
-                          {Array.from({length: 31}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-2 col-span-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ወር' : 'Month'}</label>
-                        <select value={formData.birthMonth} onChange={(e) => updateGCDate('month', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
-                          {(language === 'am' ? MONTHS_GC_AM : MONTHS_GC).map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">{language === 'am' ? 'ዓመት' : 'Year'}</label>
-                        <select value={formData.birthYear} onChange={(e) => updateGCDate('year', e.target.value)} className="w-full px-4 py-4 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-500">
-                          {Array.from({length: 100}, (_, i) => 2024 - i).map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
                       </div>
                     </div>
