@@ -481,40 +481,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* INTERACTIVE SHIELD / SECURITY STATS COUNTERS */}
-      <section className="py-12 bg-slate-100/50 border-y border-slate-200/50 z-10 relative">
-        <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-          <div className="flex flex-col items-center">
-            <div className="p-3 bg-white rounded-2xl shadow-sm mb-3">
-              <Users className="text-[#0c2340]" size={22} />
-            </div>
-            <p className="text-2xl sm:text-3xl font-black text-[#0c2340] font-serif">15,000+</p>
-            <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mt-1">{language === 'am' ? 'ቁጠባ አባላት' : 'ACTIVE MEMBERS'}</p>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="p-3 bg-white rounded-2xl shadow-sm mb-3">
-              <CheckCircle2 className="text-emerald-600" size={22} />
-            </div>
-            <p className="text-2xl sm:text-3xl font-black text-emerald-600 font-serif">100%</p>
-            <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mt-1">{language === 'am' ? 'የታመነ ደህንነት' : 'TRUST RATE'}</p>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="p-3 bg-white rounded-2xl shadow-sm mb-3">
-              <Zap className="text-amber-500" size={22} />
-            </div>
-            <p className="text-2xl sm:text-3xl font-black text-amber-500 font-serif">2.5M+</p>
-            <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mt-1">{language === 'am' ? 'የተከፈለ ዕጣ (ብር)' : 'TOTAL DISBURSED (ETB)'}</p>
-          </div>
-          <div className="flex flex-col items-center">
-            <div className="p-3 bg-white rounded-2xl shadow-sm mb-3">
-              <Globe className="text-indigo-600" size={22} />
-            </div>
-            <p className="text-2xl sm:text-3xl font-black text-indigo-600 font-serif">24/7</p>
-            <p className="text-[10px] font-black uppercase text-slate-500 tracking-wider mt-1">{language === 'am' ? 'ቅጽበታዊ ድጋፍ' : 'CUSTOMER SUPPORT'}</p>
-          </div>
-        </div>
-      </section>
-
       {/* HOW IT WORKS SECTION */}
       <section id="how-it-works" className="py-24 px-4 sm:px-8 max-w-6xl mx-auto z-10 relative">
         <div className="text-center mb-16">

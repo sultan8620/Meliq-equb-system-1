@@ -54,10 +54,6 @@ const MONTHS_GC = [
   'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const MONTHS_GC_AM = [
-  'ጃንዋሪ (January)', 'ፌብሩዋሪ (February)', 'ማርች (March)', 'ኤፕሪል (April)', 'ሜይ (May)', 'ጁን (June)', 'ጁላይ (July)', 'ኦገስት (August)', 'ሴፕቴምበር (September)', 'ኦክቶበር (October)', 'ኖቬምበር (November)', 'ዲሴምበር (December)'
-];
-
 const InputField = ({ icon: Icon, ...props }: any) => (
   <div className="space-y-2">
     {props.placeholder && (
@@ -396,34 +392,6 @@ export default function Signup() {
           }
         } catch (e) {
           console.error("Error converting EC to GC:", e);
-        }
-      }
-      return next;
-    });
-  };
-
-  const updateGCDate = (field: 'year' | 'month' | 'day', value: string) => {
-    setFormData(prev => {
-      const next = { ...prev };
-      if (field === 'year') next.birthYear = value;
-      if (field === 'month') next.birthMonth = value;
-      if (field === 'day') next.birthDay = value;
-
-      const y = parseInt(next.birthYear);
-      const m = parseInt(next.birthMonth);
-      const d = parseInt(next.birthDay);
-
-      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-        try {
-          const birth = new Date(y, m - 1, d);
-          if (!isNaN(birth.getTime())) {
-            const eth = ethDateTime.fromEuropeanDate(birth);
-            next.ethBirthYear = String(eth.year);
-            next.ethBirthMonth = String(eth.month);
-            next.ethBirthDay = String(eth.date);
-          }
-        } catch (e) {
-          console.error("Error converting GC to EC:", e);
         }
       }
       return next;
