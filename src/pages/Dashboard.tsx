@@ -707,6 +707,7 @@ export default function Dashboard() {
   const [isSubmittingGuarantor, setIsSubmittingGuarantor] = useState(false);
   const [selectedMemberModal, setSelectedMemberModal] = useState<GroupMember | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState<'pdf' | 'jpg'>('pdf');
   const [toasts, setToasts] = useState<{id: string, title: string, message: string}[]>([]);
 
   const addToast = (title: string, message: string) => {
@@ -1368,7 +1369,7 @@ export default function Dashboard() {
     setShowReceiptModal(true);
   };
 
-  const generatePDF = async (payment: any) => {
+  const generatePDF = async (payment: any, format: 'pdf' | 'jpg' = 'pdf') => {
     let wrapper: HTMLDivElement | null = null;
     try {
       const element = document.getElementById(`receipt-${payment.id}`);
@@ -1483,14 +1484,23 @@ export default function Dashboard() {
             const timestamp = new Date().toLocaleString('en-US', { hour12: true }).toUpperCase();
             ctx.fillText(`GENERATED ON ${timestamp} • ALL RIGHTS RESERVED`, 904 / 2, 1210);
 
-            // Convert canvas output to PNG dataUrl
-            const canvasDataUrl = canvas.toDataURL('image/png');
+            if (format === 'jpg') {
+              // Convert canvas output to high-quality JPEG
+              const canvasDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+              const link = document.createElement('a');
+              link.download = `Receipt-${receiptId}.jpg`;
+              link.href = canvasDataUrl;
+              link.click();
+            } else {
+              // Convert canvas output to PNG dataUrl
+              const canvasDataUrl = canvas.toDataURL('image/png');
 
-            // Generate an A4 size page (210mm x 297mm) that matches the 904x1280 aspect ratio perfectly
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            pdf.addImage(canvasDataUrl, 'PNG', 0, 0, 210, 297);
-            
-            pdf.save(`Receipt-${receiptId}.pdf`);
+              // Generate an A4 size page (210mm x 297mm) that matches the 904x1280 aspect ratio perfectly
+              const pdf = new jsPDF('p', 'mm', 'a4');
+              pdf.addImage(canvasDataUrl, 'PNG', 0, 0, 210, 297);
+              
+              pdf.save(`Receipt-${receiptId}.pdf`);
+            }
             resolve();
           } catch (err) {
             reject(err);
@@ -5954,19 +5964,47 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="mt-8 flex flex-col sm:flex-row gap-4 max-w-sm mx-auto">
-                <button 
-                  onClick={() => generatePDF(selectedPayment)}
-                  className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 active:scale-95"
-                >
-                  <FileText size={16} /> {language === 'am' ? 'አውርድ (ደረሰኝ)' : 'Download Receipt'}
-                </button>
-                <button 
-                  onClick={() => setShowReceiptModal(false)}
-                  className="flex-1 py-4 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-sm active:scale-95"
-                >
-                  {language === 'am' ? 'ተመለስ' : 'Go Back'}
-                </button>
+              <div className="mt-8 flex flex-col gap-4 max-w-sm mx-auto">
+                <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <button
+                    onClick={() => setDownloadFormat('pdf')}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${
+                      downloadFormat === 'pdf'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    <FileText size={14} />
+                    PDF
+                  </button>
+                  <button
+                    onClick={() => setDownloadFormat('jpg')}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${
+                      downloadFormat === 'jpg'
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    <ImageIcon size={14} />
+                    JPG
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button 
+                    onClick={() => generatePDF(selectedPayment, downloadFormat)}
+                    className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 active:scale-95"
+                  >
+                    <Download size={16} /> 
+                    {language === 'am' ? 'አውርድ (ደረሰኝ)' : 'Download Receipt'}
+                  </button>
+                  <button 
+                    onClick={() => setShowReceiptModal(false)}
+                    className="flex-1 py-4 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                  >
+                    {language === 'am' ? 'ተመለስ' : 'Go Back'}
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>

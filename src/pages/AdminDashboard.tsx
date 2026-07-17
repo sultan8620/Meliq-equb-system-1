@@ -2892,6 +2892,7 @@ export default function AdminDashboard() {
 
   const [showManualPaymentModal, setShowManualPaymentModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState<'pdf' | 'jpg'>('pdf');
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [paymentCount, setPaymentCount] = useState(1);
@@ -2995,7 +2996,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const generatePDF = async (payment: any) => {
+  const generatePDF = async (payment: any, format: 'pdf' | 'jpg' = 'pdf') => {
     let wrapper: HTMLDivElement | null = null;
     try {
       const element = document.getElementById(`receipt-${payment.id}`);
@@ -3110,14 +3111,23 @@ export default function AdminDashboard() {
             const timestamp = new Date().toLocaleString('en-US', { hour12: true }).toUpperCase();
             ctx.fillText(`GENERATED ON ${timestamp} • ALL RIGHTS RESERVED`, 904 / 2, 1210);
 
-            // Convert canvas output to PNG dataUrl
-            const canvasDataUrl = canvas.toDataURL('image/png');
+            if (format === 'jpg') {
+              // Convert canvas output to high-quality JPEG
+              const canvasDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+              const link = document.createElement('a');
+              link.download = `Receipt-${receiptId}.jpg`;
+              link.href = canvasDataUrl;
+              link.click();
+            } else {
+              // Convert canvas output to PNG dataUrl
+              const canvasDataUrl = canvas.toDataURL('image/png');
 
-            // Generate an A4 size page (210mm x 297mm) that matches the 904x1280 aspect ratio perfectly
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            pdf.addImage(canvasDataUrl, 'PNG', 0, 0, 210, 297);
-            
-            pdf.save(`Receipt-${receiptId}.pdf`);
+              // Generate an A4 size page (210mm x 297mm) that matches the 904x1280 aspect ratio perfectly
+              const pdf = new jsPDF('p', 'mm', 'a4');
+              pdf.addImage(canvasDataUrl, 'PNG', 0, 0, 210, 297);
+              
+              pdf.save(`Receipt-${receiptId}.pdf`);
+            }
             resolve();
           } catch (err) {
             reject(err);
@@ -12046,6 +12056,31 @@ export default function AdminDashboard() {
                   {language === 'am' ? 'ይህ ሰነድ በዲጂታል መንገድ የተረጋገጠ እና በህግ ተቀባይነት ያለው ነው።' : 'This document is digitally verified and legally binding.'}
                </p>
                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                  <div className="flex bg-slate-200 p-0.5 rounded-xl w-full sm:w-auto">
+                    <button
+                      onClick={() => setDownloadFormat('pdf')}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${
+                        downloadFormat === 'pdf'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      <FileText size={14} />
+                      PDF
+                    </button>
+                    <button
+                      onClick={() => setDownloadFormat('jpg')}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${
+                        downloadFormat === 'jpg'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      <ImageIcon size={14} />
+                      JPG
+                    </button>
+                  </div>
+
                   {isSuperAdmin && (
                     <button 
                       onClick={() => deletePaymentReceipt(selectedPayment.id)}
@@ -12062,7 +12097,7 @@ export default function AdminDashboard() {
                     {language === 'am' ? 'ተመለስ' : 'Go Back'}
                   </button>
                   <button 
-                    onClick={() => generatePDF(selectedPayment)}
+                    onClick={() => generatePDF(selectedPayment, downloadFormat)}
                     className="flex-1 sm:flex-none px-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-95"
                   >
                     <Download size={18} />
