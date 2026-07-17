@@ -1420,12 +1420,20 @@ export default function Dashboard() {
             ctx.textAlign = 'center';
             ctx.fillText("MELIQ EKUB OFFICIAL DIGITAL RECEIPT", 904 / 2, 85);
 
-            // Draw the actual receipt centered perfectly on the 904x1280 page
-            const targetWidth = 760;
-            const targetHeight = (img.height * targetWidth) / img.width;
+            // Draw the actual receipt centered perfectly on the 904x1280 page without being cut off
+            const maxWidth = 760;
+            const maxHeight = 1000;
+
+            let targetWidth = maxWidth;
+            let targetHeight = (img.height * targetWidth) / img.width;
+
+            if (targetHeight > maxHeight) {
+              targetHeight = maxHeight;
+              targetWidth = (img.width * targetHeight) / img.height;
+            }
 
             const x = (904 - targetWidth) / 2;
-            const y = 120 + (1040 - targetHeight) / 2;
+            const y = 120 + (1000 - targetHeight) / 2;
 
             ctx.drawImage(img, x, y, targetWidth, targetHeight);
 

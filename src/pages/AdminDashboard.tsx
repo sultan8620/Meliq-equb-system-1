@@ -3047,12 +3047,20 @@ export default function AdminDashboard() {
             ctx.textAlign = 'center';
             ctx.fillText("MELIQ EKUB OFFICIAL DIGITAL RECEIPT", 904 / 2, 85);
 
-            // Draw the actual receipt centered perfectly on the 904x1280 page
-            const targetWidth = 760;
-            const targetHeight = (img.height * targetWidth) / img.width;
+            // Draw the actual receipt centered perfectly on the 904x1280 page without being cut off
+            const maxWidth = 760;
+            const maxHeight = 1000;
+
+            let targetWidth = maxWidth;
+            let targetHeight = (img.height * targetWidth) / img.width;
+
+            if (targetHeight > maxHeight) {
+              targetHeight = maxHeight;
+              targetWidth = (img.width * targetHeight) / img.height;
+            }
 
             const x = (904 - targetWidth) / 2;
-            const y = 120 + (1040 - targetHeight) / 2;
+            const y = 120 + (1000 - targetHeight) / 2;
 
             ctx.drawImage(img, x, y, targetWidth, targetHeight);
 
@@ -11871,9 +11879,15 @@ export default function AdminDashboard() {
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የአባል ስም' : 'Member Name'}</p>
                       <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">{selectedPayment.userName}</p>
-                      <p className="text-[9px] font-black text-indigo-600 font-mono mt-0.5 leading-none">
-                        {language === 'am' ? 'መለያ: ' : 'ID: '}{selectedPayment.memberCode || `M-${(selectedPayment.userId || '').slice(-5).toUpperCase()}`}
-                      </p>
+                      {(() => {
+                        const matchedUser = allUsers.find(u => u.id === selectedPayment.userId || u.uid === selectedPayment.userId) || admins.find(a => a.id === selectedPayment.userId || a.uid === selectedPayment.userId);
+                        const displayMemberCode = selectedPayment.memberCode || matchedUser?.memberCode || `M-${(selectedPayment.userId || '').slice(-5).toUpperCase()}`;
+                        return (
+                          <p className="text-[9px] font-black text-indigo-600 font-mono mt-0.5 leading-none">
+                            {language === 'am' ? 'መለያ: ' : 'ID: '}{displayMemberCode}
+                          </p>
+                        );
+                      })()}
                     </div>
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'እቁብ/ምድብ' : 'Group/Round'}</p>
