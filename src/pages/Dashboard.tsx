@@ -3346,7 +3346,7 @@ export default function Dashboard() {
                                 <ImageIcon size={14} />
                               </button>
                             )}
-                            {(payment.status === 'active' || payment.status === 'pending') && (
+                            {(payment.status === 'active' || payment.status === 'pending' || payment.status === 'rejected') && (
                               <button 
                                 onClick={() => handleDownloadReceipt(payment)}
                                 className="p-2 bg-slate-50 text-slate-900 rounded-lg border border-slate-200 hover:bg-slate-100 transition-all shadow-sm"
@@ -5636,13 +5636,23 @@ export default function Dashboard() {
             
             <div className="flex-1 overflow-y-auto w-full bg-black/50 rounded-3xl border border-white/10 flex flex-col items-center p-4 gap-4">
               {selectedReceiptImages.map((imgUrl, idx) => (
-                 <img 
-                   key={idx} 
-                   src={imgUrl} 
-                   alt={`Receipt ${idx + 1}`} 
-                   referrerPolicy="no-referrer"
-                   className="max-w-full rounded-xl object-contain shadow-2xl" 
-                 />
+                 <div key={idx} className="w-full flex flex-col items-center bg-white/5 p-3 rounded-2xl border border-white/10">
+                   <img 
+                     src={imgUrl} 
+                     alt={`Receipt ${idx + 1}`} 
+                     referrerPolicy="no-referrer"
+                     className="max-w-full rounded-xl object-contain shadow-2xl mb-3" 
+                   />
+                   <a
+                     href={imgUrl}
+                     download={`Uploaded-Receipt-${idx + 1}.jpg`}
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 border border-white/10"
+                   >
+                     <Download size={14} /> {language === 'am' ? 'ፎቶውን አውርድ' : 'Download Photo'}
+                   </a>
+                 </div>
               ))}
             </div>
           </motion.div>
@@ -5781,8 +5791,14 @@ export default function Dashboard() {
                       <p className="text-xl font-black">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">ETB</span></p>
                     </div>
                     <div className="text-right relative z-10">
-                      <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'ሁኔታ' : 'Status'}</p>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">{language === 'am' ? 'ተረጋግጧል' : 'Verified'}</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'ሁኔታ' : 'Status'}</p>
+                      {selectedPayment.status === 'active' ? (
+                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">{language === 'am' ? 'ተረጋግጧል' : 'Verified'}</p>
+                      ) : selectedPayment.status === 'rejected' ? (
+                        <p className="text-[9px] font-black uppercase tracking-widest text-rose-500">{language === 'am' ? 'ውድቅ የተደረገ' : 'Rejected'}</p>
+                      ) : (
+                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">{language === 'am' ? 'በሂደት ላይ' : 'Pending'}</p>
+                      )}
                     </div>
                   </div>
 

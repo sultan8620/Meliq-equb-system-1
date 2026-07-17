@@ -5382,7 +5382,7 @@ export default function AdminDashboard() {
                       </div>
 
                       <div className="flex items-center gap-2 pt-2">
-                        {(payment.status === 'active' || payment.status === 'pending') && (
+                        {(payment.status === 'active' || payment.status === 'pending' || payment.status === 'rejected') && (
                           <button 
                             onClick={() => handleDownloadReceipt(payment)}
                             className="flex-1 px-6 py-3 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
@@ -11881,8 +11881,14 @@ export default function AdminDashboard() {
                       <p className="text-xl font-black">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">ETB</span></p>
                     </div>
                     <div className="text-right relative z-10">
-                      <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'ሁኔታ' : 'Status'}</p>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">{language === 'am' ? 'ተረጋግጧል' : 'Verified'}</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'ሁኔታ' : 'Status'}</p>
+                      {selectedPayment.status === 'active' ? (
+                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500">{language === 'am' ? 'ተረጋግጧል' : 'Verified'}</p>
+                      ) : selectedPayment.status === 'rejected' ? (
+                        <p className="text-[9px] font-black uppercase tracking-widest text-rose-500">{language === 'am' ? 'ውድቅ የተደረገ' : 'Rejected'}</p>
+                      ) : (
+                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-500">{language === 'am' ? 'በሂደት ላይ' : 'Pending'}</p>
+                      )}
                     </div>
                   </div>
 
@@ -14209,17 +14215,30 @@ export default function AdminDashboard() {
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
             exit={{ opacity: 0 }} 
-            className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl"
+            className="fixed inset-0 z-[2000] flex flex-col items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl gap-4"
             onClick={() => setShowImagePreview(null)}
           >
-            <motion.img 
+            <motion.div 
               initial={{ scale: 0.9, opacity: 0 }} 
               animate={{ scale: 1, opacity: 1 }} 
               exit={{ scale: 0.9, opacity: 0 }}
-              src={showImagePreview} 
-              className="max-w-full max-h-[90vh] rounded-2xl shadow-2xl border border-white/10" 
+              className="relative max-w-full max-h-[85vh] flex flex-col items-center"
               onClick={(e) => e.stopPropagation()}
-            />
+            >
+              <img 
+                src={showImagePreview} 
+                className="max-w-full max-h-[75vh] rounded-2xl shadow-2xl border border-white/10 object-contain" 
+              />
+              <a
+                href={showImagePreview}
+                download="Receipt-Photo.jpg"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 border border-white/10"
+              >
+                <Download size={14} /> {language === 'am' ? 'ፎቶውን አውርድ' : 'Download Photo'}
+              </a>
+            </motion.div>
             <button className="absolute top-8 right-8 text-white/60 hover:text-white transition-colors">
               <XCircle size={40} />
             </button>
