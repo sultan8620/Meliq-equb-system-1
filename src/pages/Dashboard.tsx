@@ -1380,36 +1380,38 @@ export default function Dashboard() {
       // Create a hidden wrapper container at the top of the body
       wrapper = document.createElement('div');
       wrapper.style.position = 'fixed';
-      wrapper.style.top = '0';
-      wrapper.style.left = '0';
-      wrapper.style.width = '424px';
-      wrapper.style.height = '0';
+      wrapper.style.top = '-9999px';
+      wrapper.style.left = '-9999px';
+      wrapper.style.width = '320px';
+      wrapper.style.height = 'auto';
       wrapper.style.overflow = 'hidden';
       wrapper.style.pointerEvents = 'none';
       wrapper.style.zIndex = '-9999';
 
       // Inner container that will be captured with ample padding to prevent cutting off shadow/borders
       const captureContainer = document.createElement('div');
-      captureContainer.style.width = '424px';
+      captureContainer.style.width = '320px';
       captureContainer.style.height = 'auto';
-      captureContainer.style.padding = '20px';
-      captureContainer.style.backgroundColor = '#ffffff';
+      captureContainer.style.padding = '15px';
+      captureContainer.style.backgroundColor = 'transparent';
       captureContainer.style.boxSizing = 'border-box';
 
       const clone = element.cloneNode(true) as HTMLElement;
-      clone.style.width = '384px';
-      clone.style.maxWidth = '384px';
-      clone.style.minWidth = '384px';
+      clone.style.width = '290px';
+      clone.style.maxWidth = '290px';
+      clone.style.minWidth = '290px';
       clone.style.height = 'auto';
-      clone.style.margin = '0';
+      clone.style.margin = '0 auto';
       clone.style.transform = 'none';
 
       captureContainer.appendChild(clone);
       wrapper.appendChild(captureContainer);
       document.body.appendChild(wrapper);
 
+      // Wait 150ms for the browser to perform a full layout/reflow pass on the offscreen elements
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
       const dataUrl = await htmlToImage.toPng(captureContainer, { 
-        backgroundColor: '#ffffff',
         skipFonts: true,
         pixelRatio: 3
       });
