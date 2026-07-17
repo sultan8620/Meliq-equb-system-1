@@ -1376,21 +1376,11 @@ export default function Dashboard() {
         return;
       }
 
-      // We use htmlToImage to convert the styled DOM node exactly into a 904x1280 high-resolution image
+      // We capture the styled DOM node in its high-resolution natural layout (no forced viewport styling)
       const dataUrl = await htmlToImage.toPng(element, { 
-        width: 904,
-        height: 1280,
-        style: {
-          width: '384px',
-          height: '544px',
-          transform: 'scale(2.35416667)', // Scaled perfectly to fit 904x1280
-          transformOrigin: 'top left',
-          margin: '0',
-          borderRadius: '24px',
-        },
         backgroundColor: '#ffffff',
-        skipAutoScale: true,
-        skipFonts: true
+        skipFonts: true,
+        pixelRatio: 3
       });
 
       const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
@@ -1400,44 +1390,58 @@ export default function Dashboard() {
       await new Promise<void>((resolve, reject) => {
         img.onload = () => {
           try {
+            // Draw on an exact 904 x 1280 high-fidelity canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = 904;
+            canvas.height = 1280;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error("Could not get 2D canvas context"));
+              return;
+            }
+
+            // Fill soft light slate-50 background
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, 904, 1280);
+
+            // Outer elegant border (thin)
+            ctx.strokeStyle = '#e2e8f0'; // slate-200
+            ctx.lineWidth = 2;
+            ctx.strokeRect(30, 30, 904 - 60, 1280 - 60);
+
+            // Inner thicker border
+            ctx.strokeStyle = '#cbd5e1'; // slate-300
+            ctx.lineWidth = 6;
+            ctx.strokeRect(36, 36, 904 - 72, 1280 - 72);
+
+            // Header text
+            ctx.fillStyle = '#94a3b8'; // slate-400
+            ctx.font = 'bold 22px Helvetica, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("MELIQ EKUB OFFICIAL DIGITAL RECEIPT", 904 / 2, 85);
+
+            // Draw the actual receipt centered perfectly on the 904x1280 page
+            const targetWidth = 760;
+            const targetHeight = (img.height * targetWidth) / img.width;
+
+            const x = (904 - targetWidth) / 2;
+            const y = 120 + (1040 - targetHeight) / 2;
+
+            ctx.drawImage(img, x, y, targetWidth, targetHeight);
+
+            // Footer text
+            ctx.fillStyle = '#94a3b8'; // slate-400
+            ctx.font = 'normal 18px Helvetica, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            const timestamp = new Date().toLocaleString('en-US', { hour12: true }).toUpperCase();
+            ctx.fillText(`GENERATED ON ${timestamp} • ALL RIGHTS RESERVED`, 904 / 2, 1210);
+
+            // Convert canvas output to PNG dataUrl
+            const canvasDataUrl = canvas.toDataURL('image/png');
+
+            // Generate an A4 size page (210mm x 297mm) that matches the 904x1280 aspect ratio perfectly
             const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = 210;
-            const pdfHeight = 297;
-            
-            // Standard A4 width for the receipt (170mm fits perfectly with margins)
-            const width = 170;
-            const height = (img.height * width) / img.width; // 240.7mm
-            
-            const x = (pdfWidth - width) / 2;
-            const y = (pdfHeight - height) / 2;
-            
-            // Background soft light color for premium feel
-            pdf.setFillColor(248, 250, 252); // slate-50
-            pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-            
-            // Elegant double borders
-            pdf.setDrawColor(226, 232, 240); // slate-200
-            pdf.setLineWidth(0.5);
-            pdf.rect(10, 10, pdfWidth - 20, pdfHeight - 20);
-            
-            pdf.setDrawColor(203, 213, 225); // slate-300
-            pdf.setLineWidth(1.5);
-            pdf.rect(12, 12, pdfWidth - 24, pdfHeight - 24);
-            
-            // Header text on top of page
-            pdf.setFont("helvetica", "bold");
-            pdf.setFontSize(8);
-            pdf.setTextColor(148, 163, 184); // slate-400
-            pdf.text("MELIQ EKUB OFFICIAL DIGITAL RECEIPT", pdfWidth / 2, 22, { align: 'center' });
-            
-            // Add the beautifully generated card
-            pdf.addImage(dataUrl, 'PNG', x, y > 28 ? y : 28, width, height);
-            
-            // Footer text on bottom of page
-            pdf.setFont("helvetica", "normal");
-            pdf.setFontSize(7);
-            pdf.setTextColor(148, 163, 184); // slate-400
-            pdf.text(`GENERATED ON ${new Date().toLocaleString().toUpperCase()} • ALL RIGHTS RESERVED`, pdfWidth / 2, pdfHeight - 18, { align: 'center' });
+            pdf.addImage(canvasDataUrl, 'PNG', 0, 0, 210, 297);
             
             pdf.save(`Receipt-${receiptId}.pdf`);
             resolve();
