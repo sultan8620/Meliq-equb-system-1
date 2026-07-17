@@ -2140,6 +2140,7 @@ export default function Dashboard() {
                   return (
                     <div key={tab.id}>
                       <button 
+                        onClick={() => setActiveTab(tab.id as any)}
                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all relative group ${isActive ? 'bg-slate-900 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
                       >
                         <Icon size={18} className={isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-indigo-500'} />
@@ -5579,7 +5580,11 @@ export default function Dashboard() {
           { id: 'pay', icon: CreditCard, label: language === 'am' ? 'ክፍያ' : 'Pay' },
           { id: 'menu', icon: Menu, label: language === 'am' ? 'ዝርዝር' : 'Menu' }
         ].map((item) => {
-          const isActive = activeTab === item.id || (item.id === 'menu' && isMobileMenuOpen);
+          const isActive = 
+            (item.id === 'home' && activeTab === 'overview') ||
+            (item.id === 'pay' && activeTab === 'payment-send') ||
+            (item.id === 'draws' && activeTab === 'draws') ||
+            (item.id === 'menu' && isMobileMenuOpen);
           const Icon = item.icon;
           return (
             <button 
@@ -5587,6 +5592,10 @@ export default function Dashboard() {
               onClick={() => {
                 if (item.id === 'menu') {
                   setIsMobileMenuOpen(true);
+                } else if (item.id === 'home') {
+                  setActiveTab('overview');
+                } else if (item.id === 'pay') {
+                  setActiveTab('payment-send');
                 } else {
                   setActiveTab(item.id as any);
                 }
