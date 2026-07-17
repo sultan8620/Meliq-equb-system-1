@@ -3003,9 +3003,18 @@ export default function AdminDashboard() {
         return;
       }
 
-      // We use htmlToImage to convert the styled DOM node exactly into an image
+      // We use htmlToImage to convert the styled DOM node exactly into a 904x1280 high-resolution image
       const dataUrl = await htmlToImage.toPng(element, { 
-        pixelRatio: 3, 
+        width: 904,
+        height: 1280,
+        style: {
+          width: '384px',
+          height: '544px',
+          transform: 'scale(2.35416667)', // Scaled perfectly to fit 904x1280
+          transformOrigin: 'top left',
+          margin: '0',
+          borderRadius: '24px',
+        },
         backgroundColor: '#ffffff',
         skipAutoScale: true,
         skipFonts: true
@@ -3022,9 +3031,9 @@ export default function AdminDashboard() {
             const pdfWidth = 210;
             const pdfHeight = 297;
             
-            // Standard A4 width for the receipt (e.g. 140mm)
-            const width = 140;
-            const height = (img.height * width) / img.width;
+            // Standard A4 width for the receipt (170mm fits perfectly with margins)
+            const width = 170;
+            const height = (img.height * width) / img.width; // 240.7mm
             
             const x = (pdfWidth - width) / 2;
             const y = (pdfHeight - height) / 2;
