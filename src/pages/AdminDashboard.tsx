@@ -3013,11 +3013,59 @@ export default function AdminDashboard() {
 
       const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
       
-      const link = document.createElement('a');
-      link.download = `Receipt-${receiptId}.png`;
-      link.href = dataUrl;
-      link.click();
-      
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => {
+          try {
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = 210;
+            const pdfHeight = 297;
+            
+            // Standard A4 width for the receipt (e.g. 140mm)
+            const width = 140;
+            const height = (img.height * width) / img.width;
+            
+            const x = (pdfWidth - width) / 2;
+            const y = (pdfHeight - height) / 2;
+            
+            // Background soft light color for premium feel
+            pdf.setFillColor(248, 250, 252); // slate-50
+            pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
+            
+            // Elegant double borders
+            pdf.setDrawColor(226, 232, 240); // slate-200
+            pdf.setLineWidth(0.5);
+            pdf.rect(10, 10, pdfWidth - 20, pdfHeight - 20);
+            
+            pdf.setDrawColor(203, 213, 225); // slate-300
+            pdf.setLineWidth(1.5);
+            pdf.rect(12, 12, pdfWidth - 24, pdfHeight - 24);
+            
+            // Header text on top of page
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(8);
+            pdf.setTextColor(148, 163, 184); // slate-400
+            pdf.text("MELIQ EKUB OFFICIAL DIGITAL RECEIPT", pdfWidth / 2, 22, { align: 'center' });
+            
+            // Add the beautifully generated card
+            pdf.addImage(dataUrl, 'PNG', x, y > 28 ? y : 28, width, height);
+            
+            // Footer text on bottom of page
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(7);
+            pdf.setTextColor(148, 163, 184); // slate-400
+            pdf.text(`GENERATED ON ${new Date().toLocaleString().toUpperCase()} • ALL RIGHTS RESERVED`, pdfWidth / 2, pdfHeight - 18, { align: 'center' });
+            
+            pdf.save(`Receipt-${receiptId}.pdf`);
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        };
+        img.onerror = () => reject(new Error("Failed to load receipt image into PDF"));
+      });
+
       setShowReceiptModal(false);
     } catch (error) {
       console.error('Error generating PDF:', error);
