@@ -3007,7 +3007,12 @@ export default function AdminDashboard() {
       const dataUrl = await htmlToImage.toPng(element, { 
         backgroundColor: '#ffffff',
         skipFonts: true,
-        pixelRatio: 3
+        pixelRatio: 3,
+        style: {
+          width: '384px',
+          maxWidth: '384px',
+          transform: 'none',
+        }
       });
 
       const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
@@ -5446,7 +5451,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
-                           <p className="text-[9px] font-bold text-slate-700 truncate">#{payment.receiptId || 'N/A'}</p>
+                           <p className="text-[9px] font-mono font-black text-indigo-600 truncate">#{payment.receiptId || payment.id.slice(0, 8).toUpperCase()}</p>
                         </div>
                       </div>
 
@@ -13844,7 +13849,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Receipt ID</span>
-                    <span className="text-sm font-mono font-bold text-slate-700">#{paymentReviewModal.receiptId || 'N/A'}</span>
+                    <span className="text-sm font-mono font-bold text-slate-700">#{paymentReviewModal.receiptId || paymentReviewModal.id.slice(0, 8).toUpperCase()}</span>
                   </div>
                 </div>
 

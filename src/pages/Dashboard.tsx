@@ -1380,7 +1380,12 @@ export default function Dashboard() {
       const dataUrl = await htmlToImage.toPng(element, { 
         backgroundColor: '#ffffff',
         skipFonts: true,
-        pixelRatio: 3
+        pixelRatio: 3,
+        style: {
+          width: '384px',
+          maxWidth: '384px',
+          transform: 'none',
+        }
       });
 
       const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
@@ -3397,7 +3402,9 @@ export default function Dashboard() {
                               <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
                                 {payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleDateString('am-ET') : new Date(payment.createdAt).toLocaleDateString('am-ET')}
                                 {payment.transactionCode && <span className="ml-2 font-mono text-indigo-600 font-black">TXN: {payment.transactionCode}</span>}
-                                {payment.receiptId && <span className="ml-2 font-mono opacity-50">#{payment.receiptId}</span>}
+                                <span className="ml-2 font-mono text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-bold">
+                                  #{payment.receiptId || payment.id.slice(0, 8).toUpperCase()}
+                                </span>
                               </p>
                             </div>
                           </div>
