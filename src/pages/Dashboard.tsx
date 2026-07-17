@@ -5720,6 +5720,9 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የአባል ስም' : 'Member Name'}</p>
                       <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">{selectedPayment.userName || userData?.fullName}</p>
+                      <p className="text-[9px] font-black text-indigo-600 font-mono mt-0.5 leading-none">
+                        {language === 'am' ? 'መለያ: ' : 'ID: '}{selectedPayment.memberCode || userData?.memberCode || `M-${(selectedPayment.userId || '').slice(-5).toUpperCase()}`}
+                      </p>
                     </div>
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'እቁብ/ምድብ' : 'Group/Round'}</p>
@@ -5751,7 +5754,9 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የከፋይ ስም' : 'Payer Name'}</p>
                       <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
-                        {selectedPayment.payerName || 'N/A'}
+                        {selectedPayment.type === 'manual_contribution'
+                          ? (language === 'am' ? 'አስተዳዳሪ (የመዘገበው)' : 'Admin Recorded')
+                          : (selectedPayment.userName || userData?.fullName || (language === 'am' ? 'አባል' : 'Member'))}
                       </p>
                     </div>
                     <div>
