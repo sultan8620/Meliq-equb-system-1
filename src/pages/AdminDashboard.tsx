@@ -2996,6 +2996,7 @@ export default function AdminDashboard() {
   };
 
   const generatePDF = async (payment: any) => {
+    let clone: HTMLElement | null = null;
     try {
       const element = document.getElementById(`receipt-${payment.id}`);
       if (!element) {
@@ -3003,17 +3004,29 @@ export default function AdminDashboard() {
         return;
       }
 
-      // We capture the styled DOM node in its high-resolution natural layout (no forced viewport styling)
-      const dataUrl = await htmlToImage.toPng(element, { 
+      // Clone the element and place it offscreen with fixed 384px width to ensure it never shrinks/gets cut off on mobile devices
+      clone = element.cloneNode(true) as HTMLElement;
+      clone.style.position = 'absolute';
+      clone.style.top = '-9999px';
+      clone.style.left = '-9999px';
+      clone.style.width = '384px';
+      clone.style.maxWidth = '384px';
+      clone.style.minWidth = '384px';
+      clone.style.height = 'auto';
+      clone.style.transform = 'none';
+      document.body.appendChild(clone);
+
+      const dataUrl = await htmlToImage.toPng(clone, { 
         backgroundColor: '#ffffff',
         skipFonts: true,
-        pixelRatio: 3,
-        style: {
-          width: '384px',
-          maxWidth: '384px',
-          transform: 'none',
-        }
+        pixelRatio: 3
       });
+
+      // Cleanup clone early
+      if (clone && clone.parentNode) {
+        clone.parentNode.removeChild(clone);
+        clone = null;
+      }
 
       const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
       
@@ -3096,6 +3109,10 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Error generating PDF:', error);
       triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ደረሰኝ ማመንጨት አልተሳካም' : 'Failed to generate receipt');
+    } finally {
+      if (clone && clone.parentNode) {
+        clone.parentNode.removeChild(clone);
+      }
     }
   };
   const startGroup = async (groupId: string) => {
