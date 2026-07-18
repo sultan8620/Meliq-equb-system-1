@@ -39,6 +39,32 @@ const generateReceiptId = (bankName: string) => {
   return `${prefix}-${year}${month}${day}-${rand}`;
 };
 
+const formatPaymentDate = (createdAt: any, lang: string = 'am') => {
+  if (!createdAt) return new Date().toLocaleDateString(lang === 'am' ? 'am-ET' : 'en-US');
+  let date: Date;
+  if (typeof createdAt.toDate === 'function') {
+    date = createdAt.toDate();
+  } else if (createdAt.seconds !== undefined) {
+    date = new Date(createdAt.seconds * 1000);
+  } else if (createdAt._seconds !== undefined) {
+    date = new Date(createdAt._seconds * 1000);
+  } else if (createdAt instanceof Date) {
+    date = createdAt;
+  } else {
+    date = new Date(createdAt);
+  }
+  
+  if (isNaN(date.getTime())) {
+    date = new Date();
+  }
+  
+  return date.toLocaleDateString(lang === 'am' ? 'am-ET' : 'en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
 const displayReceiptId = (payment: any) => {
   if (!payment) return '';
   const bank = payment.bank || '';
@@ -12376,7 +12402,7 @@ export default function AdminDashboard() {
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የተከፈለበት ቀን' : 'Payment Date'}</p>
                       <p className="text-[10px] font-black text-slate-900">
-                        {selectedPayment.createdAt?.toDate ? selectedPayment.createdAt.toDate().toLocaleDateString() : new Date(selectedPayment.createdAt).toLocaleDateString()}
+                        {formatPaymentDate(selectedPayment.createdAt, language)}
                       </p>
                       {selectedPayment.paymentDetails?.time && (
                         <p className="text-[9px] font-black text-slate-500 mt-0.5">
