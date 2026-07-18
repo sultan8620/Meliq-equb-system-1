@@ -3346,6 +3346,11 @@ export default function AdminDashboard() {
   };
 
   const openDrawModal = (group: any) => {
+    if (!isSuperAdmin && !userData?.permissions?.manageDraws) {
+      triggerSuccess(language === 'am' ? 'የመዳረሻ ክልከላ' : 'Access Denied', language === 'am' ? 'እጣ የማውጣት ፍቃድ የለዎትም።' : 'You do not have permission to run draws.');
+      return;
+    }
+
     // Check for eligibility
     const groupPenalties = penalties.filter((p: any) => p.groupId === group.id);
     const unpaidMemberIds = new Set(groupPenalties.map((p: any) => p.userId));
