@@ -775,6 +775,7 @@ export default function AdminDashboard() {
   const [animatingAvatar, setAnimatingAvatar] = useState('');
   const [drawActiveTab, setDrawActiveTab] = useState<'eligible' | 'excluded' | 'winners'>('eligible');
   const [drawModalSearch, setDrawModalSearch] = useState('');
+  const [drawsFilter, setDrawsFilter] = useState<'active' | 'registration'>('active');
 
   useEffect(() => {
     let interval: any;
@@ -875,6 +876,16 @@ export default function AdminDashboard() {
           status: isCompleted ? 'completed' : 'active',
           updatedAt: new Date()
         });
+
+        try {
+          await updateDoc(doc(db, 'users', winner.id), {
+            wonDraw: true,
+            wonRound: round,
+            wonDate: new Date()
+          });
+        } catch (uErr) {
+          console.error("Error updating user wonDraw status:", uErr);
+        }
 
         await addDoc(collection(db, 'draws'), {
           groupId: selectedDrawGroup.id,
@@ -3272,14 +3283,15 @@ export default function AdminDashboard() {
     const currentRound = group.currentRound || 1;
     const missingDaysIds = new Set();
     group.members.forEach((m: any) => {
-       const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === group.id && p.status === 'verified');
-       if (userPayments.length < currentRound - 1) { // If round 2, they must have 1 verified payment at least.
+       const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === group.id && ['verified', 'active', 'approved'].includes(p.status));
+       if (userPayments.length < currentRound) { // They must have at least currentRound approved payments to be eligible!
          missingDaysIds.add(m.id);
        }
     });
 
     const excluded = group.members.filter((m: any) => (unpaidMemberIds.has(m.id) || missingDaysIds.has(m.id)) && !m.wonDraw);
     setIneligibleMembers(excluded);
+    setSelectedDrawGroup(group);
     setSelectedGroup(group);
     setShowDrawModal(true);
   };
@@ -8161,70 +8173,162 @@ export default function AdminDashboard() {
                </div>
             </div>
 
+            {/* Modern Tab Selector for Draw Center */}
+            <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full max-w-md mx-auto mb-6 relative z-10">
+               <button
+                 onClick={() => setDrawsFilter('active')}
+                 className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 ${drawsFilter === 'active' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-900'}`}
+               >
+                 <Zap size={14} className={drawsFilter === 'active' ? 'text-amber-400' : ''} />
+                 {language === 'am' ? 'አክቲቭ የሆኑት ምድቦች' : 'Active Groups'}
+               </button>
+               <button
+                 onClick={() => setDrawsFilter('registration')}
+                 className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 ${drawsFilter === 'registration' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-900'}`}
+               >
+                 <UserPlus size={14} className={drawsFilter === 'registration' ? 'text-rose-500' : ''} />
+                 {language === 'am' ? 'በምዝገባ ላይ ያሉ' : 'Under Registration'}
+               </button>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 pb-20">
-              {groupsWithMembers.filter(g => g.name.toLowerCase().includes(searchTerm.toLowerCase())).map((group, idx) => {
-                const membersCount = group.members?.length || 0;
-                const capacity = group.memberCount || 10;
-                const fillPercentage = membersCount > 0 ? Math.min(100, Math.round((membersCount / capacity) * 100)) : 0;
-                const isReadyForDraw = fillPercentage === 100;
-                const lastDrawDateDisplay = group.lastDrawDate ? new Date(group.lastDrawDate).toLocaleDateString('am-ET', { year: 'numeric', month: 'long', day: 'numeric'}) : 'እጣ አልወጣም';
-                const nextDrawDateDisplay = group.nextDrawDate ? new Date(group.nextDrawDate).toLocaleDateString('am-ET', { year: 'numeric', month: 'long', day: 'numeric'}) : 'በመጠባበቅ ላይ';
+              {groupsWithMembers
+                .filter(g => g.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                .filter(g => {
+                  if (drawsFilter === 'active') {
+                    return g.status === 'active';
+                  } else {
+                    return g.status === 'registration' || g.status === 'open' || !g.status;
+                  }
+                })
+                .map((group, idx) => {
+                  const membersCount = group.members?.length || 0;
+                  const capacity = group.memberCount || 10;
+                  const fillPercentage = membersCount > 0 ? Math.min(100, Math.round((membersCount / capacity) * 100)) : 0;
+                  
+                  // Compute eligibility summary before opening the draw modal
+                  const groupPenalties = penalties.filter((p: any) => p.groupId === group.id);
+                  const unpaidMemberIds = new Set(groupPenalties.map((p: any) => p.userId));
+                  const currentRound = group.currentRound || 1;
+                  const missingDaysIds = new Set();
+                  
+                  if (group.members) {
+                    group.members.forEach((m: any) => {
+                       const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === group.id && ['verified', 'active', 'approved'].includes(p.status));
+                       if (userPayments.length < currentRound) {
+                         missingDaysIds.add(m.id);
+                       }
+                    });
+                  }
 
-                return (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.min(idx * 0.05, 0.5) }}
-                    key={group.id} 
-                    className="bg-white p-6 rounded-[2.5rem] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 hover:shadow-2xl hover:shadow-rose-500/10 hover:-translate-y-1 hover:border-rose-200 transition-all flex flex-col relative overflow-hidden group"
-                  >
-                    <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-rose-400 to-orange-400"></div>
-                    <div className="absolute top-0 right-0 w-40 h-40 bg-rose-500/5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-rose-500/10 transition-colors"></div>
-                    
-                    <div className="flex justify-between items-start mb-5 relative z-10 pt-2">
-                       <div>
-                         <h2 className="text-xl font-black text-slate-900 leading-none uppercase tracking-tight group-hover:text-rose-600 transition-colors mb-2">{group.name}</h2>
-                         <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-rose-50 text-rose-600 border-rose-100 flex items-center gap-1">
-                               <Gift size={10} /> {group.type}
-                            </span>
-                            <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-slate-50 text-slate-500 border-slate-200">
-                               {parseInt(group.amount || "0").toLocaleString()} ETB / እጣ
-                            </span>
-                         </div>
-                       </div>
-                    </div>
+                  const wonDrawIds = new Set((group.members || []).filter((m: any) => m.wonDraw).map((m: any) => m.id));
+                  const eligibleCount = (group.members || []).filter((m: any) => !wonDrawIds.has(m.id) && !unpaidMemberIds.has(m.id) && !missingDaysIds.has(m.id)).length;
+                  const ineligibleCount = membersCount - eligibleCount;
 
-                    <div className="grid grid-cols-2 gap-3 mb-6 relative z-10 px-1">
-                       <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                          <div className="flex items-center gap-1.5 text-slate-400 mb-1">
-                             <Calendar size={12} />
-                             <span className="text-[8px] font-black uppercase tracking-widest">የመጨረሻ እጣ ቀን</span>
-                          </div>
-                          <p className="text-[11px] font-black text-slate-900 truncate">{lastDrawDateDisplay}</p>
-                       </div>
-                        <div className="bg-amber-50 p-3 rounded-2xl border border-amber-100 flex justify-between items-center group/schedule">
-                           <div>
-                              <div className="flex items-center gap-1.5 text-amber-500 mb-1">
-                                 <Clock size={12} />
-                                 <span className="text-[8px] font-black uppercase tracking-widest">ቀጣይ እጣ</span>
-                              </div>
-                              <p className="text-[11px] font-black text-slate-900 truncate">{nextDrawDateDisplay}</p>
+                  const lastDrawDateDisplay = group.lastDrawDate ? new Date(group.lastDrawDate).toLocaleDateString('am-ET', { year: 'numeric', month: 'long', day: 'numeric'}) : 'እጣ አልወጣም';
+                  const nextDrawDateDisplay = group.nextDrawDate ? new Date(group.nextDrawDate).toLocaleDateString('am-ET', { year: 'numeric', month: 'long', day: 'numeric'}) : 'በመጠባበቅ ላይ';
+
+                  return (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: Math.min(idx * 0.05, 0.5) }}
+                      key={group.id} 
+                      className="bg-white p-6 rounded-[2.5rem] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 hover:shadow-2xl hover:shadow-rose-500/10 hover:-translate-y-1 hover:border-rose-200 transition-all flex flex-col relative overflow-hidden group"
+                    >
+                      <div className={`absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r ${drawsFilter === 'active' ? 'from-amber-400 via-rose-500 to-indigo-500' : 'from-slate-400 to-slate-600'}`}></div>
+                      <div className="absolute top-0 right-0 w-40 h-40 bg-rose-500/5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-rose-500/10 transition-colors"></div>
+                      
+                      <div className="flex justify-between items-start mb-5 relative z-10 pt-2">
+                         <div>
+                           <h2 className="text-xl font-black text-slate-900 leading-none uppercase tracking-tight group-hover:text-rose-600 transition-colors mb-2">{group.name}</h2>
+                           <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-rose-50 text-rose-600 border-rose-100 flex items-center gap-1">
+                                 <Gift size={10} /> {group.type}
+                              </span>
+                              <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border bg-slate-50 text-slate-500 border-slate-200">
+                                 {parseInt(group.amount || "0").toLocaleString()} ETB / እጣ
+                              </span>
                            </div>
-                           <button 
-                             onClick={(e) => {
-                               e.stopPropagation();
-                               openScheduleModal(group);
-                             }}
-                             className="w-7 h-7 bg-white text-amber-500 rounded-lg flex items-center justify-center border border-amber-200 hover:bg-amber-50 transition-colors"
-                           >
-                              <Calendar size={12} />
-                           </button>
+                         </div>
+                      </div>
+
+                      {/* Diagnostic / Diagnostic Stats inside the active card */}
+                      {drawsFilter === 'active' ? (
+                        <div className="grid grid-cols-2 gap-2 mb-4 relative z-10">
+                           <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100/50 text-center">
+                              <p className="text-[7.5px] font-black text-emerald-600 uppercase tracking-wider mb-0.5">{language === 'am' ? 'ዕድለኛ እጩዎች (ብቁ)' : 'Eligible Users'}</p>
+                              <p className="text-lg font-black text-emerald-700">{eligibleCount} {language === 'am' ? 'አባል' : 'Members'}</p>
+                           </div>
+                           <div className="bg-rose-50/50 p-3 rounded-2xl border border-rose-100/50 text-center">
+                              <p className="text-[7.5px] font-black text-rose-600 uppercase tracking-wider mb-0.5">{language === 'am' ? 'የማይሳተፉ (ክፍያ ጎዶሎ/ያለፈ)' : 'Ineligible'}</p>
+                              <p className="text-lg font-black text-rose-700">{ineligibleCount} {language === 'am' ? 'አባል' : 'Members'}</p>
+                           </div>
                         </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+                      ) : (
+                        <div className="mb-4 relative z-10">
+                           <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                              <span>{language === 'am' ? 'የምዝገባ ሁኔታ' : 'Registration Progress'}</span>
+                              <span>{membersCount} / {capacity}</span>
+                           </div>
+                           <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                              <div className="bg-slate-900 h-full rounded-full transition-all duration-500" style={{ width: `${fillPercentage}%` }}></div>
+                           </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-3 mb-6 relative z-10 px-1">
+                         <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                            <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                               <Calendar size={12} />
+                               <span className="text-[8px] font-black uppercase tracking-widest">{language === 'am' ? 'የመጨረሻ እጣ ቀን' : 'Last Draw Date'}</span>
+                            </div>
+                            <p className="text-[11px] font-black text-slate-900 truncate">{lastDrawDateDisplay}</p>
+                         </div>
+                         <div className="bg-amber-50 p-3 rounded-2xl border border-amber-100 flex justify-between items-center group/schedule">
+                            <div>
+                               <div className="flex items-center gap-1.5 text-amber-500 mb-1">
+                                  <Clock size={12} />
+                                  <span className="text-[8px] font-black uppercase tracking-widest">{language === 'am' ? 'ቀጣይ እጣ' : 'Next Draw'}</span>
+                               </div>
+                               <p className="text-[11px] font-black text-slate-900 truncate">{nextDrawDateDisplay}</p>
+                            </div>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openScheduleModal(group);
+                              }}
+                              className="w-7 h-7 bg-white text-amber-500 rounded-lg flex items-center justify-center border border-amber-200 hover:bg-amber-50 transition-colors"
+                            >
+                               <Calendar size={12} />
+                            </button>
+                         </div>
+                      </div>
+
+                      {/* Launcher Actions */}
+                      <div className="mt-auto pt-2 relative z-10">
+                         {drawsFilter === 'active' ? (
+                            <button
+                              onClick={() => openDrawModal(group)}
+                              className="w-full py-3.5 bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 hover:from-rose-950 hover:to-slate-900 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] shadow-lg shadow-rose-900/10 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            >
+                              <Trophy size={14} className="text-amber-400 animate-bounce" />
+                              {language === 'am' ? 'እጣ አውጣ' : 'Perform Draw'}
+                            </button>
+                         ) : (
+                            <button
+                              onClick={() => startGroup(group.id)}
+                              disabled={membersCount === 0}
+                              className="w-full py-3.5 bg-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white disabled:opacity-50 disabled:hover:bg-slate-100 disabled:hover:text-slate-600 rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                            >
+                              <Zap size={14} />
+                              {language === 'am' ? 'ምድቡን ጀምር' : 'Start Group'}
+                            </button>
+                         )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
             </div>
           </motion.div>
         ) : activeTab === 'payouts' ? (
@@ -11641,26 +11745,48 @@ export default function AdminDashboard() {
                               ) : (
                                 ineligibleMembers
                                   .filter((m: any) => m.fullName.toLowerCase().includes(drawModalSearch.toLowerCase()))
-                                  .map((m: any) => (
-                                    <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-rose-100 rounded-xl">
-                                       <div className="flex items-center gap-2">
-                                          <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 font-bold overflow-hidden border border-rose-100/50">
-                                             {m.faceScan ? (
-                                               <img src={m.faceScan} alt="" className="w-full h-full object-cover" />
-                                             ) : (
-                                               <User size={12} />
-                                             )}
-                                          </div>
-                                          <div>
-                                             <p className="text-[10px] font-black text-rose-700 uppercase">{m.fullName}</p>
-                                             <p className="text-[8px] font-bold text-slate-400 mt-0.5">{m.phone}</p>
-                                          </div>
-                                       </div>
-                                       <span className="text-[7px] font-black text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100 uppercase tracking-widest text-center">
-                                          ክፍያ ጎዶሎ
-                                       </span>
-                                    </div>
-                                  ))
+                                  .map((m: any) => {
+                                    const isAlreadyWon = m.wonDraw;
+                                    const hasPendingPenalties = penalties.some((p: any) => p.userId === m.id && p.groupId === selectedDrawGroup.id);
+                                    
+                                    const currentRound = selectedDrawGroup.currentRound || 1;
+                                    const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === selectedDrawGroup.id && ['verified', 'active', 'approved'].includes(p.status));
+                                    const hasMissingDays = userPayments.length < currentRound;
+
+                                    let reasonAm = "የማይሳተፍ";
+                                    let reasonEn = "Excluded";
+                                    if (isAlreadyWon) {
+                                      reasonAm = "እጣ የበላ አባል";
+                                      reasonEn = "Already Won";
+                                    } else if (hasPendingPenalties) {
+                                      reasonAm = "ያልተከፈለ ቅጣት አለበት";
+                                      reasonEn = "Unpaid Penalty";
+                                    } else if (hasMissingDays) {
+                                      reasonAm = "ክፍያ ጎዶሎ (ጎዶሎ ቀን)";
+                                      reasonEn = "Missing Payment";
+                                    }
+
+                                    return (
+                                      <div key={m.id} className="flex items-center justify-between p-3 bg-white border border-rose-100 rounded-xl shadow-sm">
+                                         <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 font-bold overflow-hidden border border-rose-100/50">
+                                               {m.faceScan ? (
+                                                 <img src={m.faceScan} alt="" className="w-full h-full object-cover" />
+                                               ) : (
+                                                 <User size={12} />
+                                               )}
+                                            </div>
+                                            <div>
+                                               <p className="text-[10px] font-black text-rose-700 uppercase">{m.fullName}</p>
+                                               <p className="text-[8px] font-bold text-slate-400 mt-0.5">{m.phone}</p>
+                                            </div>
+                                         </div>
+                                         <span className="text-[7.5px] font-black text-rose-500 bg-rose-50 px-2 py-1 rounded border border-rose-100 uppercase tracking-widest text-center">
+                                            {language === 'am' ? reasonAm : reasonEn}
+                                         </span>
+                                      </div>
+                                    );
+                                  })
                               )}
                            </div>
                          )}
