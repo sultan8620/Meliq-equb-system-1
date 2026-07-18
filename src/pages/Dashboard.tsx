@@ -5940,15 +5940,38 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="pt-4 flex justify-between items-end relative z-10">
-                    <div className="inline-block px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
-                      <p className="text-[7px] font-bold text-slate-500 italic max-w-[160px] leading-relaxed">
-                        {language === 'am' ? '"እናመሰግናለን። ቁጠባዎ ደህንነቱ የተጠበቀ ነው።"' : '"Thank you. Your savings are secure with us."'}
-                      </p>
-                    </div>
-                    <div className="text-center w-20">
-                       <div className="border-b border-slate-300 w-full mb-1"></div>
-                       <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'ፊርማ' : 'Signature'}</p>
+                  <div className="pt-2 pb-1 border-t border-slate-100 mt-4 relative z-10">
+                    <p className="text-[7px] font-bold text-slate-500 italic text-center mb-3">
+                      {language === 'am' ? '"እናመሰግናለን። ቁጠባዎ ደህንነቱ የተጠበቀ ነው።"' : '"Thank you. Your savings are secure with us."'}
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Authorized Sign */}
+                      <div className="text-center relative flex flex-col items-center justify-end h-14">
+                        <img 
+                          src="/signature.jpg" 
+                          alt="Signature" 
+                          className="w-14 h-auto object-contain absolute bottom-3 select-none pointer-events-none mix-blend-multiply"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="border-b border-slate-300 w-full mb-1"></div>
+                        <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">
+                          {language === 'am' ? 'የሰብሳቢ ፊርማ' : 'Officer Sign'}
+                        </p>
+                      </div>
+
+                      {/* Guarantor Sign */}
+                      <div className="text-center relative flex flex-col items-center justify-end h-14">
+                        <img 
+                          src="/signature.jpg" 
+                          alt="Guarantor Signature" 
+                          className="w-14 h-auto object-contain absolute bottom-3 select-none pointer-events-none mix-blend-multiply"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="border-b border-slate-300 w-full mb-1"></div>
+                        <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">
+                          {language === 'am' ? 'የዋስ ፊርማ' : 'Guarantor Sign'}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>

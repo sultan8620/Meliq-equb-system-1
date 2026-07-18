@@ -969,6 +969,34 @@ export default function AdminDashboard() {
     }
   };
 
+  const [selectedPendingUserIds, setSelectedPendingUserIds] = useState<string[]>([]);
+  const togglePendingUserSelection = (userId: string) => {
+    setSelectedPendingUserIds(prev => 
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
+  const selectAllPendingUsers = (filteredPendingUsers: any[]) => {
+    if (selectedPendingUserIds.length === filteredPendingUsers.length) {
+      setSelectedPendingUserIds([]);
+    } else {
+      setSelectedPendingUserIds(filteredPendingUsers.map(u => u.id));
+    }
+  };
+
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<string[]>([]);
+  const togglePaymentSelection = (paymentId: string) => {
+    setSelectedPaymentIds(prev => 
+      prev.includes(paymentId) ? prev.filter(id => id !== paymentId) : [...prev, paymentId]
+    );
+  };
+  const selectAllPayments = (filteredPaymentsList: any[]) => {
+    if (selectedPaymentIds.length === filteredPaymentsList.length) {
+      setSelectedPaymentIds([]);
+    } else {
+      setSelectedPaymentIds(filteredPaymentsList.map(p => p.id));
+    }
+  };
+
   const handleExportUsers = (usersToExport: any[]) => {
     try {
       const headers = ['Full Name', 'Phone', 'Region', 'Status', 'Verified', 'Slots', 'Joined Date'];
@@ -1017,6 +1045,80 @@ export default function AdminDashboard() {
       triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ሁሉም አባላት በተሳካ ሁኔታ ተረጋግጠዋል!' : 'All selected members verified successfully!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/bulk`);
+    }
+  };
+
+  const handleBulkApprovePending = async () => {
+    if (selectedPendingUserIds.length === 0) return;
+    if (!await confirmAction(language === 'am' ? `${selectedPendingUserIds.length} የሚጠባበቁ አባላትን ማጽደቅ ይፈልጋሉ?` : `Are you sure you want to approve ${selectedPendingUserIds.length} pending members?`)) return;
+
+    try {
+      const promises = selectedPendingUserIds.map(async (userId) => {
+        await updateDoc(doc(db, 'users', userId), {
+          status: 'active',
+          isVerified: true,
+          verifiedAt: serverTimestamp()
+        });
+
+        // Send SMS notification
+        try {
+          const userSnap = await getDoc(doc(db, 'users', userId));
+          if (userSnap.exists()) {
+            const uData = userSnap.data();
+            if (uData.phone) {
+              const amMsg = `ሰላም ${uData.fullName || 'አቢሌ'}፣ የምዝገባ ጥያቄዎ በአድሚን ተቀብሏል። አሁን ገብተው መደበኛ አገልግሎቱን መጠቀም ይችላሉ። መልካም የእቁብ ቆይታ!`;
+              const enMsg = `Hello ${uData.fullName || 'Member'}, your registration request has been approved by the Admin. You can now log in and access all services. Enjoy your Equb experience!`;
+              const smsMsg = language === 'am' ? amMsg : enMsg;
+              await sendSMS(uData.phone, smsMsg, uData.fullName || 'Member', 'approval');
+            }
+          }
+        } catch (smsErr) {
+          console.warn("SMS sending failed for bulk user, continuing anyway:", smsErr);
+        }
+
+        // Send greeting notification
+        await addDoc(collection(db, 'notifications'), {
+          recipientId: userId,
+          title: language === 'am' ? 'እንኳን ደህና መጡ!' : 'Welcome!',
+          message: language === 'am' 
+            ? 'መለያዎ ጸድቋል። አሁን ሁሉንም አገልግሎቶች መጠቀም ይችላሉ።' 
+            : 'Your account has been approved. You can now use all services.',
+          createdAt: serverTimestamp(),
+          read: false,
+          type: 'approval'
+        });
+      });
+
+      await Promise.all(promises);
+      setSelectedPendingUserIds([]);
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ሁሉም የተመረጡ አባላት በተሳካ ሁኔታ ጸድቀዋል!' : 'All selected members approved successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/bulk_approve`);
+    }
+  };
+
+  const handleBulkApprovePayments = async () => {
+    if (selectedPaymentIds.length === 0) return;
+    if (!await confirmAction(language === 'am' ? `${selectedPaymentIds.length} ክፍያዎችን ማጽደቅ ይፈልጋሉ?` : `Are you sure you want to approve ${selectedPaymentIds.length} payments?`)) return;
+
+    try {
+      const promises = selectedPaymentIds.map(async (paymentId) => {
+        await updateDoc(doc(db, 'payments', paymentId), {
+          status: 'active',
+          approvedAt: new Date(),
+          reviewMessage: 'Bulk Approved'
+        });
+        const pt = allPayments.find(p => p.id === paymentId);
+        if (pt?.userId) {
+          await notifyUserAdminChange(pt.userId, 'ክፍያ ጸድቋል', 'Payment Approved', 'ክፍያዎ በተሳካ ሁኔታ ጸድቋል።', 'Your payment has been successfully approved.');
+        }
+      });
+
+      await Promise.all(promises);
+      setSelectedPaymentIds([]);
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ሁሉም የተመረጡ ክፍያዎች በተሳካ ሁኔታ ጸድቀዋል!' : 'All selected payments approved successfully!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `payments/bulk_approve`);
     }
   };
 
@@ -3546,7 +3648,7 @@ export default function AdminDashboard() {
 
             {/* Filter & Search Bar */}
             <div className="flex flex-col lg:flex-row items-center justify-between gap-6 bg-white p-5 rounded-[2.5rem] border border-slate-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] relative z-20">
-               <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar no-scrollbar w-full lg:w-auto px-2 pb-2 lg:pb-0">
+               <div className="flex flex-wrap items-center gap-2 overflow-x-auto custom-scrollbar no-scrollbar w-full lg:w-auto px-2 pb-2 lg:pb-0">
                   <div className="flex items-center gap-2 pr-4 border-r border-slate-100 mr-2 shrink-0">
                     <Filter size={16} className="text-amber-500" />
                     <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest hidden sm:inline-block">ማጣሪያ:</span>
@@ -3564,6 +3666,19 @@ export default function AdminDashboard() {
                       {r}
                     </button>
                   ))}
+                  <div className="h-6 w-px bg-slate-100 mx-2 hidden md:block"></div>
+                  <button 
+                     onClick={() => selectAllPendingUsers(filteredPending)}
+                     className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border-2 ${
+                       selectedPendingUserIds.length === filteredPending.length && filteredPending.length > 0
+                       ? 'bg-rose-500 text-white border-rose-600 shadow-md' 
+                       : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                     }`}
+                  >
+                     {selectedPendingUserIds.length === filteredPending.length && filteredPending.length > 0
+                       ? (language === 'am' ? 'ሁሉንም አትምረጥ' : 'Deselect All')
+                       : (language === 'am' ? 'ሁሉንም ምረጥ' : 'Select All')}
+                  </button>
                </div>
 
                <div className="relative w-full lg:w-[400px] group mx-2 shrink-0">
@@ -3608,6 +3723,14 @@ export default function AdminDashboard() {
                      {/* Border Gradient Top */}
                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-rose-400 opacity-80 group-hover:opacity-100 transition-opacity"></div>
                      <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-3xl group-hover:bg-amber-500/10 transition-colors pointer-events-none"></div>
+
+                     {/* Selection Overlay */}
+                     <button 
+                        onClick={() => togglePendingUserSelection(user.id)}
+                        className={`absolute top-4 left-4 z-20 w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center ${selectedPendingUserIds.includes(user.id) ? 'bg-amber-600 border-amber-600 opacity-100' : 'bg-white/80 backdrop-blur-md border-slate-300 opacity-40 group-hover:opacity-100'}`}
+                     >
+                        {selectedPendingUserIds.includes(user.id) && <CheckCircle size={10} className="text-white" />}
+                     </button>
 
                      <div className="p-4">
                        <div className="flex gap-4 relative z-10 mb-4">
@@ -3723,6 +3846,40 @@ export default function AdminDashboard() {
                  ))
                )}
             </div>
+
+            {/* Floating Bulk Actions Bar */}
+            {selectedPendingUserIds.length > 0 && (
+               <motion.div 
+                  initial={{ opacity: 0, y: 100 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 100 }}
+                  className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 backdrop-blur-md border border-slate-800 text-white px-8 py-4 rounded-3xl flex items-center gap-6 shadow-[0_20px_50px_rgba(0,0,0,0.3)] min-w-[320px] max-w-full justify-between"
+               >
+                  <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs font-mono">
+                        {selectedPendingUserIds.length}
+                     </div>
+                     <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-300">
+                        {language === 'am' ? 'የተመረጡ አባላት' : 'Selected Pending'}
+                     </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                     <button 
+                        onClick={() => setSelectedPendingUserIds([])}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+                     >
+                        {language === 'am' ? 'አትምረጥ' : 'Cancel'}
+                     </button>
+                     <button 
+                        onClick={handleBulkApprovePending}
+                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                     >
+                        <CheckCircle size={14} />
+                        {language === 'am' ? 'አጽድቅ (ሁሉንም)' : 'Approve All'}
+                     </button>
+                  </div>
+               </motion.div>
+            )}
           </motion.div>
         ) : activeTab === 'users' ? (
           <motion.div 
@@ -3840,6 +3997,21 @@ export default function AdminDashboard() {
                </div>
 
                <div className="flex items-center gap-3">
+                  <div className="bg-white p-2 rounded-2xl border border-slate-100 shadow-lg flex items-center gap-1">
+                     <button 
+                        onClick={() => selectAllUsers(filteredUsers)}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all duration-300 ${
+                          selectedUserIds.length === filteredUsers.length && filteredUsers.length > 0
+                          ? 'bg-rose-600 text-white shadow-md hover:bg-rose-700' 
+                          : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                        }`}
+                     >
+                        {selectedUserIds.length === filteredUsers.length && filteredUsers.length > 0
+                          ? (language === 'am' ? 'ሁሉንም አትምረጥ' : 'Deselect All')
+                          : (language === 'am' ? 'ሁሉንም ምረጥ' : 'Select All')}
+                     </button>
+                  </div>
+
                   <div className="bg-white p-2 rounded-2xl border border-slate-100 shadow-lg flex items-center gap-1">
                      <button 
                         onClick={() => setUserViewMode('grid')}
@@ -4094,7 +4266,7 @@ export default function AdminDashboard() {
                      {/* Selection Overlay */}
                      <button 
                         onClick={() => toggleUserSelection(u.id)}
-                        className={`absolute top-4 left-4 z-20 w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center ${selectedUserIds.includes(u.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white/50 backdrop-blur-md border-white/80 opacity-0 group-hover:opacity-100'}`}
+                        className={`absolute top-4 left-4 z-20 w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center ${selectedUserIds.includes(u.id) ? 'bg-indigo-600 border-indigo-600 opacity-100' : 'bg-white/80 backdrop-blur-md border-slate-300 opacity-40 group-hover:opacity-100'}`}
                      >
                         {selectedUserIds.includes(u.id) && <CheckCircle size={10} className="text-white" />}
                      </button>
@@ -5378,6 +5550,19 @@ export default function AdminDashboard() {
               </div>
 
               <div className="flex items-center gap-3 w-full md:w-auto">
+                <button 
+                  onClick={() => selectAllPayments(paymentHistoryView === 'pending' ? allowedPayments : allowedAllPayments)}
+                  className={`px-5 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${
+                    selectedPaymentIds.length === (paymentHistoryView === 'pending' ? allowedPayments : allowedAllPayments).length && (paymentHistoryView === 'pending' ? allowedPayments : allowedAllPayments).length > 0
+                    ? 'bg-rose-500 text-white border-rose-600 shadow-md' 
+                    : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                  }`}
+                >
+                  {selectedPaymentIds.length === (paymentHistoryView === 'pending' ? allowedPayments : allowedAllPayments).length && (paymentHistoryView === 'pending' ? allowedPayments : allowedAllPayments).length > 0
+                    ? (language === 'am' ? 'ሁሉንም አትምረጥ' : 'Deselect All')
+                    : (language === 'am' ? 'ሁሉንም ምረጥ' : 'Select All')}
+                </button>
+
                 <div className="relative flex-1 md:flex-none md:w-64">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                   <input 
@@ -5440,6 +5625,14 @@ export default function AdminDashboard() {
                       >
                       {/* Status Accent Bar */}
                       <div className={`absolute top-0 left-0 w-1.5 h-full ${payment.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      
+                      {/* Selection Overlay */}
+                      <button 
+                         onClick={() => togglePaymentSelection(payment.id)}
+                         className={`absolute top-4 right-4 z-20 w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center ${selectedPaymentIds.includes(payment.id) ? 'bg-blue-600 border-blue-600 opacity-100' : 'bg-slate-100 border-slate-300 opacity-40 group-hover:opacity-100'}`}
+                      >
+                         {selectedPaymentIds.includes(payment.id) && <CheckCircle size={10} className="text-white" />}
+                      </button>
                       
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -5539,6 +5732,40 @@ export default function AdminDashboard() {
                   ))}
                 </div>
               )}
+
+            {/* Floating Bulk Actions Bar for Payments */}
+            {selectedPaymentIds.length > 0 && (
+               <motion.div 
+                  initial={{ opacity: 0, y: 100 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 100 }}
+                  className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 backdrop-blur-md border border-slate-800 text-white px-8 py-4 rounded-3xl flex items-center gap-6 shadow-[0_20px_50px_rgba(0,0,0,0.3)] min-w-[320px] max-w-full justify-between"
+               >
+                  <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-black text-xs font-mono">
+                        {selectedPaymentIds.length}
+                     </div>
+                     <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-300">
+                        {language === 'am' ? 'የተመረጡ ክፍያዎች' : 'Selected Payments'}
+                     </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                     <button 
+                        onClick={() => setSelectedPaymentIds([])}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+                     >
+                        {language === 'am' ? 'አትምረጥ' : 'Cancel'}
+                     </button>
+                     <button 
+                        onClick={handleBulkApprovePayments}
+                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                     >
+                        <CheckCircle size={14} />
+                        {language === 'am' ? 'አጽድቅ (ሁሉንም)' : 'Approve All'}
+                     </button>
+                  </div>
+               </motion.div>
+            )}
           </motion.div>
         ) : isSuperAdmin && activeTab === 'admins' ? (
           <motion.div 
@@ -12025,15 +12252,38 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className="pt-4 flex justify-between items-end relative z-10">
-                    <div className="inline-block px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
-                      <p className="text-[7px] font-bold text-slate-500 italic max-w-[160px] leading-relaxed">
-                        {language === 'am' ? '"እናመሰግናለን። ቁጠባዎ ደህንነቱ የተጠበቀ ነው።"' : '"Thank you. Your savings are secure with us."'}
-                      </p>
-                    </div>
-                    <div className="text-center w-20">
-                       <div className="border-b border-slate-300 w-full mb-1"></div>
-                       <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'ፊርማ' : 'Signature'}</p>
+                  <div className="pt-2 pb-1 border-t border-slate-100 mt-4 relative z-10">
+                    <p className="text-[7px] font-bold text-slate-500 italic text-center mb-3">
+                      {language === 'am' ? '"እናመሰግናለን። ቁጠባዎ ደህንነቱ የተጠበቀ ነው።"' : '"Thank you. Your savings are secure with us."'}
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Authorized Sign */}
+                      <div className="text-center relative flex flex-col items-center justify-end h-14">
+                        <img 
+                          src="/signature.jpg" 
+                          alt="Signature" 
+                          className="w-14 h-auto object-contain absolute bottom-3 select-none pointer-events-none mix-blend-multiply"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="border-b border-slate-300 w-full mb-1"></div>
+                        <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">
+                          {language === 'am' ? 'የሰብሳቢ ፊርማ' : 'Officer Sign'}
+                        </p>
+                      </div>
+
+                      {/* Guarantor Sign */}
+                      <div className="text-center relative flex flex-col items-center justify-end h-14">
+                        <img 
+                          src="/signature.jpg" 
+                          alt="Guarantor Signature" 
+                          className="w-14 h-auto object-contain absolute bottom-3 select-none pointer-events-none mix-blend-multiply"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="border-b border-slate-300 w-full mb-1"></div>
+                        <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">
+                          {language === 'am' ? 'የዋስ ፊርማ' : 'Guarantor Sign'}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -12371,23 +12621,23 @@ export default function AdminDashboard() {
                   </>
                 )}
                 
-                {isSuperAdmin && (
+                {(isSuperAdmin || userData?.permissions?.manageGroups) && (
                   <button 
                     onClick={async () => {
-                      if (await confirmAction(`Are you sure you want to delete the group ${selectedGroup.name}?`)) {
+                      if (await confirmAction(language === 'am' ? `ቡድኑን ${selectedGroup.name} መሰረዝ እንደሚፈልጉ እርግጠኛ ነዎት?` : `Are you sure you want to delete the group ${selectedGroup.name}?`)) {
                         try {
                           await deleteDoc(doc(db, 'groups', selectedGroup.id));
                           setShowManageGroupModal(false);
-                          triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Group deleted successfully.');
+                          triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Notice', language === 'am' ? 'ምድቡ በተሳካ ሁኔታ ተሰርዟል::' : 'Group deleted successfully.');
                         } catch (e) {
                           console.error("Error deleting group:", e);
-                          triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'Failed to delete group.');
+                          triggerSuccess(language === 'am' ? 'ስህተት' : 'Notice', language === 'am' ? 'ምድቡን ለመሰረዝ አልተሳካም::' : 'Failed to delete group.');
                         }
                       }
                     }}
                     className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm border border-rose-100 flex items-center justify-center gap-2 hover:bg-rose-100 transition-colors"
                   >
-                    <Trash2 size={14} /> Delete Group
+                    <Trash2 size={14} /> {language === 'am' ? 'ምድቡን አጥፋ' : 'Delete Group'}
                   </button>
                 )}
               </div>

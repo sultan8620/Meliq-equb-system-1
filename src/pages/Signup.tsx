@@ -446,53 +446,10 @@ export default function Signup() {
         const validOpenGroups = groups.filter(g => g.memberCount < g.limit);
 
         if (validOpenGroups.length === 0) {
-          const creationKey = `${formData.frequency}_${formData.memberLimit}_${finalAmount}`;
-          if (groupCreationInstance.current === creationKey) {
-            return;
-          }
-          groupCreationInstance.current = creationKey;
-
-          // No open group available for this combination! Auto-create one immediately.
-          const groupsRef = collection(db, 'groups');
-          
-          const qAll = query(
-            groupsRef, 
-            where('type', '==', formData.frequency),
-            where('limit', '==', formData.memberLimit),
-            where('amount', '==', finalAmount)
-          );
-          const allSnapshot = await getDocs(qAll);
-          const count = allSnapshot ? allSnapshot.docs.length : 0;
-
-          const getLetterName = (num: number) => {
-            let name = '';
-            while (num >= 0) {
-              name = String.fromCharCode(65 + (num % 26)) + name;
-              num = Math.floor(num / 26) - 1;
-            }
-            return name;
-          };
-          const newName = `ምድብ ${getLetterName(count)}`;
-
-          const newDoc = {
-            name: newName,
-            type: formData.frequency,
-            limit: formData.memberLimit,
-            amount: finalAmount,
-            memberCount: 0,
-            status: 'registration',
-            createdAt: serverTimestamp()
-          };
-
-          const newGroupRef = await addDoc(groupsRef, newDoc);
-          const newGroupData = { id: newGroupRef.id, ...newDoc, createdAt: new Date() };
-          
           if (active) {
-            groups = [newGroupData];
-            setAvailableGroups(groups);
-            setSelectedGroup(newGroupData);
+            setAvailableGroups([]);
+            setSelectedGroup(null);
           }
-          groupCreationInstance.current = '';
         } else {
           if (active) {
             setAvailableGroups(groups);
@@ -843,60 +800,77 @@ export default function Signup() {
       }
 
       // 1. Resolve Target Group
-      if (!targetGroup || (targetGroup.memberCount + formData.slots) > targetGroup.limit) {
-        const openGroup = availableGroups.find(g => (g.memberCount + formData.slots) <= g.limit);
+      // If there is an existing open group for this Equb type, join it (fills existing group first).
+      // If no open group exists with enough capacity, automatically create a new group.
+      let resolvedTargetGroup = null;
+      try {
+        const groupsRef = collection(db, 'groups');
+        const qGroups = query(
+          groupsRef,
+          where('type', '==', formData.frequency),
+          where('limit', '==', formData.memberLimit),
+          where('amount', '==', finalAmount)
+        );
         
-        if (openGroup) {
-          targetGroup = openGroup;
-        } else {
-          // Create new group with sequential name A, B, C...
-          const groupsRef = collection(db, 'groups');
-          // Fetch all groups of this type/limit/amount to count them
-          const qAll = query(
-            groupsRef, 
-            where('type', '==', formData.frequency),
-            where('limit', '==', formData.memberLimit),
-            where('amount', '==', finalAmount)
-          );
-          
-          let allSnapshot;
-          try {
-            allSnapshot = await getDocs(qAll);
-          } catch (error) {
-            handleFirestoreError(error, OperationType.LIST, 'groups');
-          }
-          
-          const count = allSnapshot.docs.length;
-          
-          // Generate name: ምድብ A, ምድብ B, ..., ምድብ Z, ምድብ AA, ምድብ AB...
-          const getLetterName = (num: number) => {
-            let name = '';
-            while (num >= 0) {
-              name = String.fromCharCode(65 + (num % 26)) + name;
-              num = Math.floor(num / 26) - 1;
-            }
-            return name;
-          };
-          const newName = `ምድብ ${getLetterName(count)}`;
+        const groupsSnap = await getDocs(qGroups);
+        const allGroups = groupsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+        
+        // Find the oldest open group with enough capacity for user's slots
+        const openGroup = allGroups
+          .filter(g => ['open', 'registration'].includes(g.status) && (g.memberCount + formData.slots) <= g.limit)
+          .sort((a, b) => {
+            const dateA = a.createdAt?.seconds || 0;
+            const dateB = b.createdAt?.seconds || 0;
+            return dateA - dateB;
+          })[0];
 
-          let newGroupRef;
-          try {
-            newGroupRef = await addDoc(groupsRef, {
-              name: newName,
-              type: formData.frequency,
-              limit: formData.memberLimit,
-              amount: finalAmount,
-              memberCount: 0,
-              status: 'registration', // Initial status is registration
-              createdAt: serverTimestamp()
-            });
-          } catch (error) {
-            handleFirestoreError(error, OperationType.CREATE, 'groups');
-          }
+        if (openGroup) {
+          resolvedTargetGroup = openGroup;
+        } else {
+          // Automatic Group Creation
+          const count = allGroups.length;
+          const frequencyLabelEn = formData.frequency === 'tendays' ? '10 Days' : formData.frequency === 'fivedays' ? '5 Days' : formData.frequency === 'weekly' ? 'Weekly' : formData.frequency === 'monthly' ? 'Monthly' : 'Daily';
+          const frequencyLabelAm = formData.frequency === 'tendays' ? 'የ10 ቀን' : formData.frequency === 'fivedays' ? 'የ5 ቀን' : formData.frequency === 'weekly' ? 'ሳምንታዊ' : formData.frequency === 'monthly' ? 'ወርሃዊ' : 'ዕለታዊ';
           
-          targetGroup = { id: newGroupRef.id, name: newName, memberCount: 0, limit: formData.memberLimit };
+          const newGroupName = language === 'am'
+            ? `${frequencyLabelAm} - ${finalAmount} ብር - ምድብ ${count + 1}`
+            : `${frequencyLabelEn} - ${finalAmount} ETB - Group ${count + 1}`;
+            
+          const newGroupDoc = {
+            name: newGroupName,
+            type: formData.frequency,
+            limit: formData.memberLimit,
+            amount: finalAmount,
+            memberCount: 0,
+            status: 'registration',
+            createdAt: serverTimestamp(),
+            currentRound: 1,
+            cbeAccount: '',
+            telebirrAccount: '',
+            boaAccount: ''
+          };
+          
+          const newGroupRef = await addDoc(groupsRef, newGroupDoc);
+          resolvedTargetGroup = {
+            id: newGroupRef.id,
+            ...newGroupDoc,
+            memberCount: 0
+          };
         }
+      } catch (grpErr) {
+        console.error("Error resolving/creating target group, falling back:", grpErr);
+        resolvedTargetGroup = targetGroup;
       }
+
+      if (!resolvedTargetGroup) {
+        throw new Error(
+          language === 'am' 
+            ? 'ይቅርታ፣ መምረጥ ወይም መፍጠር አልተቻለም። እባክዎ አስተዳዳሪውን ያነጋግሩ።' 
+            : 'Sorry, unable to assign or create a group. Please contact the administrator.'
+        );
+      }
+
+      targetGroup = resolvedTargetGroup;
 
       const isAdminPhone = cleanPhone === '0900000000';
       
@@ -910,7 +884,7 @@ export default function Signup() {
           email: dummyEmail,
           authEmail: dummyEmail,
           memberCode: memberCode,
-          round: selectedGroup?.currentRound || 1,
+          round: targetGroup?.currentRound || 1,
           amount: finalAmount,
           commission: commissionPerSlot,
           totalPerSlot,
