@@ -14,6 +14,50 @@ import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSn
 import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ChevronDown, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff, UserMinus } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { sendSMS } from '../lib/smsHelper';
+import userSignatureImg from '../assets/images/user_signature_1784378339618.jpg';
+
+const getBankPrefix = (bankName: string) => {
+  if (!bankName) return 'REC';
+  const name = bankName.toLowerCase();
+  if (name.includes('cbe')) return 'CBE';
+  if (name.includes('tele') || name.includes('birr')) return 'TELE';
+  if (name.includes('abyssinia') || name.includes('boa')) return 'BOA';
+  if (name.includes('awash')) return 'AWASH';
+  if (name.includes('dashen')) return 'DASHEN';
+  if (name.includes('zemen')) return 'ZEMEN';
+  if (name.includes('hibret')) return 'HIB';
+  return bankName.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 5) || 'REC';
+};
+
+const generateReceiptId = (bankName: string) => {
+  const prefix = getBankPrefix(bankName);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `${prefix}-${year}${month}${day}-${rand}`;
+};
+
+const displayReceiptId = (payment: any) => {
+  if (!payment) return '';
+  const bank = payment.bank || '';
+  const prefix = getBankPrefix(bank);
+  
+  if (payment.receiptId) {
+    if (payment.receiptId.startsWith(`${prefix}-`)) {
+      return payment.receiptId;
+    }
+    if (payment.receiptId.includes('-')) {
+      const parts = payment.receiptId.split('-');
+      return `${prefix}-${parts.slice(1).join('-')}`;
+    }
+    return `${prefix}-${payment.receiptId}`;
+  }
+  
+  const paymentSuffix = payment.id ? payment.id.slice(0, 8).toUpperCase() : Math.floor(1000 + Math.random() * 9000);
+  return `${prefix}-${paymentSuffix}`;
+};
 
 const Magnetic = ({ children, className }: { children: React.ReactNode, className?: string, key?: any }) => {
   const ref = React.useRef<HTMLDivElement>(null);
@@ -87,6 +131,7 @@ export default function AdminDashboard() {
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showScheduleDrawModal, setShowScheduleDrawModal] = useState(false);
   const [ineligibleMembers, setIneligibleMembers] = useState<any[]>([]);
+  const [includeIneligible, setIncludeIneligible] = useState(false);
   const [scheduledDrawGroup, setScheduledDrawGroup] = useState<any>(null);
   const [drawScheduleDate, setDrawScheduleDate] = useState('');
   const [drawScheduleTime, setDrawScheduleTime] = useState('');
@@ -781,7 +826,7 @@ export default function AdminDashboard() {
     let interval: any;
     if (drawStage === 'animating' && selectedDrawGroup) {
       const eligible = selectedDrawGroup.members.filter(
-        (m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id)
+        (m: any) => !m.wonDraw && (includeIneligible || !ineligibleMembers.find((im: any) => im.id === m.id))
       );
       if (eligible.length > 0) {
         let counter = 0;
@@ -794,7 +839,7 @@ export default function AdminDashboard() {
       }
     }
     return () => clearInterval(interval);
-  }, [drawStage, selectedDrawGroup, ineligibleMembers]);
+  }, [drawStage, selectedDrawGroup, ineligibleMembers, includeIneligible]);
 
   const regions = ['All', 'አዲስ አበባ', 'አማራ', 'ኦሮሚያ', 'ትግራይ', 'ደቡብ ኢትዮጵያ', 'ደቡብ', 'ሶማሌ', 'አፋር', 'ቤንሻንጉል ጉሙዝ', 'ጋምቤላ', 'ሐረሪ', 'ሲዳማ', 'ድሬዳዋ'];
 
@@ -836,7 +881,7 @@ export default function AdminDashboard() {
       try {
         let winner: any = null;
         const eligible = selectedDrawGroup.members.filter(
-          (m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id)
+          (m: any) => !m.wonDraw && (includeIneligible || !ineligibleMembers.find((im: any) => im.id === m.id))
         );
 
         if (winnerIdOrMode === 'auto') {
@@ -3021,7 +3066,7 @@ export default function AdminDashboard() {
       const totalAmount = amountPerSlot * paymentCount * (selectedMember.slots || 1);
       
       const now = new Date();
-      const receiptId = `REC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const receiptId = generateReceiptId('CASH');
 
       await addDoc(collection(db, 'payments'), {
         userId: selectedMember.id,
@@ -3163,7 +3208,7 @@ export default function AdminDashboard() {
         wrapper = null;
       }
 
-      const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
+      const receiptId = displayReceiptId(payment);
       
       const img = new Image();
       img.src = dataUrl;
@@ -3291,6 +3336,7 @@ export default function AdminDashboard() {
 
     const excluded = group.members.filter((m: any) => (unpaidMemberIds.has(m.id) || missingDaysIds.has(m.id)) && !m.wonDraw);
     setIneligibleMembers(excluded);
+    setIncludeIneligible(false);
     setSelectedDrawGroup(group);
     setSelectedGroup(group);
     setShowDrawModal(true);
@@ -5601,7 +5647,7 @@ export default function AdminDashboard() {
               p.userName?.toLowerCase().includes(paymentSearch.toLowerCase()) || 
               p.groupName?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
               p.reference?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
-              p.receiptId?.toLowerCase().includes(paymentSearch.toLowerCase())
+              displayReceiptId(p).toLowerCase().includes(paymentSearch.toLowerCase())
             ).length === 0 ? (
                 <div className="bg-white rounded-[2rem] border border-slate-100 p-12 text-center flex flex-col items-center justify-center">
                   <div className="w-20 h-20 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
@@ -5627,7 +5673,7 @@ export default function AdminDashboard() {
                       p.userName?.toLowerCase().includes(paymentSearch.toLowerCase()) || 
                       p.groupName?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
                       p.reference?.toLowerCase().includes(paymentSearch.toLowerCase()) ||
-                      p.receiptId?.toLowerCase().includes(paymentSearch.toLowerCase())
+                      displayReceiptId(p).toLowerCase().includes(paymentSearch.toLowerCase())
                     )
                     .map(payment => (
                       <motion.div 
@@ -5704,7 +5750,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
-                           <p className="text-[9px] font-mono font-black text-indigo-600 truncate">#{payment.receiptId || payment.id.slice(0, 8).toUpperCase()}</p>
+                           <p className="text-[9px] font-mono font-black text-indigo-600 truncate">#{displayReceiptId(payment)}</p>
                         </div>
                       </div>
 
@@ -11574,6 +11620,31 @@ export default function AdminDashboard() {
                        <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Select Winner for Round {selectedDrawGroup.currentRound || 1}</p>
                     </div>
 
+                    {/* Toggle Eligibility Requirement Option */}
+                    {ineligibleMembers.length > 0 && (
+                      <div className="bg-amber-50 border border-amber-100 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 max-w-xl mx-auto shadow-sm">
+                        <div className="flex gap-3 items-start">
+                          <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600 shrink-0 mt-0.5">
+                            <AlertTriangle size={20} />
+                          </div>
+                          <div>
+                            <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-wide">ጎዶሎ ክፍያ/ቅጣት ያለባቸውን አባላት ማካተት</h4>
+                            <p className="text-[10px] text-slate-500 font-bold mt-0.5">ጎዶሎ ክፍያ ወይም ያልተከፈለ ቅጣት ያለባቸው {ineligibleMembers.length} አባላት አሉ::</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIncludeIneligible(!includeIneligible)}
+                          className={`w-full sm:w-auto px-4 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border shrink-0 ${
+                            includeIneligible 
+                              ? 'bg-amber-600 border-amber-600 text-white shadow-md shadow-amber-600/15'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {includeIneligible ? 'አሁን ይካተታሉ (Included)' : 'እንዳይካተቱ ተደርገዋል (Excluded)'}
+                        </button>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full max-w-4xl mx-auto mb-4">
                        {/* Auto Draw Option */}
                        <div 
@@ -11609,7 +11680,7 @@ export default function AdminDashboard() {
                                >
                                  <option value="">-- አባል ይምረጡ --</option>
                                  {selectedDrawGroup.members
-                                    .filter((m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id))
+                                    .filter((m: any) => !m.wonDraw && (includeIneligible || !ineligibleMembers.find((im: any) => im.id === m.id)))
                                     .map((m: any) => (
                                       <option key={m.id} value={m.id}>{m.fullName}</option>
                                     ))
@@ -11652,7 +11723,7 @@ export default function AdminDashboard() {
                               : 'border-transparent text-slate-400 hover:text-slate-600'
                           }`}
                         >
-                          <UserCheck size={12} /> የሚሳተፉ ({selectedDrawGroup.members.length - ineligibleMembers.length})
+                          <UserCheck size={12} /> የሚሳተፉ ({selectedDrawGroup.members.filter((m: any) => !m.wonDraw && (includeIneligible || !ineligibleMembers.find((im: any) => im.id === m.id))).length})
                         </button>
                         <button
                           onClick={() => setDrawActiveTab('excluded')}
@@ -11662,7 +11733,7 @@ export default function AdminDashboard() {
                               : 'border-transparent text-slate-400 hover:text-slate-600'
                           }`}
                         >
-                          <UserMinus size={12} /> የማይሳተፉ ({ineligibleMembers.length})
+                          <UserMinus size={12} /> የማይሳተፉ ({includeIneligible ? 0 : ineligibleMembers.length})
                         </button>
                         <button
                           onClick={() => setDrawActiveTab('winners')}
@@ -11694,7 +11765,7 @@ export default function AdminDashboard() {
                          {drawActiveTab === 'eligible' && (
                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               {selectedDrawGroup.members
-                                .filter((m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id))
+                                .filter((m: any) => !m.wonDraw && (includeIneligible || !ineligibleMembers.find((im: any) => im.id === m.id)))
                                 .filter((m: any) => m.fullName.toLowerCase().includes(drawModalSearch.toLowerCase()))
                                 .length === 0 ? (
                                 <div className="col-span-2 text-center py-6">
@@ -11703,7 +11774,7 @@ export default function AdminDashboard() {
                                 </div>
                               ) : (
                                 selectedDrawGroup.members
-                                  .filter((m: any) => !m.wonDraw && !ineligibleMembers.find((im: any) => im.id === m.id))
+                                  .filter((m: any) => !m.wonDraw && (includeIneligible || !ineligibleMembers.find((im: any) => im.id === m.id)))
                                   .filter((m: any) => m.fullName.toLowerCase().includes(drawModalSearch.toLowerCase()))
                                   .map((m: any) => {
                                     const integrity = calculateIntegrityScore(m.id);
@@ -12276,7 +12347,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
-                    <p className="text-[10px] font-black text-slate-900 font-mono">#{selectedPayment.receiptId || selectedPayment.id.slice(0, 8).toUpperCase()}</p>
+                    <p className="text-[10px] font-black text-slate-900 font-mono">#{displayReceiptId(selectedPayment)}</p>
                   </div>
                 </div>
 
@@ -12386,7 +12457,7 @@ export default function AdminDashboard() {
                       {/* Authorized Sign */}
                       <div className="text-center relative flex flex-col items-center justify-end h-14">
                         <img 
-                          src="/signature.jpg" 
+                          src={userSignatureImg} 
                           alt="Signature" 
                           className="w-14 h-auto object-contain absolute bottom-3 select-none pointer-events-none mix-blend-multiply"
                           referrerPolicy="no-referrer"

@@ -57,6 +57,50 @@ import { Users, Image as ImageIcon, Paperclip, PhoneCall, Video as VideoCall, Fi
 import { useLocation, useNavigate } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore';
 import { ProfileEditFields } from '../components/MemberProfileEdit';
+import userSignatureImg from '../assets/images/user_signature_1784378339618.jpg';
+
+const getBankPrefix = (bankName: string) => {
+  if (!bankName) return 'REC';
+  const name = bankName.toLowerCase();
+  if (name.includes('cbe')) return 'CBE';
+  if (name.includes('tele') || name.includes('birr')) return 'TELE';
+  if (name.includes('abyssinia') || name.includes('boa')) return 'BOA';
+  if (name.includes('awash')) return 'AWASH';
+  if (name.includes('dashen')) return 'DASHEN';
+  if (name.includes('zemen')) return 'ZEMEN';
+  if (name.includes('hibret')) return 'HIB';
+  return bankName.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 5) || 'REC';
+};
+
+const generateReceiptId = (bankName: string) => {
+  const prefix = getBankPrefix(bankName);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `${prefix}-${year}${month}${day}-${rand}`;
+};
+
+const displayReceiptId = (payment: any) => {
+  if (!payment) return '';
+  const bank = payment.bank || '';
+  const prefix = getBankPrefix(bank);
+  
+  if (payment.receiptId) {
+    if (payment.receiptId.startsWith(`${prefix}-`)) {
+      return payment.receiptId;
+    }
+    if (payment.receiptId.includes('-')) {
+      const parts = payment.receiptId.split('-');
+      return `${prefix}-${parts.slice(1).join('-')}`;
+    }
+    return `${prefix}-${payment.receiptId}`;
+  }
+  
+  const paymentSuffix = payment.id ? payment.id.slice(0, 8).toUpperCase() : Math.floor(1000 + Math.random() * 9000);
+  return `${prefix}-${paymentSuffix}`;
+};
 
 interface Group {
   id: string;
@@ -991,6 +1035,7 @@ export default function Dashboard() {
         payerAccount: '',
         transactionCode: paymentCode || '',
         receiptImages: receiptImages || [],
+        receiptId: generateReceiptId(paymentBank),
         status: 'pending',
         createdAt: serverTimestamp()
       });
@@ -1810,7 +1855,7 @@ export default function Dashboard() {
     setIsSubmitting(true);
     try {
       const now = new Date();
-      const generatedReceiptId = `REC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const generatedReceiptId = generateReceiptId(paymentBank);
 
       await addDoc(collection(db, 'payments'), {
         userId: user.uid,
@@ -3451,7 +3496,7 @@ export default function Dashboard() {
                                 {payment.createdAt?.toDate ? payment.createdAt.toDate().toLocaleDateString('am-ET') : new Date(payment.createdAt).toLocaleDateString('am-ET')}
                                 {payment.transactionCode && <span className="ml-2 font-mono text-indigo-600 font-black">TXN: {payment.transactionCode}</span>}
                                 <span className="ml-2 font-mono text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-bold">
-                                  #{payment.receiptId || payment.id.slice(0, 8).toUpperCase()}
+                                  #{displayReceiptId(payment)}
                                 </span>
                               </p>
                             </div>
@@ -5844,7 +5889,7 @@ export default function Dashboard() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Receipt ID</p>
-                    <p className="text-[10px] font-black text-slate-900 font-mono">#{selectedPayment.receiptId || selectedPayment.id.slice(0, 8).toUpperCase()}</p>
+                    <p className="text-[10px] font-black text-slate-900 font-mono">#{displayReceiptId(selectedPayment)}</p>
                   </div>
                 </div>
 
@@ -5948,7 +5993,7 @@ export default function Dashboard() {
                       {/* Authorized Sign */}
                       <div className="text-center relative flex flex-col items-center justify-end h-14">
                         <img 
-                          src="/signature.jpg" 
+                          src={userSignatureImg} 
                           alt="Signature" 
                           className="w-14 h-auto object-contain absolute bottom-3 select-none pointer-events-none mix-blend-multiply"
                           referrerPolicy="no-referrer"

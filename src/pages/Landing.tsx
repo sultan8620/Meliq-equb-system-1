@@ -31,7 +31,6 @@ import {
   HelpCircle as FaqIcon
 } from 'lucide-react';
 import { useLanguage } from '../lib/LanguageContext';
-// @ts-expect-error - static asset import
 import heroImg from '../assets/images/equb_hero_celebration_1782574091164.jpg';
 
 export default function Landing() {
