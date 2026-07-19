@@ -14,7 +14,6 @@ import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSn
 import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ChevronDown, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff, UserMinus } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { sendSMS } from '../lib/smsHelper';
-import userSignatureImg from '../assets/images/user_signature_1784378339618.jpg';
 
 const getBankPrefix = (bankName: string) => {
   if (!bankName) return 'REC';
@@ -2638,7 +2637,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!addAdminForm.fullName || (!addAdminForm.email && !addAdminForm.phone)) return;
     try {
-      const cleanPhone = normalizePhone(addAdminForm.phone);
+      const cleanPhone = addAdminForm.phone ? normalizePhone(addAdminForm.phone) : '';
       const emailToUse = addAdminForm.email ? addAdminForm.email.trim().toLowerCase() : `${cleanPhone}@melikekub.com`;
       const passToUse = addAdminForm.password || 'Admin123!';
       
@@ -5523,6 +5522,11 @@ export default function AdminDashboard() {
                                       .header h1 { margin: 0; font-size: 32px; font-weight: 900; letter-spacing: -1px; }
                                       pre { white-space: pre-wrap; font-size: 16px; margin: 0; font-family: inherit; }
                                       .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; }
+                                      .signature-box { margin-top: 40px; display: flex; justify-content: flex-end; padding-right: 40px; }
+                                      .signature-content { text-align: center; width: 200px; position: relative; }
+                                      .signature-img { height: 60px; object-fit: contain; mix-blend-mode: multiply; margin-bottom: -15px; }
+                                      .signature-line { border-bottom: 2px solid #1e293b; margin-bottom: 5px; width: 100%; }
+                                      .signature-label { font-size: 12px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 2px; }
                                       @media print { .no-print { display: none; } body { padding: 0; } .form-container { border: 2px solid #eee; } }
                                     </style>
                                   </head>
@@ -5536,6 +5540,13 @@ export default function AdminDashboard() {
                                         <p style="font-size: 10px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 3px;">Official Legal Binding Agreement</p>
                                       </div>
                                       <pre>${guarantorFormContent}</pre>
+                                      <div class="signature-box">
+                                        <div class="signature-content">
+                                          <img src="${window.location.origin}/signature.jpg" class="signature-img" alt="Officer Signature" />
+                                          <div class="signature-line"></div>
+                                          <div class="signature-label">Officer Sign / የሰብሳቢ ፊርማ</div>
+                                        </div>
+                                      </div>
                                       <div class="footer">Verified by ${t('common.appName').toUpperCase()} Systems</div>
                                     </div>
                                   </body>
@@ -12484,11 +12495,11 @@ export default function AdminDashboard() {
                     <p className="text-[7px] font-bold text-slate-500 italic text-center mb-3">
                       {language === 'am' ? '"እናመሰግናለን። ቁጠባዎ ደህንነቱ የተጠበቀ ነው።"' : '"Thank you. Your savings are secure with us."'}
                     </p>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="flex justify-center mt-4">
                       {/* Authorized Sign */}
-                      <div className="text-center relative flex flex-col items-center justify-end h-14">
+                      <div className="text-center relative flex flex-col items-center justify-end h-14 w-32">
                         <img 
-                          src={userSignatureImg} 
+                          src="/signature.jpg" 
                           alt="Signature" 
                           className="w-14 h-auto object-contain absolute bottom-3 select-none pointer-events-none mix-blend-multiply"
                           referrerPolicy="no-referrer"
@@ -12496,20 +12507,6 @@ export default function AdminDashboard() {
                         <div className="border-b border-slate-300 w-full mb-1"></div>
                         <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">
                           {language === 'am' ? 'የሰብሳቢ ፊርማ' : 'Officer Sign'}
-                        </p>
-                      </div>
-
-                      {/* Guarantor Sign */}
-                      <div className="text-center relative flex flex-col items-center justify-end h-14">
-                        <img 
-                          src="/signature.jpg" 
-                          alt="Guarantor Signature" 
-                          className="w-14 h-auto object-contain absolute bottom-3 select-none pointer-events-none mix-blend-multiply"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="border-b border-slate-300 w-full mb-1"></div>
-                        <p className="text-[6px] font-black text-slate-400 uppercase tracking-widest">
-                          {language === 'am' ? 'የዋስ ፊርማ' : 'Guarantor Sign'}
                         </p>
                       </div>
                     </div>
@@ -13563,24 +13560,14 @@ export default function AdminDashboard() {
                    </div>
                  </div>
 
-                 {/* Phone, Email, Role */}
-                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                   <div>
-                     <label className="block text-[10px] font-black text-slate-700 mb-1">ስልክ ቁጥር</label>
-                     <input 
-                       type="text" 
-                       required
-                       placeholder="09..." 
-                       value={addAdminForm.phone} 
-                       onChange={e => setAddAdminForm({...addAdminForm, phone: e.target.value})} 
-                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" 
-                     />
-                   </div>
+                 {/* Email and Role */}
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                    <div>
                      <label className="block text-[10px] font-black text-slate-700 mb-1">ኢሜይል</label>
                      <input 
                        type="email" 
-                       placeholder="አማራጭ ኢሜይል" 
+                       required
+                       placeholder="አድሚን ኢሜይል" 
                        value={addAdminForm.email} 
                        onChange={e => setAddAdminForm({...addAdminForm, email: e.target.value})} 
                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" 
@@ -13600,19 +13587,7 @@ export default function AdminDashboard() {
                  </div>
                </div>
                
-               {/* Password row */}
-               <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100/50 space-y-1.5 mt-2 mb-4">
-                 <label className="block text-[10px] font-black text-amber-800 uppercase tracking-wider">ለአዲሱ አድሚን መግቢያ የይለፍ ቃል (Assign Login Password)</label>
-                 <input 
-                   type="text" 
-                   required
-                   placeholder="የይለፍ ቃል ያስገቡ (ለምሳሌ: Admin123!)" 
-                   value={addAdminForm.password} 
-                   onChange={e => setAddAdminForm({...addAdminForm, password: e.target.value})} 
-                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors" 
-                 />
-                 <p className="text-[9px] font-semibold text-slate-400 mt-0.5">አድሚኑ በዚሁ የይለፍ ቃል እና በስልካቸው/በኢሜይላቸው መግባት ይችላሉ። (ያለ የይለፍ ቃል 'Admin123!' በዲፎልት ያገለግላል)</p>
-               </div>
+
 
                {addAdminForm.role === 'admin' && (
                  <div className="bg-slate-50 p-4 rounded-2xl space-y-3 border border-slate-100">

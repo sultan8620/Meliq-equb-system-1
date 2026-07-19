@@ -48,13 +48,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ) : (
               <div className="flex items-center gap-1 sm:gap-3">
                 {isPendingUser ? (
-                  <Link to="/pending-approval" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-500 font-bold hover:text-amber-600 transition-colors hidden xs:block">
+                  <Link to="/pending-approval" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-500 font-bold hover:text-amber-600 transition-colors">
                     {language === 'am' ? 'ይሁንታ ማረጋገጫ' : 'Pending Approval'}
                   </Link>
                 ) : (
-                  <Link to="/dashboard" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-emerald-600 font-bold hover:text-emerald-700 transition-colors hidden xs:block">{t('nav.dashboard')}</Link>
+                  <Link to="/dashboard" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-emerald-600 font-bold hover:text-emerald-700 transition-colors">{t('nav.dashboard')}</Link>
                 )}
-                {isAdmin && <Link to="/admin" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-indigo-500 hover:text-indigo-600 transition-colors hidden sm:block">{t('nav.admin')}</Link>}
+                {isAdmin && <Link to="/admin" className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-indigo-500 hover:text-indigo-600 transition-colors">{t('nav.admin')}</Link>}
                 <button 
                   onClick={async () => { await signOut(auth); window.location.href = '/'; }} 
                   className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-50 text-slate-400 rounded-lg sm:rounded-xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100 shadow-sm shrink-0"
