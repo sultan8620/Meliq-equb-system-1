@@ -6247,8 +6247,13 @@ export default function Dashboard() {
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'እቁብ/ምድብ' : 'Group/Round'}</p>
                       <p className="text-xs font-black text-slate-900 leading-tight truncate">
                         {(selectedPayment.groupName || group?.name || 'N/A')
-                          .replace(/የ10 ቀን 500 ብር/g, '')
-                          .replace(/የ10 ቀን 500/g, '')
+                          .replace(/የ10\s*ቀን\s*-\s*500\s*ብር\s*-\s*/gi, '')
+                          .replace(/የ10\s*ቀን\s*500\s*ብር\s*-\s*/gi, '')
+                          .replace(/10\s*Days\s*-\s*500\s*ETB\s*-\s*/gi, '')
+                          .replace(/10\s*Days\s*500\s*ETB\s*-\s*/gi, '')
+                          .replace(/የ10\s*ቀን\s*-\s*500\s*ብር/gi, '')
+                          .replace(/የ10\s*ቀን\s*500\s*ብር/gi, '')
+                          .replace(/10\s*Days\s*-\s*500\s*ETB/gi, '')
                           .trim() || 'እቁብ'}
                       </p>
                     </div>
