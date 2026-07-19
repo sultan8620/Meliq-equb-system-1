@@ -6245,7 +6245,12 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'እቁብ/ምድብ' : 'Group/Round'}</p>
-                      <p className="text-xs font-black text-slate-900 leading-tight truncate">{selectedPayment.groupName || group?.name}</p>
+                      <p className="text-xs font-black text-slate-900 leading-tight truncate">
+                        {(selectedPayment.groupName || group?.name || 'N/A')
+                          .replace(/የ10 ቀን 500 ብር/g, '')
+                          .replace(/የ10 ቀን 500/g, '')
+                          .trim() || 'እቁብ'}
+                      </p>
                     </div>
                   </div>
 
