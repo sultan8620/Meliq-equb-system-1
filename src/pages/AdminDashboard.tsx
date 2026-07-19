@@ -4995,9 +4995,10 @@ export default function AdminDashboard() {
                                       const totalPaidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
 
                                       const getSteps = (type: string) => {
-                                        const t = (type || 'weekly').toLowerCase();
-                                        if (t === 'daily') return 10;
-                                        if (t === 'fivedays') return 5;
+                                         const t = (type || 'weekly').toLowerCase();
+                                         if (t === 'daily') return 10;
+                                         if (t === 'fivedays') return 5;
+                                         if (t === 'tendays') return 10;
                                         if (t === 'weekly') return 7;
                                         if (t === 'monthly') return 10;
                                         return 10;
@@ -5034,12 +5035,19 @@ export default function AdminDashboard() {
                                                   <div className="text-[8px] font-black uppercase tracking-wider opacity-60">
                                                     ቀን ${stepNo}
                                                   </div>
-                                                  <div className="flex items-center justify-center mt-1">
-                                                    {isPaid ? (
-                                                      <span className="text-emerald-600 font-bold text-xs">✓</span>
-                                                    ) : (
-                                                      <span className="text-slate-300 font-bold text-xs">✗</span>
-                                                    )}
+                                                  <div className="flex flex-col items-center justify-center mt-1">
+                                                     {isPaid ? (
+                                                       <div className="flex flex-col items-center">
+                                                         <span className="text-emerald-600 font-bold text-xs">✓</span>
+                                                         {(member.slots || 1) > 1 && (
+                                                           <span className="bg-amber-100 text-amber-800 text-[6px] px-1 rounded font-black tracking-tighter" title="Stacked Payment">
+                                                             x{member.slots}
+                                                           </span>
+                                                         )}
+                                                       </div>
+                                                     ) : (
+                                                       <span className="text-slate-300 font-bold text-xs">✗</span>
+                                                     )}
                                                   </div>
                                                 </div>
                                               );
@@ -12533,7 +12541,9 @@ export default function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የአባል ስም' : 'Member Name'}</p>
-                      <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">{selectedPayment.userName}</p>
+                      <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">
+                        {selectedPayment.userName || (allUsers.find(u => u.id === selectedPayment.userId || u.uid === selectedPayment.userId) || admins.find(a => a.id === selectedPayment.userId || a.uid === selectedPayment.userId))?.fullName || 'N/A'}
+                      </p>
                       {(() => {
                         const matchedUser = allUsers.find(u => u.id === selectedPayment.userId || u.uid === selectedPayment.userId) || admins.find(a => a.id === selectedPayment.userId || a.uid === selectedPayment.userId);
                         const displayMemberCode = selectedPayment.memberCode || matchedUser?.memberCode || `M-${(selectedPayment.userId || '').slice(-5).toUpperCase()}`;
@@ -12576,7 +12586,7 @@ export default function AdminDashboard() {
                       <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
                         {selectedPayment.type === 'manual_contribution'
                           ? (language === 'am' ? 'አስተዳዳሪ (የመዘገበው)' : 'Admin Recorded')
-                          : (selectedPayment.userName || (language === 'am' ? 'አባል' : 'Member'))}
+                          : (selectedPayment.userName || (allUsers.find(u => u.id === selectedPayment.userId || u.uid === selectedPayment.userId) || admins.find(a => a.id === selectedPayment.userId || a.uid === selectedPayment.userId))?.fullName || (language === 'am' ? 'አባል' : 'Member'))}
                       </p>
                     </div>
                     <div>
@@ -12612,7 +12622,7 @@ export default function AdminDashboard() {
                       </svg>
                     </div>
                     <div className="relative z-10">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? `የ${selectedPayment.paymentDays || 1} ቀን ክፍያ` : `${selectedPayment.paymentDays || 1} Day(s) Paid`}</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'የክፍያ መጠን' : 'Payment Amount'}</p>
                       <p className="text-xl font-black">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">ETB</span></p>
                     </div>
                     <div className="text-right relative z-10">

@@ -1514,7 +1514,7 @@ export default function Dashboard() {
         wrapper = null;
       }
 
-      const receiptId = payment.receiptId || payment.id.slice(0, 8).toUpperCase();
+      const receiptId = displayReceiptId(payment);
       
       const img = new Image();
       img.src = dataUrl;
@@ -1958,6 +1958,7 @@ export default function Dashboard() {
     if (group.type === 'daily') next.setDate(next.getDate() + 1);
     else if (group.type === 'weekly') next.setDate(next.getDate() + 7);
     else if (group.type === 'fivedays') next.setDate(next.getDate() + 5);
+    else if (group.type === 'tendays') next.setDate(next.getDate() + 10);
     else if (group.type === 'monthly') next.setMonth(next.getMonth() + 1);
     
     const options: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric', year: 'numeric' };
@@ -3275,8 +3276,8 @@ export default function Dashboard() {
                       </div>
                       <h4 className="text-2xl font-display font-black text-slate-900 tracking-tight">
                         {language === 'am' 
-                          ? `${group.type === 'daily' ? 'የዕለታዊ' : group.type === 'fivedays' ? 'የ5 ቀን' : group.type === 'weekly' ? 'የሳምንታዊ' : 'የወርሃዊ'} እቁብ መከታተያ`
-                          : `${group.type.toUpperCase()} Ekub Calendar`}
+                          ? `${group.type === 'daily' ? 'የዕለታዊ' : group.type === 'fivedays' ? 'የ5 ቀን' : group.type === 'tendays' ? 'የ10 ቀን' : group.type === 'weekly' ? 'የሳምንታዊ' : 'የወርሃዊ'} እቁብ መከታተያ`
+                          : `${group.type === 'tendays' ? '10-DAY' : group.type.toUpperCase()} Ekub Calendar`}
                       </h4>
                     </div>
                     
@@ -3301,6 +3302,7 @@ export default function Dashboard() {
                       const t = (type || 'weekly').toLowerCase();
                       if (t === 'daily') return 10;
                       if (t === 'fivedays') return 5;
+                      if (t === 'tendays') return 10;
                       if (t === 'weekly') return 7;
                       if (t === 'monthly') return 10;
                       return 10;
@@ -3397,8 +3399,12 @@ export default function Dashboard() {
                             const stepNo = sIdx + 1;
                             const isPaid = stepNo <= paidStepsInSelectedRound;
 
-                            let statusTextAm = isPaid ? "የተከፈለ" : "ያልተከፈለ";
-                            let statusTextEn = isPaid ? "Paid" : "Unpaid";
+                            let statusTextAm = isPaid 
+                              ? `የራይት ምልክት (ተከፍሏል)${(userData?.slots || 1) > 1 ? ` - ተደርቧል (x${userData.slots})` : ''}` 
+                              : "የኤክስ ምልክት (ያልተከፈለ)";
+                            let statusTextEn = isPaid 
+                              ? `Verified (Paid)${(userData?.slots || 1) > 1 ? ` - Stacked (x${userData.slots})` : ''}` 
+                              : "Pending (Unpaid)";
 
                             return (
                               <motion.div
@@ -3409,13 +3415,13 @@ export default function Dashboard() {
                                     setActiveTab('payment-send');
                                   }
                                 }}
-                                className={`p-4 rounded-[1.5rem] border flex flex-col justify-between h-28 relative overflow-hidden transition-all shadow-sm ${
+                                className={`p-4 rounded-[1.5rem] border flex flex-col justify-between h-32 relative overflow-hidden transition-all shadow-sm ${
                                   isPaid 
                                     ? "bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-950" 
                                     : selectedTrackerRound === (group.currentRound || 1)
                                       ? "bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-white text-slate-900 cursor-pointer"
                                       : "bg-slate-100/50 border-slate-100 text-slate-400 opacity-60"
-                                }`}
+                                  }`}
                               >
                                 {/* Decorative circle */}
                                 <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-md opacity-20 ${isPaid ? 'bg-emerald-400' : 'bg-slate-300'}`} />
@@ -3441,7 +3447,14 @@ export default function Dashboard() {
                                       ? (language === 'am' ? 'የራይት ምልክት' : 'Verified')
                                       : (language === 'am' ? 'ኤክስ ምልክት' : 'Pending')}
                                   </p>
-                                  <p className="text-[8px] font-bold uppercase tracking-widest opacity-60">
+                                  {isPaid && (userData?.slots || 1) > 1 && (
+                                    <div className="mb-1">
+                                      <span className="bg-amber-100 border border-amber-200 text-amber-900 text-[6px] px-1 py-0.5 rounded font-black uppercase tracking-widest">
+                                        {language === 'am' ? 'የድርብ እጣ ክፍያ' : 'Stacked Payment'}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <p className="text-[8px] font-bold uppercase tracking-widest opacity-60 leading-tight">
                                     {language === 'am' ? statusTextAm : statusTextEn}
                                   </p>
                                 </div>
@@ -6298,7 +6311,7 @@ export default function Dashboard() {
                       </svg>
                     </div>
                     <div className="relative z-10">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? `የ${selectedPayment.paymentDays || 1} ቀን ክፍያ` : `${selectedPayment.paymentDays || 1} Day(s) Paid`}</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'የክፍያ መጠን' : 'Payment Amount'}</p>
                       <p className="text-xl font-black">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">ETB</span></p>
                     </div>
                     <div className="text-right relative z-10">
