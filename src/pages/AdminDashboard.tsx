@@ -66,21 +66,10 @@ const formatPaymentDate = (createdAt: any, lang: string = 'am') => {
 
 const displayReceiptId = (payment: any) => {
   if (!payment) return '';
+  if (payment.receiptId) return payment.receiptId;
   const bank = payment.bank || '';
   const prefix = getBankPrefix(bank);
-  
-  if (payment.receiptId) {
-    if (payment.receiptId.startsWith(`${prefix}-`)) {
-      return payment.receiptId;
-    }
-    if (payment.receiptId.includes('-')) {
-      const parts = payment.receiptId.split('-');
-      return `${prefix}-${parts.slice(1).join('-')}`;
-    }
-    return `${prefix}-${payment.receiptId}`;
-  }
-  
-  const paymentSuffix = payment.id ? payment.id.slice(0, 8).toUpperCase() : Math.floor(1000 + Math.random() * 9000);
+  const paymentSuffix = payment.id ? payment.id.slice(0, 8).toUpperCase() : Math.floor(1000 + Math.random() * 9000).toString();
   return `${prefix}-${paymentSuffix}`;
 };
 
@@ -152,6 +141,7 @@ export default function AdminDashboard() {
   const [admins, setAdmins] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [allPayments, setAllPayments] = useState<any[]>([]);
+  const [groupPayments, setGroupPayments] = useState<any[]>([]);
   const [notification, setNotification] = useState({ title: '', message: '', recipientId: '' });
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showScheduleDrawModal, setShowScheduleDrawModal] = useState(false);
@@ -163,6 +153,8 @@ export default function AdminDashboard() {
   const [paymentReviewModal, setPaymentReviewModal] = useState<any>(null);
   const [paymentReviewMessage, setPaymentReviewMessage] = useState('');
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [expandedTrackerMemberId, setExpandedTrackerMemberId] = useState<string | null>(null);
+  const [adminTrackerRound, setAdminTrackerRound] = useState<number>(1);
   const [showKYCModal, setShowKYCModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('pending');
   const [smsMessage, setSmsMessage] = useState('');
@@ -1746,6 +1738,24 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
+    if (!viewingGroupId) {
+      setGroupPayments([]);
+      return;
+    }
+    const q = query(
+      collection(db, 'payments'),
+      where('groupId', '==', viewingGroupId),
+      where('status', '==', 'active')
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      setGroupPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error fetching group payments:", error);
+    });
+    return () => unsub();
+  }, [viewingGroupId]);
+
+  useEffect(() => {
     const unsubNotifs = onSnapshot(query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(100)), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setNotifications(data.filter((n: any) => !n.read));
@@ -3100,6 +3110,7 @@ export default function AdminDashboard() {
         groupName: manualPaymentGroup.name,
         memberCode: selectedMember.memberCode || '',
         amount: totalAmount,
+        paymentDays: paymentCount,
         status: 'active',
         type: 'manual_contribution',
         cycles: paymentCount,
@@ -4841,8 +4852,11 @@ export default function AdminDashboard() {
                                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">No members yet</p>
                               </div>
                            )}
-                           {vGroup.members?.map((member: any, i: number) => (
-                              <div key={member.id} className="group/member flex items-start gap-3 p-3 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all">
+                           {vGroup.members?.map((member: any, i: number) => {
+                              const isExpanded = expandedTrackerMemberId === member.id;
+                              return (
+                               <div key={member.id} className="group/member flex flex-col gap-3 p-3 rounded-2xl bg-slate-50/50 border border-slate-100 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all">
+                                  <div className="flex items-start gap-3 w-full">
                                  <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0 shadow-sm relative group-hover/member:border-indigo-200 transition-colors">
                                     <div className="absolute top-0 left-0 bg-slate-900 text-white w-4 h-4 rounded-br-lg text-[8px] font-black flex items-center justify-center z-10 shadow-sm">{i + 1}</div>
                                     {member.faceScan ? (
@@ -4910,13 +4924,135 @@ export default function AdminDashboard() {
                                         setViewingGroupId(null); setActiveTab('chat'); 
                                       }} 
                                       className="px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] hover:bg-indigo-500 hover:text-white transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5"
-                                      title="Private Message"
-                                    >
-                                       <MessageCircle size={12} /> ላክ (Msg)
-                                    </button>
-                                 </div>
-                              </div>
-                           ))}
+                                       title="Private Message"
+                                     >
+                                        <MessageCircle size={12} /> ላክ (Msg)
+                                     </button>
+                                     <button 
+                                       onClick={() => { 
+                                         if (isExpanded) {
+                                           setExpandedTrackerMemberId(null);
+                                         } else {
+                                           setExpandedTrackerMemberId(member.id);
+                                           setAdminTrackerRound(vGroup.currentRound || 1);
+                                         }
+                                       }} 
+                                       className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 ${
+                                         isExpanded 
+                                           ? "bg-slate-900 text-gold-400 border-slate-900" 
+                                           : "bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-500 hover:text-white"
+                                       }`}
+                                     >
+                                        <Calendar size={12} /> {isExpanded ? 'ዝጋ (Close)' : 'መከታተያ (Track)'}
+                                     </button>
+                                  </div>
+                               </div>
+
+                               {isExpanded && (
+                                  <div className="mt-3 p-4 bg-white rounded-2xl border border-slate-100 space-y-4 w-full">
+                                    {/* Header with round selector */}
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-50">
+                                      <div>
+                                        <h5 className="text-[11px] font-black uppercase tracking-wider text-slate-700">
+                                          የክፍያ ዝርዝር መከታተያ (የዕለት ዙር)
+                                        </h5>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                          Day-by-Day Payment Tracker
+                                        </p>
+                                      </div>
+                                      
+                                      {/* Simple Round Selector */}
+                                      <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
+                                        {Array.from({ length: vGroup.limit || vGroup.memberCount || 10 }).map((_, rIdx) => {
+                                          const rNo = rIdx + 1;
+                                          const isCurrent = rNo === (vGroup.currentRound || 1);
+                                          const isSelected = rNo === adminTrackerRound;
+                                          
+                                          return (
+                                            <button
+                                              key={rNo}
+                                              type="button"
+                                              onClick={() => setAdminTrackerRound(rNo)}
+                                              className={`px-2 py-1 text-[8px] font-black rounded-md uppercase tracking-wider transition-all ${
+                                                isSelected
+                                                  ? "bg-slate-900 text-gold-400 shadow-sm"
+                                                  : isCurrent
+                                                    ? "bg-amber-100 text-amber-800 animate-pulse"
+                                                    : "text-slate-500 hover:bg-slate-200"
+                                              }`}
+                                            >
+                                              {language === 'am' ? `ዙር ${rNo}` : `R${rNo}`}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    {/* Tracker calculations */}
+                                    {(() => {
+                                      // Filter active payments for this user in this group
+                                      const userPayments = groupPayments.filter(p => p.userId === member.id);
+                                      const totalPaidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+
+                                      const getSteps = (type: string) => {
+                                        const t = (type || 'weekly').toLowerCase();
+                                        if (t === 'daily') return 10;
+                                        if (t === 'fivedays') return 5;
+                                        if (t === 'weekly') return 7;
+                                        if (t === 'monthly') return 10;
+                                        return 10;
+                                      };
+                                      const stepsPerRound = getSteps(vGroup.type);
+                                      
+                                      const paidStepsInSelectedRound = Math.min(
+                                        stepsPerRound,
+                                        Math.max(0, totalPaidDays - (adminTrackerRound - 1) * stepsPerRound)
+                                      );
+
+                                      return (
+                                        <div className="space-y-3">
+                                          <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                                            <span>ጠቅላላ ክፍያ: <strong className="text-slate-800">${totalPaidDays} ቀናት</strong></span>
+                                            <span>ዙር ${adminTrackerRound}: <strong className="text-slate-800">${paidStepsInSelectedRound}/${stepsPerRound} ቀናት</strong></span>
+                                          </div>
+
+                                          {/* Mini day grid */}
+                                          <div className="grid grid-cols-5 gap-2">
+                                            {Array.from({ length: stepsPerRound }).map((_, sIdx) => {
+                                              const stepNo = sIdx + 1;
+                                              const isPaid = stepNo <= paidStepsInSelectedRound;
+
+                                              return (
+                                                <div 
+                                                  key={stepNo} 
+                                                  className={`p-2 rounded-lg border text-center relative overflow-hidden ${
+                                                    isPaid
+                                                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-900"
+                                                      : "bg-slate-50 border-slate-100 text-slate-400"
+                                                  }`}
+                                                >
+                                                  <div className="text-[8px] font-black uppercase tracking-wider opacity-60">
+                                                    ቀን ${stepNo}
+                                                  </div>
+                                                  <div className="flex items-center justify-center mt-1">
+                                                    {isPaid ? (
+                                                      <span className="text-emerald-600 font-bold text-xs">✓</span>
+                                                    ) : (
+                                                      <span className="text-slate-300 font-bold text-xs">✗</span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                               )}
+                            </div>
+                           );
+                         })}
                         </div>
                      </div>
 
@@ -12476,7 +12612,7 @@ export default function AdminDashboard() {
                       </svg>
                     </div>
                     <div className="relative z-10">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'የተከፈለው መጠን' : 'Amount Paid'}</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? `የ${selectedPayment.paymentDays || 1} ቀን ክፍያ` : `${selectedPayment.paymentDays || 1} Day(s) Paid`}</p>
                       <p className="text-xl font-black">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">ETB</span></p>
                     </div>
                     <div className="text-right relative z-10">
@@ -12987,7 +13123,7 @@ export default function AdminDashboard() {
               </div>
               
               <div>
-                <label className="block text-[8px] font-black text-slate-400 uppercase mb-1.5 tracking-widest">Quantity (Cycles)</label>
+                <label className="block text-[8px] font-black text-slate-400 uppercase mb-1.5 tracking-widest">{language === 'am' ? 'የስንት ቀን ክፍያ ነው? (Cycles/Days)' : 'Quantity (Cycles)'}</label>
                 <input 
                   type="number" 
                   min="1"

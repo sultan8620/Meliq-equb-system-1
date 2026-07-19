@@ -109,21 +109,10 @@ const formatPaymentDate = (createdAt: any, lang: string = 'am') => {
 
 const displayReceiptId = (payment: any) => {
   if (!payment) return '';
+  if (payment.receiptId) return payment.receiptId;
   const bank = payment.bank || '';
   const prefix = getBankPrefix(bank);
-  
-  if (payment.receiptId) {
-    if (payment.receiptId.startsWith(`${prefix}-`)) {
-      return payment.receiptId;
-    }
-    if (payment.receiptId.includes('-')) {
-      const parts = payment.receiptId.split('-');
-      return `${prefix}-${parts.slice(1).join('-')}`;
-    }
-    return `${prefix}-${payment.receiptId}`;
-  }
-  
-  const paymentSuffix = payment.id ? payment.id.slice(0, 8).toUpperCase() : Math.floor(1000 + Math.random() * 9000);
+  const paymentSuffix = payment.id ? payment.id.slice(0, 8).toUpperCase() : Math.floor(1000 + Math.random() * 9000).toString();
   return `${prefix}-${paymentSuffix}`;
 };
 
@@ -679,11 +668,19 @@ export default function Dashboard() {
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [selectedTrackerRound, setSelectedTrackerRound] = useState<number>(1);
+
+  useEffect(() => {
+    if (group?.currentRound) {
+      setSelectedTrackerRound(group.currentRound);
+    }
+  }, [group?.currentRound]);
   const [userPenalties, setUserPenalties] = useState<any[]>([]);
   const [paymentBank, setPaymentBank] = useState('');
   const [paymentPayerName, setPaymentPayerName] = useState('');
   const [paymentPayerAccount, setPaymentPayerAccount] = useState('');
   const [paymentCode, setPaymentCode] = useState('');
+  const [paymentDays, setPaymentDays] = useState<number>(1);
   const [memberCode, setMemberCode] = useState('');
   const [receiptImages, setReceiptImages] = useState<string[]>([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -1048,7 +1045,8 @@ export default function Dashboard() {
     try {
       if (!user || !userData?.groupId) throw new Error("Missing context");
       const paymentRef = collection(db, 'payments');
-      const calculatedAmount = userData?.totalPerSlot ? (userData.totalPerSlot * (userData.slots || 1)) : ((group?.amount || 0) * 1.1 * (userData?.slots || 1));
+      const baseAmount = userData?.totalPerSlot ? (userData.totalPerSlot * (userData.slots || 1)) : ((group?.amount || 0) * 1.1 * (userData?.slots || 1));
+      const calculatedAmount = baseAmount * paymentDays;
       await addDoc(paymentRef, {
         userId: user.uid,
         userName: userData.fullName || 'Unknown User',
@@ -1056,6 +1054,7 @@ export default function Dashboard() {
         groupId: userData.groupId,
         groupName: group?.name || 'Unknown Group',
         amount: calculatedAmount,
+        paymentDays: paymentDays,
         bank: paymentBank,
         payerName: '',
         payerAccount: '',
@@ -1073,6 +1072,7 @@ export default function Dashboard() {
       
       setPaymentBank('');
       setPaymentCode('');
+      setPaymentDays(1);
       setPaymentPayerName('');
       setPaymentPayerAccount('');
       // setMemberCode(''); // Keep member code
@@ -1923,6 +1923,7 @@ export default function Dashboard() {
       setShowContributeModal(false);
       setReceiptImage(null);
       setPaymentCode('');
+      setPaymentDays(1);
       triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', t('dashboard.payment_sent_success'));
     } catch (error) {
       console.error('Contribution error:', error);
@@ -3258,6 +3259,214 @@ export default function Dashboard() {
                 </div>
               </div>
               
+              {/* Ekub Day-by-Day Payment Tracker & Round Management */}
+              {group && (
+                <div className="glass-card p-8 sm:p-10 rounded-[3rem] relative overflow-hidden bg-white/40 border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-amber-50/50 rounded-full blur-3xl -mr-20 -mt-20 opacity-60 pointer-events-none" />
+                  
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 relative z-10">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Calendar size={18} className="text-gold-500" />
+                        <h3 className="text-xs font-black uppercase tracking-[0.3em] text-slate-400">
+                          {language === 'am' ? 'የቀን መከታተያ' : 'Payment Tracker'}
+                        </h3>
+                      </div>
+                      <h4 className="text-2xl font-display font-black text-slate-900 tracking-tight">
+                        {language === 'am' 
+                          ? `${group.type === 'daily' ? 'የዕለታዊ' : group.type === 'fivedays' ? 'የ5 ቀን' : group.type === 'weekly' ? 'የሳምንታዊ' : 'የወርሃዊ'} እቁብ መከታተያ`
+                          : `${group.type.toUpperCase()} Ekub Calendar`}
+                      </h4>
+                    </div>
+                    
+                    {/* Stats Pill */}
+                    <div className="bg-slate-900 text-gold-400 px-4 py-2 rounded-2xl flex items-center gap-2 border border-slate-800 shadow-lg shrink-0">
+                      <Trophy size={14} />
+                      <span className="text-[10px] font-black uppercase tracking-widest font-mono">
+                        {language === 'am' ? `ዙር ${group.currentRound || 1} እጣ` : `Round ${group.currentRound || 1} Draw`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Calculations */}
+                  {(() => {
+                    // Filter user payments in this group that are verified (status === 'active')
+                    const userActivePayments = payments.filter(p => p.groupId === group.id && p.status === 'active');
+                    // Calculate total paid days (using paymentDays, fallback to 1)
+                    const totalPaidDays = userActivePayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+
+                    // Determine steps per round
+                    const getSteps = (type: string) => {
+                      const t = (type || 'weekly').toLowerCase();
+                      if (t === 'daily') return 10;
+                      if (t === 'fivedays') return 5;
+                      if (t === 'weekly') return 7;
+                      if (t === 'monthly') return 10;
+                      return 10;
+                    };
+                    const stepsPerRound = getSteps(group.type);
+                    
+                    // Total rounds = number of members in group
+                    const totalRounds = group.limit || group.memberCount || 10;
+
+                    // Calculate days paid in the SELECTED round
+                    const paidStepsInSelectedRound = Math.min(
+                      stepsPerRound,
+                      Math.max(0, totalPaidDays - (selectedTrackerRound - 1) * stepsPerRound)
+                    );
+
+                    return (
+                      <div className="space-y-6 relative z-10">
+                        {/* Round Selector Tabs */}
+                        <div className="space-y-2">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2">
+                            {language === 'am' ? 'የእጣ ዙር ምረጥ' : 'Select Draw Round'}
+                          </span>
+                          <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar mask-gradient">
+                            {Array.from({ length: totalRounds }).map((_, idx) => {
+                              const rNo = idx + 1;
+                              const isCurrent = rNo === (group.currentRound || 1);
+                              const isSelected = rNo === selectedTrackerRound;
+                              const isCompleted = rNo < (group.currentRound || 1);
+                              
+                              let bgClass = "bg-white text-slate-600 border-slate-100";
+                              if (isSelected) {
+                                bgClass = "bg-slate-900 text-white border-slate-900 shadow-md";
+                              } else if (isCurrent) {
+                                bgClass = "bg-amber-50 text-amber-700 border-amber-200 animate-pulse";
+                              } else if (isCompleted) {
+                                bgClass = "bg-emerald-50 text-emerald-700 border-emerald-100";
+                              }
+
+                              return (
+                                <button
+                                  key={rNo}
+                                  onClick={() => setSelectedTrackerRound(rNo)}
+                                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all shrink-0 cursor-pointer ${bgClass}`}
+                                >
+                                  {language === 'am' ? `ዙር ${rNo}` : `Round ${rNo}`}
+                                  {isCompleted && " ✓"}
+                                  {isCurrent && !isSelected && " •"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Round Summary Card */}
+                        <div className="bg-slate-50/80 rounded-[2rem] p-5 border border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`w-2 h-2 rounded-full ${selectedTrackerRound === (group.currentRound || 1) ? 'bg-amber-400 animate-pulse' : selectedTrackerRound < (group.currentRound || 1) ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                {selectedTrackerRound === (group.currentRound || 1) 
+                                  ? (language === 'am' ? 'የአሁኑ ዙር መከታተያ' : 'Current Active Round')
+                                  : selectedTrackerRound < (group.currentRound || 1)
+                                    ? (language === 'am' ? 'ያለፈ ዙር (የተጠናቀቀ)' : 'Completed Previous Round')
+                                    : (language === 'am' ? 'ያልተጀመረ ቀጣይ ዙር' : 'Upcoming Future Round')}
+                              </span>
+                            </div>
+                            <h5 className="text-lg font-black text-slate-800">
+                              {language === 'am' 
+                                ? `በዙር ${selectedTrackerRound} ${paidStepsInSelectedRound}/${stepsPerRound} ቀናት ተከፍለዋል`
+                                : `Round ${selectedTrackerRound}: ${paidStepsInSelectedRound} of ${stepsPerRound} Days Settled`}
+                            </h5>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="w-full sm:w-48">
+                            <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">
+                              <span>{language === 'am' ? 'ሂደት' : 'Progress'}</span>
+                              <span>{Math.round((paidStepsInSelectedRound / stepsPerRound) * 100)}%</span>
+                            </div>
+                            <div className="w-full h-3 bg-slate-200/50 rounded-full overflow-hidden p-0.5 border border-slate-200/20 shadow-inner">
+                              <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${(paidStepsInSelectedRound / stepsPerRound) * 100}%` }}
+                                transition={{ duration: 1, ease: 'easeOut' }}
+                                className={`h-full rounded-full shadow-md ${selectedTrackerRound < (group.currentRound || 1) ? 'bg-emerald-500' : 'gold-gradient'}`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Calendar Day Grid */}
+                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-3.5">
+                          {Array.from({ length: stepsPerRound }).map((_, sIdx) => {
+                            const stepNo = sIdx + 1;
+                            const isPaid = stepNo <= paidStepsInSelectedRound;
+
+                            let statusTextAm = isPaid ? "የተከፈለ" : "ያልተከፈለ";
+                            let statusTextEn = isPaid ? "Paid" : "Unpaid";
+
+                            return (
+                              <motion.div
+                                key={stepNo}
+                                whileHover={{ scale: 1.02 }}
+                                onClick={() => {
+                                  if (!isPaid && selectedTrackerRound === (group.currentRound || 1)) {
+                                    setActiveTab('payment-send');
+                                  }
+                                }}
+                                className={`p-4 rounded-[1.5rem] border flex flex-col justify-between h-28 relative overflow-hidden transition-all shadow-sm ${
+                                  isPaid 
+                                    ? "bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-950" 
+                                    : selectedTrackerRound === (group.currentRound || 1)
+                                      ? "bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-white text-slate-900 cursor-pointer"
+                                      : "bg-slate-100/50 border-slate-100 text-slate-400 opacity-60"
+                                }`}
+                              >
+                                {/* Decorative circle */}
+                                <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-md opacity-20 ${isPaid ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+
+                                <div className="flex justify-between items-start relative z-10">
+                                  <span className="text-[9px] font-black uppercase tracking-widest font-mono opacity-60">
+                                    {language === 'am' ? `ቀን ${stepNo}` : `Day ${stepNo}`}
+                                  </span>
+                                  {isPaid ? (
+                                    <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+                                      <CheckCircle size={12} strokeWidth={3} />
+                                    </div>
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full bg-slate-300 text-slate-500 flex items-center justify-center">
+                                      <XCircle size={12} strokeWidth={3} />
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="mt-auto relative z-10">
+                                  <p className="text-xs font-black tracking-tight leading-none mb-1">
+                                    {isPaid 
+                                      ? (language === 'am' ? 'የራይት ምልክት' : 'Verified')
+                                      : (language === 'am' ? 'ኤክስ ምልክት' : 'Pending')}
+                                  </p>
+                                  <p className="text-[8px] font-bold uppercase tracking-widest opacity-60">
+                                    {language === 'am' ? statusTextAm : statusTextEn}
+                                  </p>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Helper tip */}
+                        {totalPaidDays === 0 && (
+                          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500/80 italic pl-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <Info size={14} className="text-slate-400" />
+                            <span>
+                              {language === 'am'
+                                ? 'እባክዎ ክፍያ ሲፈጽሙ የቀኖቹ መከታተያ በራስ-ሰር ይሞላል። በአንድ ላይ ተደራራቢ ክፍያዎችን በአንዴ መክፈል ይችላሉ።'
+                                : 'Completing payments will automatically check off days. Multiple pending installments can be paid simultaneously.'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               {/* Quick Actions */}
               <div className="grid grid-cols-3 lg:grid-cols-3 gap-4">
                  <button onClick={() => setActiveTab('members')} className="bg-white hover:-translate-y-1 transition-all p-8 rounded-[2rem] flex flex-col items-center justify-center gap-4 group text-slate-500 hover:text-indigo-600 border border-slate-100 shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-xl hover:shadow-indigo-500/10 cursor-pointer">
@@ -4215,9 +4424,26 @@ export default function Dashboard() {
                  {/* Amount */}
                  <div className="space-y-4">
                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">{language === 'am' ? 'የስንት ቀን ክፍያ ነው?' : 'Payment for how many days?'}</label>
+                      <select 
+                        value={paymentDays}
+                        onChange={(e) => setPaymentDays(Number(e.target.value))}
+                        className="w-full h-14 bg-slate-50 border border-slate-200 rounded-2xl px-5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-slate-200 cursor-pointer"
+                      >
+                        <option value={1}>የአንድ ቀን (1 Day)</option>
+                        <option value={2}>የሁለት ቀን (2 Days)</option>
+                        <option value={3}>የሶስት ቀን (3 Days)</option>
+                        <option value={4}>የአራት ቀን (4 Days)</option>
+                        <option value={5}>የአምስት ቀን (5 Days)</option>
+                        <option value={10}>የ 10 ቀን (10 Days)</option>
+                        <option value={15}>የ 15 ቀን (15 Days)</option>
+                        <option value={30}>የ 30 ቀን (1 Month)</option>
+                      </select>
+                   </div>
+                   <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">{language === 'am' ? 'የክፍያ መጠን' : 'Amount to Pay'}</label>
                       <div className="w-full h-14 bg-slate-100 border border-slate-200 rounded-2xl px-5 flex items-center shadow-inner">
-                        <span className="text-lg font-black text-slate-900">{(userData?.totalPerSlot ? (userData.totalPerSlot * (userData.slots || 1)) : ((group?.amount || 0) * 1.1 * (userData?.slots || 1))).toLocaleString()} ETB</span>
+                        <span className="text-lg font-black text-slate-900">{((userData?.totalPerSlot ? (userData.totalPerSlot * (userData.slots || 1)) : ((group?.amount || 0) * 1.1 * (userData?.slots || 1))) * paymentDays).toLocaleString()} ETB</span>
                       </div>
                    </div>
                  </div>
@@ -6072,7 +6298,7 @@ export default function Dashboard() {
                       </svg>
                     </div>
                     <div className="relative z-10">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? 'የተከፈለው መጠን' : 'Amount Paid'}</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">{language === 'am' ? `የ${selectedPayment.paymentDays || 1} ቀን ክፍያ` : `${selectedPayment.paymentDays || 1} Day(s) Paid`}</p>
                       <p className="text-xl font-black">{(selectedPayment.amount || 0).toLocaleString()} <span className="text-[9px] font-bold text-slate-400">ETB</span></p>
                     </div>
                     <div className="text-right relative z-10">
