@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, onSnapshot, setDoc, deleteDoc, getDocs, query, collection, where } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, setDoc, deleteDoc, getDocs, query, collection, where, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -31,6 +31,19 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       // If user logs in or switches, show loading until we fetch their data
       if (currentUser && (!user || currentUser.uid !== user.uid)) {
         setLoading(true);
+        // Update user status to online
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+            isOnline: true,
+            lastLogin: serverTimestamp(),
+            lastActive: serverTimestamp()
+        }).catch(console.error);
+      } else if (!currentUser && user) {
+        // User logged out - update status to offline
+        await updateDoc(doc(db, 'users', user.uid), {
+            isOnline: false,
+            lastLogout: serverTimestamp(),
+            lastActive: serverTimestamp()
+        }).catch(console.error);
       }
       setUser(currentUser);
       

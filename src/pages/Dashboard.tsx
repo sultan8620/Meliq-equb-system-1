@@ -3793,11 +3793,19 @@ export default function Dashboard() {
                     <div className="h-24 bg-slate-50 w-full absolute top-0 left-0 border-b border-slate-100 group-hover:bg-indigo-50/50 transition-colors" />
                     
                     {/* Status Badge */}
-                    <div className="absolute top-4 right-4 z-10">
+                    <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-1.5">
                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1.5 backdrop-blur-md ${member.status === 'active' ? 'bg-emerald-100/90 text-emerald-700' : 'bg-slate-200/90 text-slate-600'}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${member.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
                           {member.status === 'active' ? (language === 'am' ? 'የነቃ' : 'Active') : (language === 'am' ? 'በመጠባበቅ' : 'Pending')}
                        </span>
+                       <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest shadow-sm backdrop-blur-md ${member.isOnline ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                          {member.isOnline ? (language === 'am' ? 'ኦንላይን' : 'Online') : (language === 'am' ? 'ኦፍላይን' : 'Offline')}
+                       </span>
+                       {member.lastActive && (
+                         <span className="text-[7px] font-bold text-slate-400 uppercase mt-1">
+                            {member.isOnline ? '' : (language === 'am' ? 'ባለፈው የታየው:' : 'Last seen:') + ' ' + member.lastActive.toDate().toLocaleTimeString()}
+                         </span>
+                       )}
                     </div>
 
                     <div className="p-6 pt-10 relative z-10 flex flex-col items-center flex-1">
