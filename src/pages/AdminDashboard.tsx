@@ -1682,7 +1682,7 @@ export default function AdminDashboard() {
       handleFirestoreError(error, OperationType.LIST, 'payments');
     });
 
-    const unsubAllPayments = onSnapshot(query(collection(db, 'payments'), where('status', '==', 'active'), limit(50)), (snapshot) => {
+    const unsubAllPayments = onSnapshot(query(collection(db, 'payments'), where('status', '==', 'active')), (snapshot) => {
       setAllPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'payments');
@@ -1694,7 +1694,7 @@ export default function AdminDashboard() {
       handleFirestoreError(error, OperationType.LIST, 'payouts');
     });
 
-    const unsubAllPayouts = onSnapshot(query(collection(db, 'payouts'), where('status', 'in', ['active', 'cancelled']), limit(50)), (snapshot) => {
+    const unsubAllPayouts = onSnapshot(query(collection(db, 'payouts'), where('status', 'in', ['active', 'cancelled'])), (snapshot) => {
       setAllPayouts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'payouts');
@@ -1706,7 +1706,7 @@ export default function AdminDashboard() {
       handleFirestoreError(error, OperationType.LIST, 'penalties');
     });
 
-    const unsubAllPenalties = onSnapshot(query(collection(db, 'penalties'), where('status', '==', 'settled'), limit(50)), (snapshot) => {
+    const unsubAllPenalties = onSnapshot(query(collection(db, 'penalties'), where('status', '==', 'settled')), (snapshot) => {
       setAllPenalties(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'penalties');
@@ -1760,7 +1760,7 @@ export default function AdminDashboard() {
     const q = query(
       collection(db, 'payments'),
       where('groupId', '==', viewingGroupId),
-      where('status', '==', 'active')
+      where('status', 'in', ['active', 'verified', 'completed', 'pending'])
     );
     const unsub = onSnapshot(q, (snapshot) => {
       setGroupPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -3935,7 +3935,8 @@ export default function AdminDashboard() {
     const missingDaysIds = new Set();
     group.members.forEach((m: any) => {
        const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === group.id && ['verified', 'active', 'approved'].includes(p.status));
-       if (userPayments.length < currentRound) { // They must have at least currentRound approved payments to be eligible!
+       const paidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+       if (paidDays < currentRound) { // They must have at least currentRound approved payments to be eligible!
          missingDaysIds.add(m.id);
        }
     });
@@ -3947,6 +3948,47 @@ export default function AdminDashboard() {
     setSelectedGroup(group);
     setShowDrawModal(true);
   };
+
+  const monthlyChartData = useMemo(() => {
+    const data: { [key: string]: { income: number; payout: number } } = {};
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Initialize last 6 months including current
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      data[`${d.getFullYear()}-${d.getMonth()}`] = { income: 0, payout: 0 };
+    }
+
+    allPayments.forEach(p => {
+      const pDate = p.createdAt?.toDate ? p.createdAt.toDate() : (p.createdAt ? new Date(p.createdAt) : null);
+      if (pDate) {
+        const key = `${pDate.getFullYear()}-${pDate.getMonth()}`;
+        if (data[key]) {
+          data[key].income += (p.amount || 0);
+        }
+      }
+    });
+
+    allPayouts.filter(p => p.status === 'active').forEach(p => {
+      const pDate = p.createdAt?.toDate ? p.createdAt.toDate() : (p.createdAt ? new Date(p.createdAt) : null);
+      if (pDate) {
+        const key = `${pDate.getFullYear()}-${pDate.getMonth()}`;
+        if (data[key]) {
+          data[key].payout += (p.amount || 0);
+        }
+      }
+    });
+
+    return Object.keys(data).sort().map(key => {
+      const [year, month] = key.split('-');
+      return {
+        name: monthNames[parseInt(month)],
+        income: data[key].income,
+        payout: data[key].payout
+      };
+    });
+  }, [allPayments, allPayouts]);
 
   return (
     <div className="h-[100dvh] overflow-hidden bg-slate-50 flex font-sans">
@@ -5556,8 +5598,14 @@ export default function AdminDashboard() {
                                     {/* Tracker calculations */}
                                     {(() => {
                                       // Filter active payments for this user in this group
-                                      const userPayments = groupPayments.filter(p => p.userId === member.id);
-                                      const totalPaidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                                      const userActivePayments = groupPayments.filter(p => p.userId === member.id && (p.status === 'active' || p.status === 'verified' || p.status === 'completed'));
+                                      const totalActiveDays = userActivePayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                                      
+                                      const userPendingPayments = groupPayments.filter(p => p.userId === member.id && p.status === 'pending');
+                                      const totalPendingDays = userPendingPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                                      
+                                      const totalPaidDays = totalActiveDays;
+                                      const totalAccountedDays = totalActiveDays + totalPendingDays;
 
                                       const getSteps = (type: string) => {
                                          const t = (type || 'weekly').toLowerCase();
@@ -9012,7 +9060,8 @@ export default function AdminDashboard() {
                   if (group.members) {
                     group.members.forEach((m: any) => {
                        const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === group.id && ['verified', 'active', 'approved'].includes(p.status));
-                       if (userPayments.length < currentRound) {
+                       const paidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                       if (paidDays < currentRound) {
                          missingDaysIds.add(m.id);
                        }
                     });
@@ -9787,7 +9836,7 @@ export default function AdminDashboard() {
                         <ShieldCheck size={40} className="text-white" />
                      </div>
                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2 leading-none">System Health</h4>
-                     <p className="text-4xl font-black text-white leading-none">98.5%</p>
+                     <p className="text-4xl font-black text-white leading-none">{(100 - (allUsers.filter(u => u.status === 'rejected').length / Math.max(1, allUsers.length)) * 100).toFixed(1)}%</p>
                      <div className="mt-6 flex justify-center gap-2">
                         {[1, 2, 3, 4, 5].map(i => (
                           <div key={i} className={`w-2 h-2 rounded-full ${i < 5 ? 'bg-emerald-500' : 'bg-white/20'}`} />
@@ -9806,7 +9855,7 @@ export default function AdminDashboard() {
                   <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">ጠቅላላ አባላት (Total Members)</p>
                   <p className="text-4xl font-black text-white tracking-tighter">{allUsers.length}</p>
                   <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-[10px] font-bold text-blue-100">
-                     <TrendingUp size={14} /> +12% Growth
+                     <TrendingUp size={14} /> {allUsers.filter(u => u.status === 'active').length} Active Members
                   </div>
                </div>
 
@@ -9816,7 +9865,7 @@ export default function AdminDashboard() {
                   </div>
                   <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">የተሰበሰበ መዋጮ (Collected)</p>
                   <p className="text-4xl font-black text-white tracking-tighter">
-                    {allPayments.filter(p => p.status === 'verified').reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-xs">ETB</span>
+                    {allPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-xs">ETB</span>
                   </p>
                   <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-[10px] font-bold text-emerald-100">
                      <CheckCircle size={14} /> Safe & Verified
@@ -9867,13 +9916,7 @@ export default function AdminDashboard() {
                   <div className="h-[200px] w-full relative overflow-hidden">
                      <ResponsiveContainer width="100%" height={200}>
                         <AreaChart
-                           data={[
-                              { name: 'Jan', income: 45000, payout: 30000 },
-                              { name: 'Feb', income: 72000, payout: 40000 },
-                              { name: 'Mar', income: 68000, payout: 50000 },
-                              { name: 'Apr', income: 91000, payout: 60000 },
-                              { name: 'May', income: 105000, payout: 70000 },
-                           ]}
+                           data={monthlyChartData}
                         >
                            <defs>
                               <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
@@ -10010,7 +10053,7 @@ export default function AdminDashboard() {
                         {groups.filter(g => g.name.toLowerCase().includes(reportSearch.toLowerCase())).map((group, idx) => {
                            const groupMembers = allUsers.filter(u => u.groupId === group.id);
                            const groupIncome = allPayments
-                              .filter(p => p.groupId === group.id && (p.status === 'verified'))
+                              .filter(p => p.groupId === group.id && (p.status === 'active' || p.status === 'verified' || p.status === 'completed'))
                               .reduce((acc, curr) => acc + (curr.amount || 0), 0);
                            
                            return (
@@ -10053,9 +10096,10 @@ export default function AdminDashboard() {
                                  </td>
                                  <td className="px-10 py-8">
                                     <div className="flex gap-1">
-                                       {[1, 2, 3, 4, 5].map(star => (
-                                          <div key={star} className={`w-1.5 h-6 rounded-full ${star < 4 ? 'bg-emerald-500' : 'bg-slate-100'}`} />
-                                       ))}
+                                       {[1, 2, 3, 4, 5].map(star => {
+                                          const score = Math.max(1, Math.min(5, Math.ceil((groupMembers.length / Math.max(1, group.memberCount)) * 5)));
+                                          return <div key={star} className={`w-1.5 h-6 rounded-full ${star <= score ? 'bg-emerald-500' : 'bg-slate-100'}`} />
+                                       })}
                                     </div>
                                  </td>
                               </motion.tr>
@@ -12593,7 +12637,8 @@ export default function AdminDashboard() {
                                     
                                     const currentRound = selectedDrawGroup.currentRound || 1;
                                     const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === selectedDrawGroup.id && ['verified', 'active', 'approved'].includes(p.status));
-                                    const hasMissingDays = userPayments.length < currentRound;
+                                    const paidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                                    const hasMissingDays = paidDays < currentRound;
 
                                     let reasonAm = "የማይሳተፍ";
                                     let reasonEn = "Excluded";
@@ -15729,7 +15774,14 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Amount</span>
-                    <span className="text-lg font-black text-slate-900">{paymentReviewModal.amount?.toLocaleString()} ETB</span>
+                    <div className="flex items-center gap-2">
+                       <span className="text-lg font-black text-slate-900">{paymentReviewModal.amount?.toLocaleString()} ETB</span>
+                       {(paymentReviewModal.paymentDays || 1) > 1 && (
+                         <span className="px-2 py-1 bg-amber-100 text-amber-700 text-[9px] font-black uppercase tracking-widest rounded-lg">
+                           x{paymentReviewModal.paymentDays || 1} {language === 'am' ? 'ቀናት' : 'Days'}
+                         </span>
+                       )}
+                    </div>
                   </div>
                   <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                     <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">Receipt ID</span>

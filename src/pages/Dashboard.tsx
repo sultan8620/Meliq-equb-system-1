@@ -786,7 +786,7 @@ export default function Dashboard() {
   const [isOnline, setIsOnline] = useState(true);
   const [showContributeModal, setShowContributeModal] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('overview'); 
- const [chatSubTab, setChatSubTab] = useState<'group' | 'admin'>('group');
+ const [chatSubTab, setChatSubTab] = useState<'group' | 'admin'>('admin');
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [membersFilter, setMembersFilter] = useState<'all' | 'winners' | 'active'>('all');
   const [showGuarantorInfoModal, setShowGuarantorInfoModal] = useState(false);
@@ -2024,7 +2024,7 @@ export default function Dashboard() {
           id: 'chat', 
           label: language === 'am' ? 'ውይይት (Chat)' : 'Chat', 
           icon: MessageCircle,
-          description: language === 'am' ? 'ከአድሚን እና ከአባላት ጋር ይወያዩ' : 'Chat with admin and members'
+          description: language === 'am' ? 'ከአድሚን ጋር ይወያዩ' : 'Chat with admin'
         },
         { 
           id: 'draws', 
@@ -3420,10 +3420,15 @@ export default function Dashboard() {
 
                   {/* Calculations */}
                   {(() => {
-                    // Filter user payments in this group that are verified (status === 'active')
-                    const userActivePayments = payments.filter(p => p.groupId === group.id && p.status === 'active');
-                    // Calculate total paid days (using paymentDays, fallback to 1)
-                    const totalPaidDays = userActivePayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                    // Filter user payments in this group that are verified (status === 'active' or 'verified')
+                    const userActivePayments = payments.filter(p => p.groupId === group.id && (p.status === 'active' || p.status === 'verified'));
+                    const totalActiveDays = userActivePayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                    
+                    const userPendingPayments = payments.filter(p => p.groupId === group.id && p.status === 'pending');
+                    const totalPendingDays = userPendingPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                    
+                    const totalPaidDays = totalActiveDays;
+                    const totalAccountedDays = totalActiveDays + totalPendingDays;
 
                     // Determine steps per round
                     const getSteps = (type: string) => {
@@ -3441,9 +3446,14 @@ export default function Dashboard() {
                     const totalRounds = group.limit || group.memberCount || 10;
 
                     // Calculate days paid in the SELECTED round
-                    const paidStepsInSelectedRound = Math.min(
+                    const activeStepsInSelectedRound = Math.min(
                       stepsPerRound,
-                      Math.max(0, totalPaidDays - (selectedTrackerRound - 1) * stepsPerRound)
+                      Math.max(0, totalActiveDays - (selectedTrackerRound - 1) * stepsPerRound)
+                    );
+                    
+                    const accountedStepsInSelectedRound = Math.min(
+                      stepsPerRound,
+                      Math.max(0, totalAccountedDays - (selectedTrackerRound - 1) * stepsPerRound)
                     );
 
                     return (
@@ -3499,8 +3509,8 @@ export default function Dashboard() {
                             </div>
                             <h5 className="text-lg font-black text-slate-800">
                               {language === 'am' 
-                                ? `በዙር ${selectedTrackerRound} ${paidStepsInSelectedRound}/${stepsPerRound} ቀናት ተከፍለዋል`
-                                : `Round ${selectedTrackerRound}: ${paidStepsInSelectedRound} of ${stepsPerRound} Days Settled`}
+                                ? `በዙር ${selectedTrackerRound} ${accountedStepsInSelectedRound}/${stepsPerRound} ቀናት ተከፍለዋል`
+                                : `Round ${selectedTrackerRound}: ${accountedStepsInSelectedRound} of ${stepsPerRound} Days Settled`}
                             </h5>
                           </div>
 
@@ -3508,12 +3518,12 @@ export default function Dashboard() {
                           <div className="w-full sm:w-48">
                             <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 pl-1">
                               <span>{language === 'am' ? 'ሂደት' : 'Progress'}</span>
-                              <span>{Math.round((paidStepsInSelectedRound / stepsPerRound) * 100)}%</span>
+                              <span>{Math.round((accountedStepsInSelectedRound / stepsPerRound) * 100)}%</span>
                             </div>
                             <div className="w-full h-3 bg-slate-200/50 rounded-full overflow-hidden p-0.5 border border-slate-200/20 shadow-inner">
                               <motion.div
                                 initial={{ width: 0 }}
-                                animate={{ width: `${(paidStepsInSelectedRound / stepsPerRound) * 100}%` }}
+                                animate={{ width: `${(accountedStepsInSelectedRound / stepsPerRound) * 100}%` }}
                                 transition={{ duration: 1, ease: 'easeOut' }}
                                 className={`h-full rounded-full shadow-md ${selectedTrackerRound < (group.currentRound || 1) ? 'bg-emerald-500' : 'gold-gradient'}`}
                               />
@@ -3525,14 +3535,20 @@ export default function Dashboard() {
                         <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-3.5">
                           {Array.from({ length: stepsPerRound }).map((_, sIdx) => {
                             const stepNo = sIdx + 1;
-                            const isPaid = stepNo <= paidStepsInSelectedRound;
+                            const isPaidActive = stepNo <= activeStepsInSelectedRound;
+                            const isPaidPending = !isPaidActive && stepNo <= accountedStepsInSelectedRound;
+                            const isPaid = isPaidActive || isPaidPending;
 
-                            let statusTextAm = isPaid 
-                              ? `የራይት ምልክት (ተከፍሏል)${(userData?.slots || 1) > 1 ? ` - ተደርቧል (x${userData.slots})` : ''}` 
-                              : "የኤክስ ምልክት (ያልተከፈለ)";
-                            let statusTextEn = isPaid 
-                              ? `Verified (Paid)${(userData?.slots || 1) > 1 ? ` - Stacked (x${userData.slots})` : ''}` 
-                              : "Pending (Unpaid)";
+                            let statusTextAm = isPaidActive
+                              ? `የራይት ምልክት (ተረጋግጧል)${(userData?.slots || 1) > 1 ? ` - ተደርቧል (x${userData.slots})` : ''}`
+                              : isPaidPending
+                                ? `በመጠባበቅ ላይ (ክፍያ ተልኳል)`
+                                : "የኤክስ ምልክት (ያልተከፈለ)";
+                            let statusTextEn = isPaidActive
+                              ? `Verified (Paid)${(userData?.slots || 1) > 1 ? ` - Stacked (x${userData.slots})` : ''}`
+                              : isPaidPending
+                                ? `Pending Review (Submitted)`
+                                : "Unpaid";
 
                             return (
                               <motion.div
@@ -3544,15 +3560,17 @@ export default function Dashboard() {
                                   }
                                 }}
                                 className={`p-4 rounded-[1.5rem] border flex flex-col justify-between h-32 relative overflow-hidden transition-all shadow-sm ${
-                                  isPaid 
+                                  isPaidActive 
                                     ? "bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-950" 
-                                    : selectedTrackerRound === (group.currentRound || 1)
-                                      ? "bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-white text-slate-900 cursor-pointer"
-                                      : "bg-slate-100/50 border-slate-100 text-slate-400 opacity-60"
+                                    : isPaidPending
+                                      ? "bg-amber-500/10 border-amber-500/20 hover:border-amber-500/40 text-amber-950"
+                                      : selectedTrackerRound === (group.currentRound || 1)
+                                        ? "bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-white text-slate-900 cursor-pointer"
+                                        : "bg-slate-100/50 border-slate-100 text-slate-400 opacity-60"
                                   }`}
                               >
                                 {/* Decorative circle */}
-                                <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-md opacity-20 ${isPaid ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                                <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-md opacity-20 ${isPaidActive ? 'bg-emerald-400' : isPaidPending ? 'bg-amber-400' : 'bg-slate-300'}`} />
 
                                 <div className="flex justify-between items-start relative z-10">
                                   <span className="text-[9px] font-black uppercase tracking-widest font-mono opacity-60">
@@ -3571,9 +3589,11 @@ export default function Dashboard() {
 
                                 <div className="mt-auto relative z-10">
                                   <p className="text-xs font-black tracking-tight leading-none mb-1">
-                                    {isPaid 
-                                      ? (language === 'am' ? 'የራይት ምልክት' : 'Verified')
-                                      : (language === 'am' ? 'ኤክስ ምልክት' : 'Pending')}
+                                    {isPaidActive 
+                                      ? (language === 'am' ? 'የራይት ምልክት (ተረጋግጧል)' : 'Verified')
+                                      : isPaidPending
+                                        ? (language === 'am' ? 'በግምገማ ላይ (Pending)' : 'Under Review')
+                                        : (language === 'am' ? 'ኤክስ ምልክት (ያልተከፈለ)' : 'Unpaid')}
                                   </p>
                                   {isPaid && (userData?.slots || 1) > 1 && (
                                     <div className="mb-1">
@@ -3889,9 +3909,16 @@ export default function Dashboard() {
                             {payment.status === 'rejected' ? <XCircle size={16} /> : <ArrowUpRight size={16} />}
                           </div>
                           <div>
-                            <p className="text-[12px] font-black text-slate-900 tracking-tight leading-none mb-1">
-                              {(payment.amount || 0).toLocaleString()} <span className="text-[8px] text-slate-400">ETB</span>
-                            </p>
+                            <div className="flex items-center gap-2 mb-1">
+                               <p className="text-[12px] font-black text-slate-900 tracking-tight leading-none">
+                                 {(payment.amount || 0).toLocaleString()} <span className="text-[8px] text-slate-400">ETB</span>
+                               </p>
+                               {(payment.paymentDays || 1) > 1 && (
+                                 <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 text-[8px] font-black uppercase tracking-widest rounded">
+                                   x{payment.paymentDays || 1}
+                                 </span>
+                               )}
+                            </div>
                             <div className="flex items-center gap-1">
                               <Clock size={8} className="text-slate-300" />
                               <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
@@ -4834,10 +4861,7 @@ export default function Dashboard() {
 
                     {activeTab === 'chat' && (
              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-[80vh] flex flex-col bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-xl shadow-slate-200/40 relative">
-               <div className="flex bg-slate-50 border-b border-slate-100 p-2">
-                 <button onClick={() => setChatSubTab('group')} className={`flex-1 py-3 font-bold rounded-2xl transition-colors ${chatSubTab === 'group' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:bg-slate-100/50'}`}>{language === 'am' ? 'የቡድን ውይይት (Group)' : 'Group Chat'}</button>
-                 <button onClick={() => setChatSubTab('admin')} className={`flex-1 py-3 font-bold rounded-2xl transition-colors ${chatSubTab === 'admin' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:bg-slate-100/50'}`}>{language === 'am' ? 'አድሚን (Admin)' : 'Admin'}</button>
-               </div>
+
                
                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50">
                  {messages.filter(m => chatSubTab === 'group' ? (m.groupId === userData?.groupId || m.targetType === 'all') : (m.targetType === 'private' && (m.targetUserId === user?.uid || m.senderId === user?.uid))).map(msg => {
