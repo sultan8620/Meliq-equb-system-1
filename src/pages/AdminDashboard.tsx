@@ -2537,11 +2537,27 @@ export default function AdminDashboard() {
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [unsubMessages, setUnsubMessages] = useState<any>(null);
 
-  const [addUserModalTab, setAddUserModalTab] = useState<'register' | 'transfer'>('register');
+  const [addUserModalTab, setAddUserModalTab] = useState<'register' | 'transfer' | 'joint'>('register');
   const [transferSourceGroupId, setTransferSourceGroupId] = useState<string>('');
   const [transferSelectedUserIds, setTransferSelectedUserIds] = useState<string[]>([]);
   const [isTransferringUsers, setIsTransferringUsers] = useState(false);
   const [transferSearchQuery, setTransferSearchQuery] = useState('');
+
+  const [jointSlotForm, setJointSlotForm] = useState({
+    groupId: '',
+    splitFactor: 2,
+    member1Type: 'existing' as 'existing' | 'new',
+    member1Id: '',
+    member1Name: '',
+    member1Phone: '',
+    member1Password: '123456',
+    member2Type: 'existing' as 'existing' | 'new',
+    member2Id: '',
+    member2Name: '',
+    member2Phone: '',
+    member2Password: '123456'
+  });
+  const [isCreatingJointSlot, setIsCreatingJointSlot] = useState(false);
 
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [adminLayoutView, setAdminLayoutView] = useState<'grid' | 'table'>('grid');
@@ -3071,6 +3087,271 @@ export default function AdminDashboard() {
       );
     } finally {
       setIsTransferringUsers(false);
+    }
+  };
+
+  const handleCreateJointSlotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const {
+      groupId,
+      splitFactor,
+      member1Type,
+      member1Id,
+      member1Name,
+      member1Phone,
+      member1Password,
+      member2Type,
+      member2Id,
+      member2Name,
+      member2Phone,
+      member2Password,
+    } = jointSlotForm;
+
+    if (!groupId) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'እባክዎ መጀመሪያ ምድብ ይምረጡ!' : 'Please select a group first!'
+      );
+      return;
+    }
+
+    if (member1Type === 'existing' && !member1Id) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'እባክዎ አባል 1 ይምረጡ!' : 'Please select Member 1!'
+      );
+      return;
+    }
+    if (member1Type === 'new' && (!member1Name || !member1Phone)) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'እባክዎ ለአባል 1 ሙሉ ስምና ስልክ ቁጥር ያስገቡ!' : 'Please provide Name and Phone for Member 1!'
+      );
+      return;
+    }
+
+    if (member2Type === 'existing' && !member2Id) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'እባክዎ አባል 2 ይምረጡ!' : 'Please select Member 2!'
+      );
+      return;
+    }
+    if (member2Type === 'new' && (!member2Name || !member2Phone)) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'እባክዎ ለአባል 2 ሙሉ ስምና ስልክ ቁጥር ያስገቡ!' : 'Please provide Name and Phone for Member 2!'
+      );
+      return;
+    }
+
+    if (member1Type === 'existing' && member2Type === 'existing' && member1Id === member2Id) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'ተመሳሳይ አባልን ከራሱ ጋር ማጣመር አይቻልም!' : 'Cannot pair a member with themselves!'
+      );
+      return;
+    }
+
+    setIsCreatingJointSlot(true);
+    let tempApp;
+
+    try {
+      const targetGroup = groups.find(g => g.id === groupId);
+      if (!targetGroup) {
+        throw new Error('Group not found');
+      }
+
+      const frequency = targetGroup.type || 'weekly';
+      const prefix = frequency === 'daily' ? 'D' : frequency === 'monthly' ? 'M' : frequency === 'fivedays' ? 'F' : 'W';
+
+      const getUniqueMemberCode = async () => {
+        let isUnique = false;
+        let memberCode = '';
+        let attempts = 0;
+        while (!isUnique && attempts < 50) {
+          attempts++;
+          const randomPart = Math.floor(10000 + Math.random() * 90000);
+          memberCode = `${prefix}${randomPart}`;
+          const qCode = query(collection(db, 'users'), where('memberCode', '==', memberCode));
+          const snapshotCode = await getDocs(qCode);
+          if (snapshotCode.empty) {
+            isUnique = true;
+          }
+        }
+        return memberCode || `${prefix}${Math.floor(10000 + Math.random() * 90000)}`;
+      };
+
+      const normalizeAndCleanPhone = (p: string) => {
+        let clean = p.trim().replace(/\D/g, '');
+        if (clean.startsWith('251')) {
+          clean = '0' + clean.substring(3);
+        } else if (clean.length === 9 && clean.startsWith('9')) {
+          clean = '0' + clean;
+        }
+        return clean;
+      };
+
+      tempApp = initializeApp(firebaseConfig, 'tempJointApp-' + Date.now());
+      const tempAuth = getAuth(tempApp);
+
+      const createSlotForMember = async (
+        type: 'existing' | 'new',
+        id: string,
+        name: string,
+        phoneInput: string,
+        passwordInput: string
+      ) => {
+        let fullName = name;
+        let phone = '';
+        let baseData: any = {};
+
+        if (type === 'existing') {
+          const existingUser = allUsers.find(u => u.id === id);
+          if (!existingUser) {
+            throw new Error(`Existing user ${id} not found`);
+          }
+          fullName = existingUser.fullName;
+          phone = existingUser.phone;
+          baseData = { ...existingUser };
+        } else {
+          phone = normalizeAndCleanPhone(phoneInput);
+        }
+
+        let emailOffset = 0;
+        let foundFreeEmail = false;
+        let userCredential = null;
+        let dummyEmail = '';
+
+        while (!foundFreeEmail && emailOffset < 50) {
+          dummyEmail = emailOffset === 0 ? `${phone}@melikekub.com` : `${phone}+${emailOffset}@melikekub.com`;
+          try {
+            userCredential = await createUserWithEmailAndPassword(tempAuth, dummyEmail, passwordInput);
+            foundFreeEmail = true;
+          } catch (authError: any) {
+            if (authError.code === 'auth/email-already-in-use') {
+              emailOffset++;
+            } else {
+              throw authError;
+            }
+          }
+        }
+
+        if (!userCredential) {
+          throw new Error(`Failed to create Auth credential for ${fullName}`);
+        }
+
+        const uid = userCredential.user.uid;
+        const slotsVal = 1 / splitFactor;
+        const amount = targetGroup.amount || 0;
+        const commissionPerSlot = amount * 0.1;
+        const totalPerSlot = amount + commissionPerSlot;
+        const multiplier = targetGroup.frequency === 'fivedays' ? 5 : (targetGroup.frequency === 'tendays' || targetGroup.frequency === 'daily') ? 10 : 1;
+        const limit = targetGroup.limit || targetGroup.memberLimit || 10;
+        const totalPayoutPerSlot = amount * multiplier * limit;
+        const totalCyclePayment = totalPerSlot * multiplier * limit * slotsVal;
+        const memberCode = await getUniqueMemberCode();
+
+        const newUserDoc = {
+          uid: uid,
+          fullName: fullName,
+          email: dummyEmail,
+          authEmail: dummyEmail,
+          phone: phone,
+          birthCountry: baseData.birthCountry || 'ኢትዮጵያ',
+          birthRegion: baseData.birthRegion || 'አዲስ አበባ',
+          birthZone: baseData.birthZone || '',
+          birthWoreda: baseData.birthWoreda || '',
+          birthKebele: baseData.birthKebele || '',
+          addressCountry: baseData.addressCountry || 'ኢትዮጵያ',
+          addressRegion: baseData.addressRegion || 'አዲስ አበባ',
+          addressZone: baseData.addressZone || '',
+          addressWoreda: baseData.addressWoreda || '',
+          addressKebele: baseData.addressKebele || '',
+          birthDate: baseData.birthDate || '',
+          birthDateEC: baseData.birthDateEC || '',
+          age: baseData.age || 0,
+          slots: slotsVal,
+          isSharedSlot: true,
+          splitFactor: splitFactor,
+          amount: amount,
+          commission: commissionPerSlot,
+          totalPerSlot: totalPerSlot,
+          totalPayout: totalPayoutPerSlot * slotsVal,
+          totalCyclePayment: totalCyclePayment,
+          groupId: groupId,
+          ekubType: targetGroup.type || '',
+          memberCode: memberCode,
+          nationalId: baseData.nationalId || '',
+          jobTitle: baseData.jobTitle || '',
+          preferredItem: baseData.preferredItem || 'Cash (ጥሬ ገንዘብ)',
+          idFront: baseData.idFront || '',
+          idBack: baseData.idBack || '',
+          faceScan: baseData.faceScan || '',
+          status: 'active',
+          isVerified: true,
+          verifiedAt: new Date(),
+          isAdmin: false,
+          role: 'user',
+          createdAt: serverTimestamp()
+        };
+
+        await setDoc(doc(db, 'users', uid), newUserDoc);
+        return { uid, fullName };
+      };
+
+      const m1Result = await createSlotForMember(
+        member1Type,
+        member1Id,
+        member1Name,
+        member1Phone,
+        member1Password
+      );
+
+      const m2Result = await createSlotForMember(
+        member2Type,
+        member2Id,
+        member2Name,
+        member2Phone,
+        member2Password
+      );
+
+      const addedSlots = (1 / splitFactor) * 2;
+      await updateDoc(doc(db, 'groups', groupId), {
+        memberCount: increment(addedSlots)
+      }).catch(err => console.error("Error updating group memberCount on joint slot creation:", err));
+
+      setShowAddUserModal(false);
+      setJointSlotForm({
+        groupId: '',
+        splitFactor: 2,
+        member1Type: 'existing',
+        member1Id: '',
+        member1Name: '',
+        member1Phone: '',
+        member1Password: '123456',
+        member2Type: 'existing',
+        member2Id: '',
+        member2Name: '',
+        member2Phone: '',
+        member2Password: '123456'
+      });
+
+      triggerSuccess(
+        language === 'am' ? 'ማሳወቂያ' : 'Notice',
+        language === 'am'
+          ? `የጋራ እጣ ለ${m1Result.fullName} እና ለ${m2Result.fullName} በተሳካ ሁኔታ ተፈጥሯል!`
+          : `Shared joint slot successfully created for ${m1Result.fullName} and ${m2Result.fullName}!`
+      );
+
+    } catch (error: any) {
+      console.error("Error creating joint slot:", error);
+      handleFirestoreError(error, OperationType.CREATE, 'users');
+    } finally {
+      if (tempApp) {
+        await deleteApp(tempApp).catch(console.error);
+      }
+      setIsCreatingJointSlot(false);
     }
   };
 
@@ -14212,7 +14493,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setAddUserModalTab('register')}
-                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-2xl transition-all ${
+                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider rounded-2xl transition-all ${
                   addUserModalTab === 'register' 
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' 
                     : 'text-slate-500 hover:text-slate-800'
@@ -14223,17 +14504,28 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setAddUserModalTab('transfer')}
-                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-2xl transition-all ${
+                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider rounded-2xl transition-all ${
                   addUserModalTab === 'transfer' 
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' 
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                {language === 'am' ? 'አባል ከሌላ ምድብ አዛውር (Migrate)' : 'Transfer Member'}
+                {language === 'am' ? 'አባል አዛውር (Migrate)' : 'Transfer Member'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddUserModalTab('joint')}
+                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider rounded-2xl transition-all ${
+                  addUserModalTab === 'joint' 
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {language === 'am' ? 'የጋራ እጣ ፍጠር' : 'Create Joint Slot'}
               </button>
             </div>
             
-            {addUserModalTab === 'register' ? (
+            {addUserModalTab === 'register' && (
               <form onSubmit={handleAddUserSubmit} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar pb-32">
                {/* Section 1: Basic Identity */}
                <div className="space-y-6">
@@ -14672,7 +14964,9 @@ export default function AdminDashboard() {
                    </div>
                    <div className="relative z-10 flex-1">
                       <p className="text-sm font-black text-white uppercase tracking-widest mb-2">ለአባሉ የመግቢያ መረጃ (Login Credentials)</p>                      <p className="text-[11px] font-bold text-slate-400 leading-relaxed">                         አባሉ በሚቀጥለው ጊዜ ወደ መሊክ እቁብ ለመግባት <span className="text-rose-400 font-black">{addUserForm.phone || 'ስልክ ቁጥራቸው'}</span> እና ከላይ ያስገቡትን <span className="text-rose-400 font-black">የይለፍ ቃል</span> በመጠቀም መግባት ይችላሉ። ሲመዘገቡ የሚሰጣቸውን የአባል መለያ ኮድም ከገቡ በኋላ ያገኙታል።                      </p>                   </div>                 </div>               </div>            </form>
-            ) : (
+            )}
+            
+            {addUserModalTab === 'transfer' && (
               <form onSubmit={handleTransferUsersSubmit} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar pb-32">
                  {/* Target Group selection */}
                  <div className="space-y-2">
@@ -14839,6 +15133,208 @@ export default function AdminDashboard() {
               </form>
             )}
 
+            {addUserModalTab === 'joint' && (
+              <form onSubmit={handleCreateJointSlotSubmit} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar pb-32">
+                {/* Section 1: Group and Share Factor */}
+                <div className="bg-slate-50 border border-slate-100 p-6 rounded-[2rem] space-y-4">
+                  <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px]">1</span>
+                    {language === 'am' ? 'የዕቁብ ቡድን እና የእጣ ድርሻ መጠን' : 'Ekub Group & Slot Share Size'}
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-slate-700">
+                        {language === 'am' ? 'ለመመዝገብ የሚፈልጉበት ምድብ (Target Group) *' : 'Target Group *'}
+                      </label>
+                      <select
+                        value={jointSlotForm.groupId}
+                        onChange={e => setJointSlotForm({ ...jointSlotForm, groupId: e.target.value })}
+                        required
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                      >
+                        <option value="">-- {language === 'am' ? 'ምድብ ይምረጡ' : 'Select Group'} --</option>
+                        {groups.map(g => (
+                          <option key={g.id} value={g.id}>{g.name} ({(g.amount || 0).toLocaleString()} ETB - {g.type})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-slate-700">
+                        {language === 'am' ? 'የእጣ ተጋጭ/ድርሻ ብዛት' : 'Split Count'}
+                      </label>
+                      <select
+                        value={jointSlotForm.splitFactor}
+                        onChange={e => setJointSlotForm({ ...jointSlotForm, splitFactor: Number(e.target.value) })}
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                      >
+                        <option value="2">{language === 'am' ? 'ለሁለት (1/2 - 50%)' : 'For Two (1/2 - 50%)'}</option>
+                        <option value="3">{language === 'am' ? 'ለሶስት (1/3 - 33.3%)' : 'For Three (1/3 - 33.3%)'}</option>
+                        <option value="4">{language === 'am' ? 'ለአራት (1/4 - 25%)' : 'For Four (1/4 - 25%)'}</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Member 1 details */}
+                <div className="border border-indigo-100 p-6 rounded-[2rem] space-y-4 bg-indigo-50/10">
+                  <h4 className="text-xs font-black text-indigo-900 uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">2</span>
+                    {language === 'am' ? 'አባል 1 (Member 1)' : 'Member 1'}
+                  </h4>
+
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-xl max-w-xs">
+                    <button
+                      type="button"
+                      onClick={() => setJointSlotForm({ ...jointSlotForm, member1Type: 'existing' })}
+                      className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                        jointSlotForm.member1Type === 'existing' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                      }`}
+                    >
+                      {language === 'am' ? 'ነባር አባል' : 'Existing Member'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setJointSlotForm({ ...jointSlotForm, member1Type: 'new' })}
+                      className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                        jointSlotForm.member1Type === 'new' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                      }`}
+                    >
+                      {language === 'am' ? 'አዲስ አባል' : 'New Member'}
+                    </button>
+                  </div>
+
+                  {jointSlotForm.member1Type === 'existing' ? (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-slate-700">
+                        {language === 'am' ? 'ነባር አባል ይምረጡ *' : 'Select Existing Member *'}
+                      </label>
+                      <select
+                        value={jointSlotForm.member1Id}
+                        onChange={e => setJointSlotForm({ ...jointSlotForm, member1Id: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                      >
+                        <option value="">-- {language === 'am' ? 'አባል ይምረጡ' : 'Select Member'} --</option>
+                        {allUsers.map(u => (
+                          <option key={u.id} value={u.id}>{u.fullName} ({u.phone})</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-black text-slate-700">{language === 'am' ? 'ሙሉ ስም *' : 'Full Name *'}</label>
+                        <input
+                          type="text"
+                          value={jointSlotForm.member1Name}
+                          onChange={e => setJointSlotForm({ ...jointSlotForm, member1Name: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-black text-slate-700">{language === 'am' ? 'ስልክ ቁጥር *' : 'Phone *'}</label>
+                        <input
+                          type="text"
+                          placeholder="09..."
+                          value={jointSlotForm.member1Phone}
+                          onChange={e => setJointSlotForm({ ...jointSlotForm, member1Phone: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-black text-slate-700">{language === 'am' ? 'የይለፍ ቃል *' : 'Password *'}</label>
+                        <input
+                          type="text"
+                          value={jointSlotForm.member1Password}
+                          onChange={e => setJointSlotForm({ ...jointSlotForm, member1Password: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 3: Member 2 details */}
+                <div className="border border-emerald-100 p-6 rounded-[2rem] space-y-4 bg-emerald-50/10">
+                  <h4 className="text-xs font-black text-emerald-900 uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">3</span>
+                    {language === 'am' ? 'አባል 2 (Member 2)' : 'Member 2'}
+                  </h4>
+
+                  <div className="flex gap-2 p-1 bg-slate-100 rounded-xl max-w-xs">
+                    <button
+                      type="button"
+                      onClick={() => setJointSlotForm({ ...jointSlotForm, member2Type: 'existing' })}
+                      className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                        jointSlotForm.member2Type === 'existing' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                      }`}
+                    >
+                      {language === 'am' ? 'ነባር አባል' : 'Existing Member'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setJointSlotForm({ ...jointSlotForm, member2Type: 'new' })}
+                      className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                        jointSlotForm.member2Type === 'new' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                      }`}
+                    >
+                      {language === 'am' ? 'አዲስ አባል' : 'New Member'}
+                    </button>
+                  </div>
+
+                  {jointSlotForm.member2Type === 'existing' ? (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-slate-700">
+                        {language === 'am' ? 'ነባር አባል ይምረጡ *' : 'Select Existing Member *'}
+                      </label>
+                      <select
+                        value={jointSlotForm.member2Id}
+                        onChange={e => setJointSlotForm({ ...jointSlotForm, member2Id: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                      >
+                        <option value="">-- {language === 'am' ? 'አባል ይምረጡ' : 'Select Member'} --</option>
+                        {allUsers.map(u => (
+                          <option key={u.id} value={u.id}>{u.fullName} ({u.phone})</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-black text-slate-700">{language === 'am' ? 'ሙሉ ስም *' : 'Full Name *'}</label>
+                        <input
+                          type="text"
+                          value={jointSlotForm.member2Name}
+                          onChange={e => setJointSlotForm({ ...jointSlotForm, member2Name: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-black text-slate-700">{language === 'am' ? 'ስልክ ቁጥር *' : 'Phone *'}</label>
+                        <input
+                          type="text"
+                          placeholder="09..."
+                          value={jointSlotForm.member2Phone}
+                          onChange={e => setJointSlotForm({ ...jointSlotForm, member2Phone: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-black text-slate-700">{language === 'am' ? 'የይለፍ ቃል *' : 'Password *'}</label>
+                        <input
+                          type="text"
+                          value={jointSlotForm.member2Password}
+                          onChange={e => setJointSlotForm({ ...jointSlotForm, member2Password: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </form>
+            )}
+
             {/* Footer Actions */}
              <div className="absolute bottom-0 left-0 right-0 p-8 pt-4 bg-white/80 backdrop-blur-md border-t border-slate-50 flex gap-4">
                <button 
@@ -14856,17 +15352,27 @@ export default function AdminDashboard() {
                    e.preventDefault(); 
                    if (addUserModalTab === 'register') {
                      handleAddUserSubmit(e); 
-                   } else {
+                   } else if (addUserModalTab === 'transfer') {
                      handleTransferUsersSubmit(e);
+                   } else {
+                     handleCreateJointSlotSubmit(e);
                    }
                  }}
-                 disabled={addUserModalTab === 'register' ? isAddingUser : isTransferringUsers}
+                 disabled={
+                   addUserModalTab === 'register' 
+                     ? isAddingUser 
+                     : addUserModalTab === 'transfer' 
+                       ? isTransferringUsers 
+                       : isCreatingJointSlot
+                 }
                  className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                >
                  {addUserModalTab === 'register' ? (
                    isAddingUser ? <RefreshCw size={18} className="animate-spin" /> : <><Users size={18} /> አባሉን መዝግብ</>
-                 ) : (
+                 ) : addUserModalTab === 'transfer' ? (
                    isTransferringUsers ? <RefreshCw size={18} className="animate-spin" /> : <><RefreshCw size={18} /> አባላትን አዛውር/አሸጋግር</>
+                 ) : (
+                   isCreatingJointSlot ? <RefreshCw size={18} className="animate-spin" /> : <><Users size={18} /> የጋራ እጣ ፍጠር</>
                  )}
                </button>
              </div>
