@@ -72,6 +72,11 @@ export default function Login() {
   const isInputValid = isPhoneValid || isEmailValid;
   const fullPhone = isEmailInput ? '' : normalizePhone(phoneNumber);
 
+  const isAdminEmail = isEmailInput && (
+    phoneNumber.toLowerCase().includes('admin') || 
+    phoneNumber.toLowerCase() === 'sefadinkedir@gmail.com'
+  );
+
   React.useEffect(() => {
      // No recaptcha needed for password login
   }, []);
@@ -234,7 +239,7 @@ export default function Login() {
               }
             } else {
               // Fallback for bootstrap admins if not found in DB or permission denied
-              if (cleanPhone === '0900000000' || cleanPhone === '0986204981') {
+              if (cleanPhone === '0900000000' || cleanPhone === '0986204981' || cleanPhone === '0926925237') {
                 setDetectedRole('admin');
                 setDetectedEmail(`${cleanPhone}@melikekub.com`);
               } else {
@@ -256,7 +261,11 @@ export default function Login() {
     }
   }, [phoneNumber, isInputValid]);
 
-  const isAdminPhone = detectedRole === 'admin' || (!isEmailInput && phoneNumber && (normalizePhone(phoneNumber) === '0900000000' || normalizePhone(phoneNumber) === '0986204981'));
+  const isAdminPhone = detectedRole === 'admin' || (!isEmailInput && phoneNumber && (
+    normalizePhone(phoneNumber) === '0900000000' || 
+    normalizePhone(phoneNumber) === '0986204981' || 
+    normalizePhone(phoneNumber) === '0926925237'
+  ));
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -272,7 +281,11 @@ export default function Login() {
       let hasAccount = false;
       const inputVal = phoneNumber.trim();
       const cleanInputPhone = isEmailInput ? '' : normalizePhone(inputVal);
-      const isBootstrapAdmin = !isEmailInput && (cleanInputPhone === '0900000000' || cleanInputPhone === '0986204981');
+      const isBootstrapAdmin = !isEmailInput && (
+        cleanInputPhone === '0900000000' || 
+        cleanInputPhone === '0986204981' || 
+        cleanInputPhone === '0926925237'
+      );
 
       let localDetectedEmail = detectedEmail;
 
@@ -442,6 +455,9 @@ export default function Login() {
                                 userEmailLower === '0900000000@melikekub.com' || 
                                 userEmailLower === '900000000@melikekub.com' ||
                                 userEmailLower === '0986204981@melikekub.com' ||
+                                userEmailLower === '0926925237@melikekub.com' ||
+                                userEmailLower === 'admin@melikekub.com' ||
+                                userEmailLower === 'admin@equb.com' ||
                                 userEmailLower.startsWith('admin.');
 
       const existingData = userDoc.exists() ? userDoc.data() : null;
@@ -567,12 +583,19 @@ export default function Login() {
                     )}
                     
                     <div className="space-y-2">
-                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{language === 'am' ? 'ስልክ ወይም ኢሜይል' : 'Phone or Email'}</label>
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                        {language === 'am' ? 'ስልክ ወይም ኢሜይል (Phone/Email)' : 'Phone or Email'}
+                        {isAdminEmail && <span className="ml-2 text-indigo-500 font-black">● Admin Mode</span>}
+                      </label>
                       <div className="relative">
-                        <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                        {isEmailInput ? (
+                          <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                        ) : (
+                          <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                        )}
                         <input 
                           type="text" 
-                          placeholder={language === 'am' ? "ስልክ ወይም ኢሜይል ያስገቡ" : "Phone or Email"} 
+                          placeholder={language === 'am' ? "ኢሜይል ወይም ስልክ ያስገቡ" : "Enter Email or Phone"} 
                           value={phoneNumber} 
                           onChange={(e) => setPhoneNumber(e.target.value)} 
                           className={`w-full pl-14 pr-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[15px] font-bold text-slate-900 outline-none transition-all ${
