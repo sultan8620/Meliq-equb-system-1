@@ -655,12 +655,37 @@ export default function Dashboard() {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userTeam, setUserTeam] = useState<any>(null);
+  const [associatedSlots, setAssociatedSlots] = useState<any[]>([]);
+  const [allGroups, setAllGroups] = useState<any[]>([]);
+
+  const jointSlots = useMemo(() => {
+    if (!userData?.phone) return [];
+    return associatedSlots.filter(s => (s.isSharedSlot === true || (s.slots && Number(s.slots) < 1)) && s.id !== user?.uid);
+  }, [associatedSlots, userData?.phone, user?.uid]);
 
   useEffect(() => {
     if (userData) {
       setIsAdmin(userData.role === 'admin' || userData.role === 'super_admin');
     }
   }, [userData]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(collection(db, 'groups'), (snap) => {
+      setAllGroups(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, 'groups'));
+    return () => unsub();
+  }, [user]);
+
+  useEffect(() => {
+    if (!userData?.phone) return;
+    const q = query(collection(db, 'users'), where('phone', '==', userData.phone));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const slots = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAssociatedSlots(slots);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
+    return () => unsub();
+  }, [userData?.phone]);
 
   useEffect(() => {
     if (user && userData?.teamId) {
@@ -766,7 +791,7 @@ export default function Dashboard() {
   const [membersFilter, setMembersFilter] = useState<'all' | 'winners' | 'active'>('all');
   const [showGuarantorInfoModal, setShowGuarantorInfoModal] = useState(false);
   const [guarantorSubTab, setGuarantorSubTab] = useState<'hub' | 'register' | 'history'>('hub');
-  const [rulesSubTab, setRulesSubTab] = useState<'general' | 'guarantor'>('general');
+  const [rulesSubTab, setRulesSubTab] = useState<'general' | 'guarantor' | 'joint'>('general');
   const [guarantorFormData, setGuarantorFormData] = useState({
     name: '',
     phone: '',
@@ -3269,7 +3294,100 @@ export default function Dashboard() {
                    </div>
                 </div>
               </div>
-              
+
+              {/* Joint Slots Tracker */}
+              {jointSlots.length > 0 && (
+                <div className="glass-card p-10 rounded-[3rem] relative overflow-hidden bg-gradient-to-br from-indigo-950 to-slate-900 text-white border border-indigo-900/30 shadow-2xl">
+                  <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-indigo-500/10 rounded-full blur-[80px] -mr-10 -mt-10 pointer-events-none" />
+                  <div className="absolute bottom-0 left-0 w-[200px] h-[200px] bg-emerald-500/5 rounded-full blur-[60px] -ml-10 -mb-10 pointer-events-none" />
+                  
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="w-14 h-14 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-indigo-400 border border-indigo-500/30 shadow-inner">
+                        <Layers size={28} />
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-display font-black tracking-tight text-white">
+                          {language === 'am' ? 'የተጨማሪ የጋራ እጣዎች መከታተያ' : 'Joint Slots Tracker'}
+                        </h4>
+                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-1">
+                          {language === 'am' ? 'በጋራ የገቧቸው ተጨማሪ እጣዎች ሁኔታ' : 'Monitor your joint slots and partnerships'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {jointSlots.map((slot) => {
+                        const targetGroup = allGroups.find(g => g.id === slot.groupId);
+                        const splitPercent = slot.splitFactor ? Math.round(100 / slot.splitFactor) : 50;
+                        return (
+                          <div key={slot.id} className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-6 hover:bg-white/10 transition-all group">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h5 className="text-base font-black text-white group-hover:text-gold-400 transition-colors">
+                                  {targetGroup ? targetGroup.name : (language === 'am' ? 'ምድብ ተጭኗል...' : 'Group loading...')}
+                                </h5>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">
+                                  {targetGroup?.type || '...'} {language === 'am' ? 'ክፍያ እቁብ' : 'Cycle'}
+                                </p>
+                              </div>
+                              <span className="px-3 py-1.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                {splitPercent}% {language === 'am' ? 'ድርሻ' : 'Share'} (1/{slot.splitFactor || 2})
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                              <div>
+                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">{language === 'am' ? 'የእጣ ኮድ' : 'Slot Code'}</p>
+                                <p className="text-sm font-mono font-bold text-slate-200">{slot.memberCode || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">{language === 'am' ? 'ክፍያ መጠን' : 'Amount'}</p>
+                                <p className="text-sm font-bold text-slate-200">
+                                  {slot.amount ? `${slot.amount.toLocaleString()} ETB` : 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Partners info if any */}
+                            <div className="pt-4 border-t border-white/5 space-y-2">
+                              <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">
+                                {language === 'am' ? 'የጋራ እጣ አጋሮች (Partners)' : 'Partners'}
+                              </p>
+                              <div className="flex flex-col gap-1.5">
+                                {associatedSlots
+                                  .filter(s => s.groupId === slot.groupId && s.id !== slot.id && (s.isSharedSlot || s.slots < 1))
+                                  .map((partner) => (
+                                    <div key={partner.id} className="flex items-center justify-between text-xs font-medium text-slate-300">
+                                      <span className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                        {partner.fullName}
+                                      </span>
+                                      <span className="text-slate-400 font-mono text-[11px]">{partner.phone}</span>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                            
+                            {/* Terms disclaimer button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('rules');
+                                setRulesSubTab('joint');
+                              }}
+                              className="w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/10 text-center"
+                            >
+                              {language === 'am' ? 'የጋራ እጣውን ህግና ደንብ ይመልከቱ' : 'View Joint Rules & Terms'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Ekub Day-by-Day Payment Tracker & Round Management */}
               {group && (
                 <div className="glass-card p-8 sm:p-10 rounded-[3rem] relative overflow-hidden bg-white/40 border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
@@ -5309,29 +5427,40 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="flex bg-white/10 p-1.5 rounded-2xl backdrop-blur-md border border-white/10">
+                  <div className="flex bg-white/10 p-1.5 rounded-2xl backdrop-blur-md border border-white/10 flex-wrap gap-2 md:gap-0">
                     <button 
                       onClick={() => setRulesSubTab('general')} 
-                      className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${rulesSubTab === 'general' ? 'bg-white text-slate-900 shadow-xl scale-105' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+                      className={`px-6 md:px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${rulesSubTab === 'general' ? 'bg-white text-slate-900 shadow-xl scale-105' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
                     >
                       {language === 'am' ? 'የእቁብ ህግ' : 'General'}
                     </button>
                     <button 
                       onClick={() => setRulesSubTab('guarantor')} 
-                      className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${rulesSubTab === 'guarantor' ? 'bg-white text-slate-900 shadow-xl scale-105' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+                      className={`px-6 md:px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${rulesSubTab === 'guarantor' ? 'bg-white text-slate-900 shadow-xl scale-105' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
                     >
                       {language === 'am' ? 'የዋስ ህግ' : 'Guarantor'}
+                    </button>
+                    <button 
+                      onClick={() => setRulesSubTab('joint')} 
+                      className={`px-6 md:px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${rulesSubTab === 'joint' ? 'bg-white text-slate-900 shadow-xl scale-105' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+                    >
+                      {language === 'am' ? 'የጋራ እጣ ህግ' : 'Joint Rules'}
                     </button>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {(rulesSubTab === 'general' ? (dynamicRules.filter(r => r.category === 'general' || !r.category).length > 0 ? dynamicRules.filter(r => r.category === 'general' || !r.category) : RULES_CONTENT) : (dynamicRules.filter(r => r.category === 'guarantor').length > 0 ? dynamicRules.filter(r => r.category === 'guarantor') : [
+                {(rulesSubTab === 'general' ? (dynamicRules.filter(r => r.category === 'general' || !r.category).length > 0 ? dynamicRules.filter(r => r.category === 'general' || !r.category) : RULES_CONTENT) : rulesSubTab === 'guarantor' ? (dynamicRules.filter(r => r.category === 'guarantor').length > 0 ? dynamicRules.filter(r => r.category === 'guarantor') : [
                   { id: 'g1', amTitle: 'ተአማኒ ዋስ', enTitle: 'Reliable Guarantor', am: 'እጣ የደረሰው ሰው በድርጅቱ ውስጥ የሚሰራ ተአማኒ ዋስ ማቅረብ አለበት።', en: 'The winner must provide a reliable guarantor who works within the organization.' },
                   { id: 'g2', amTitle: 'የዋስትና ፎርም', enTitle: 'Legal Forms', am: 'ሁሉም ዋሶች Annex 1 እና 2 ፎርሞችን መፈረም ይኖርባቸዋል።', en: 'All guarantors are required to sign Annex 1 and 2 official forms.' },
                   { id: 'g3', amTitle: 'የዋስ ቁጥር', enTitle: 'Number of Guarantors', am: 'እንደ እቁቡ መጠን 1 ወይም 2 ዋሶች ሊጠየቁ ይችላሉ።', en: 'Depending on the amount, 1 or 2 guarantors may be required.' }
-                ])).map((rule, idx) => (
+                ]) : [
+                  { id: 'j1', amTitle: 'የጋራ እና የማያቋርጥ ኃላፊነት (Joint Liability)', enTitle: 'Joint & Several Liability', am: 'ሁለቱም የጋራ እጣ አጋሮች በሙሉ እጣው ላይ እኩል ኃላፊነት አለባቸው። አንዱ አጋር ክፍያ መክፈል ካልቻለ፣ ሌላኛው አጋር ክፍያውን ሙሉ በሙሉ የመሙላት ህጋዊ ግዴታ አለበት።', en: 'Both partners have solidary liability. If one fails to pay, the other is legally bound to cover the full payment.' },
+                  { id: 'j2', amTitle: 'የእጣ ክፍፍል (Payout Split)', enTitle: 'Payout Distribution', am: 'በእጣው ወቅት እጣው ሲወጣ አጠቃላይ የእጣ ገንዘቡ ለአጋሮቹ እኩል ይከፈላል (አባሉ በገባበት ' + (jointSlots[0]?.splitFactor ? '1/' + jointSlots[0].splitFactor : '1/2') + ' ድርሻ መጠን መሰረት)።', en: 'Upon winning the draw, the total payout will be split and distributed proportionally according to the member\'s share ratio.' },
+                  { id: 'j3', amTitle: 'የዋስትና ግዴታ (Joint Guarantor)', enTitle: 'Guarantor Requirement', am: 'እጣው ለጋራ እጣው ሲወጣ፣ ሁለቱም አጋሮች የየራሳቸውን ታማኝ ዋስትና ማቅረብ ይኖርባቸዋል።', en: 'When the joint slot wins, both partners must supply reliable guarantors.' },
+                  { id: 'j4', amTitle: 'የኮሚሽን ክፍያ (Commission Division)', enTitle: 'Commission Division', am: 'እያንዳንዱ የጋራ እጣ አጋር ለገባበት የዕቁብ መጠን 10% የድርጅቱን ኮሚሽን እኩል ተካፍለው ይከፍላሉ።', en: 'Each partner shares the 10% service commission equally based on their share fraction.' }
+                ]).map((rule, idx) => (
                   <motion.div 
                     key={rule.id}
                     initial={{ opacity: 0, scale: 0.95 }}
