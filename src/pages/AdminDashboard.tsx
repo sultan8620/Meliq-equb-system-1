@@ -10,7 +10,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { initializeApp, deleteApp } from 'firebase/app';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { useLanguage } from '../lib/LanguageContext';
-import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSnapshot, serverTimestamp, limit, setDoc, deleteDoc, orderBy, arrayUnion, or } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSnapshot, serverTimestamp, limit, setDoc, deleteDoc, orderBy, arrayUnion, or, increment } from 'firebase/firestore';
 import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ChevronDown, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff, UserMinus } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { sendSMS } from '../lib/smsHelper';
@@ -869,6 +869,14 @@ export default function AdminDashboard() {
 
   const openScheduleModal = (group: any) => {
     setScheduledDrawGroup(group);
+    if (group.nextDrawDate) {
+      const parts = group.nextDrawDate.split('T');
+      setDrawScheduleDate(parts[0] || '');
+      setDrawScheduleTime(parts[1] || '12:00');
+    } else {
+      setDrawScheduleDate('');
+      setDrawScheduleTime('12:00');
+    }
     setShowScheduleDrawModal(true);
   };
 
@@ -2529,6 +2537,12 @@ export default function AdminDashboard() {
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [unsubMessages, setUnsubMessages] = useState<any>(null);
 
+  const [addUserModalTab, setAddUserModalTab] = useState<'register' | 'transfer'>('register');
+  const [transferSourceGroupId, setTransferSourceGroupId] = useState<string>('');
+  const [transferSelectedUserIds, setTransferSelectedUserIds] = useState<string[]>([]);
+  const [isTransferringUsers, setIsTransferringUsers] = useState(false);
+  const [transferSearchQuery, setTransferSearchQuery] = useState('');
+
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [adminLayoutView, setAdminLayoutView] = useState<'grid' | 'table'>('grid');
   const [adminRoleFilter, setAdminRoleFilter] = useState<'all' | 'super' | 'admin'>('all');
@@ -2916,6 +2930,12 @@ export default function AdminDashboard() {
         createdAt: serverTimestamp()
       });
 
+      if (addUserForm.groupId) {
+        await updateDoc(doc(db, 'groups', addUserForm.groupId), {
+          memberCount: increment(slots)
+        }).catch(err => console.error("Error updating group memberCount on admin add user:", err));
+      }
+
       setShowAddUserModal(false);
       setAddUserForm({ 
         fullName: '', phone: '', password: '', 
@@ -2934,6 +2954,123 @@ export default function AdminDashboard() {
         await deleteApp(tempApp).catch(console.error);
       }
       setIsAddingUser(false);
+    }
+  };
+
+  const handleTransferUsersSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addUserForm.groupId) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error', 
+        language === 'am' ? 'እባክዎ መጀመሪያ ተቀባይ ምድብ ይምረጡ!' : 'Please select a target group first!'
+      );
+      return;
+    }
+    if (transferSelectedUserIds.length === 0) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error', 
+        language === 'am' ? 'እባክዎ ለማዛወር ቢያንስ አንድ አባል ይምረጡ!' : 'Please select at least one member to transfer!'
+      );
+      return;
+    }
+
+    const targetGroup = groups.find(g => g.id === addUserForm.groupId);
+    if (!targetGroup) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error', 
+        language === 'am' ? 'ተቀባዩ ምድብ አልተገኘም::' : 'Target group not found.'
+      );
+      return;
+    }
+
+    setIsTransferringUsers(true);
+
+    try {
+      // Fetch details of all selected users
+      const selectedUsers = allUsers.filter(u => transferSelectedUserIds.includes(u.id));
+      
+      // Calculate total slots being transferred
+      const totalSlots = selectedUsers.reduce((sum, u) => sum + (parseInt(u.slots as any) || 1), 0);
+
+      // Check capacity of target group (optional but helpful warning/limit check)
+      const currentCapacity = targetGroup.memberCount || 0;
+      const groupLimit = targetGroup.limit || 10;
+      if (currentCapacity + totalSlots > groupLimit) {
+        if (!await confirmAction(
+          language === 'am' 
+            ? `ይህ ዝውውር የምድቡን ገደብ (${groupLimit}) ያሳልፋል:: አሁንም መቀጠል ይፈልጋሉ?` 
+            : `This transfer will exceed the group limit of ${groupLimit}. Do you still want to proceed?`
+        )) {
+          setIsTransferringUsers(false);
+          return;
+        }
+      }
+
+      // Group-by old group IDs so we can decrement their memberCounts efficiently
+      const oldGroupDecrements: { [groupId: string]: number } = {};
+      
+      for (const u of selectedUsers) {
+        const oldGId = u.groupId || null;
+        const slots = parseInt(u.slots as any) || 1;
+        if (oldGId && oldGId !== targetGroup.id) {
+          oldGroupDecrements[oldGId] = (oldGroupDecrements[oldGId] || 0) + slots;
+        }
+      }
+
+      // 1. Update each user in Firestore
+      for (const u of selectedUsers) {
+        const userRef = doc(db, 'users', u.id);
+        await updateDoc(userRef, {
+          groupId: targetGroup.id,
+          ekubType: targetGroup.type,
+          amount: targetGroup.amount, // Set their amount and type to match target group
+        });
+
+        // Also notify the user about group transfer
+        await notifyUserAdminChange(
+          u.id,
+          'የቡድን ዝውውር',
+          'Group Transfer',
+          `ወደ አዲሱ ምድብ "${targetGroup.name}" በተሳካ ሁኔታ ተዛውረዋል::`,
+          `You have been successfully transferred to the new group "${targetGroup.name}".`
+        ).catch(err => console.error("Error notifying user:", err));
+      }
+
+      // 2. Decrement old groups' memberCounts
+      for (const [oldGId, decAmount] of Object.entries(oldGroupDecrements)) {
+        const oldGRef = doc(db, 'groups', oldGId);
+        await updateDoc(oldGRef, {
+          memberCount: increment(-decAmount)
+        }).catch(err => console.error(`Error decrementing group ${oldGId}:`, err));
+      }
+
+      // 3. Increment target group's memberCount
+      const targetGRef = doc(db, 'groups', targetGroup.id);
+      await updateDoc(targetGRef, {
+        memberCount: increment(totalSlots)
+      }).catch(err => console.error(`Error incrementing target group ${targetGroup.id}:`, err));
+
+      // Done! Reset states
+      setTransferSelectedUserIds([]);
+      setTransferSourceGroupId('');
+      setShowAddUserModal(false);
+      setAddUserModalTab('register');
+
+      triggerSuccess(
+        language === 'am' ? 'ማሳወቂያ' : 'Notice',
+        language === 'am' 
+          ? `በድምሩ ${selectedUsers.length} አባላት ወደ "${targetGroup.name}" በተሳካ ሁኔታ ተዛውረዋል::`
+          : `Successfully transferred ${selectedUsers.length} members to "${targetGroup.name}".`
+      );
+
+    } catch (error) {
+      console.error("Error during group transfer:", error);
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'አባላትን ለማዛወር አልተሳካም::' : 'Failed to transfer members.'
+      );
+    } finally {
+      setIsTransferringUsers(false);
     }
   };
 
@@ -2989,6 +3126,26 @@ export default function AdminDashboard() {
         }
       }
 
+      const oldGroupId = originalUser?.groupId || null;
+      const newGroupId = editUserForm.groupId || null;
+      const originalSlots = parseInt(originalUser?.slots as any) || 1;
+      const newSlots = parseInt(editUserForm.slots as any) || 1;
+
+      if (oldGroupId !== newGroupId || originalSlots !== newSlots) {
+        // Decrement slots from old group
+        if (oldGroupId) {
+          await updateDoc(doc(db, 'groups', oldGroupId), {
+            memberCount: increment(-originalSlots)
+          }).catch(err => console.error("Error decrementing old group count:", err));
+        }
+        // Increment slots for new group
+        if (newGroupId) {
+          await updateDoc(doc(db, 'groups', newGroupId), {
+            memberCount: increment(newSlots)
+          }).catch(err => console.error("Error incrementing new group count:", err));
+        }
+      }
+
       await updateDoc(doc(db, 'users', editUserForm.id), {
         fullName: editUserForm.fullName || '',
         phone: editUserForm.phone || '',
@@ -3003,6 +3160,7 @@ export default function AdminDashboard() {
         ekubType: editUserForm.ekubType || '',
         memberCode: editUserForm.memberCode || '',
         amount: parseFloat(editUserForm.amount) || 0,
+        groupId: editUserForm.groupId || null,
         status: 'active' // Immediately approved/activated as requested: "ወዲያው እንዲፀድቅ አድርግልኝ"
       });
       setShowEditUserModal(false);
@@ -8512,7 +8670,7 @@ export default function AdminDashboard() {
                       <div className={`absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r ${drawsFilter === 'active' ? 'from-amber-400 via-rose-500 to-indigo-500' : 'from-slate-400 to-slate-600'}`}></div>
                       <div className="absolute top-0 right-0 w-40 h-40 bg-rose-500/5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-rose-500/10 transition-colors"></div>
                       
-                      <div className="flex justify-between items-start mb-5 relative z-10 pt-2">
+                      <div className="flex justify-between items-start mb-5 relative z-10 pt-2 w-full">
                          <div>
                            <h2 className="text-xl font-black text-slate-900 leading-none uppercase tracking-tight group-hover:text-rose-600 transition-colors mb-2">{group.name}</h2>
                            <div className="flex items-center gap-2">
@@ -8524,6 +8682,26 @@ export default function AdminDashboard() {
                               </span>
                            </div>
                          </div>
+                         {(isSuperAdmin || userData?.permissions?.manageGroups) && (
+                           <button 
+                             onClick={async (e) => {
+                               e.stopPropagation();
+                               if (await confirmAction(language === 'am' ? `ቡድኑን "${group.name}" መሰረዝ እንደሚፈልጉ እርግጠኛ ነዎት?` : `Are you sure you want to delete the group "${group.name}"?`)) {
+                                 try {
+                                   await deleteDoc(doc(db, 'groups', group.id));
+                                   triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Notice', language === 'am' ? 'ምድቡ በተሳካ ሁኔታ ተሰርዟል::' : 'Group deleted successfully.');
+                                 } catch (err) {
+                                   console.error("Error deleting group:", err);
+                                   triggerSuccess(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'ምድቡን ለመሰረዝ አልተሳካም::' : 'Failed to delete group.');
+                                 }
+                               }
+                             }}
+                             className="w-9 h-9 bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-600 rounded-xl flex items-center justify-center transition-all shadow-sm border border-rose-100 shrink-0"
+                             title={language === 'am' ? 'ምድቡን አጥፋ' : 'Delete Group'}
+                           >
+                             <Trash2 size={16} />
+                           </button>
+                         )}
                       </div>
 
                       {/* Diagnostic / Diagnostic Stats inside the active card */}
@@ -13601,6 +13779,38 @@ export default function AdminDashboard() {
                     </select>
                  </div>
                </div>
+
+               <div>
+                  <label className="block text-xs font-black text-slate-900 mb-2">የተመደበበት ምድብ (Assigned Group)</label>
+                  <select 
+                    value={editUserForm.groupId || ''} 
+                    onChange={e => {
+                      const gId = e.target.value;
+                      const matchedGroup = groups.find(g => g.id === gId);
+                      if (matchedGroup) {
+                        setEditUserForm({
+                          ...editUserForm, 
+                          groupId: gId,
+                          ekubType: matchedGroup.type,
+                          amount: matchedGroup.amount
+                        });
+                      } else {
+                        setEditUserForm({
+                          ...editUserForm, 
+                          groupId: gId || null
+                        });
+                      }
+                    }} 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none"
+                  >
+                    <option value="">-- ምድብ የሌለው (No Group) --</option>
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} ({(g.amount || 0).toLocaleString()} ETB - {g.type})
+                      </option>
+                    ))}
+                  </select>
+               </div>
                
                <button type="submit" className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black shadow-xl shadow-amber-500/20 hover:bg-amber-600 transition-all mt-4">
                   አስቀምጥ (Save)
@@ -13996,8 +14206,35 @@ export default function AdminDashboard() {
                 <XCircle size={24} />
               </button>
             </div>
+
+            {/* Custom Tab Switcher */}
+            <div className="flex border-b border-slate-100 bg-slate-50 p-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAddUserModalTab('register')}
+                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-2xl transition-all ${
+                  addUserModalTab === 'register' 
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {language === 'am' ? 'አዲስ አባል መዝግብ' : 'Register New Member'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddUserModalTab('transfer')}
+                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-2xl transition-all ${
+                  addUserModalTab === 'transfer' 
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {language === 'am' ? 'አባል ከሌላ ምድብ አዛውር (Migrate)' : 'Transfer Member'}
+              </button>
+            </div>
             
-            <form onSubmit={handleAddUserSubmit} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar pb-32">
+            {addUserModalTab === 'register' ? (
+              <form onSubmit={handleAddUserSubmit} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar pb-32">
                {/* Section 1: Basic Identity */}
                <div className="space-y-6">
                  <div className="flex items-center gap-3 mb-2">
@@ -14434,32 +14671,205 @@ export default function AdminDashboard() {
                       <Lock size={28} />
                    </div>
                    <div className="relative z-10 flex-1">
-                      <p className="text-sm font-black text-white uppercase tracking-widest mb-2">ለአባሉ የመግቢያ መረጃ (Login Credentials)</p>
-                      <p className="text-[11px] font-bold text-slate-400 leading-relaxed">
-                         አባሉ በሚቀጥለው ጊዜ ወደ መሊክ እቁብ ለመግባት <span className="text-rose-400 font-black">{addUserForm.phone || 'ስልክ ቁጥራቸው'}</span> እና ከላይ ያስገቡትን <span className="text-rose-400 font-black">የይለፍ ቃል</span> በመጠቀም መግባት ይችላሉ። ሲመዘገቡ የሚሰጣቸውን የአባል መለያ ኮድም ከገቡ በኋላ ያገኙታል።
-                      </p>
-                   </div>
+                      <p className="text-sm font-black text-white uppercase tracking-widest mb-2">ለአባሉ የመግቢያ መረጃ (Login Credentials)</p>                      <p className="text-[11px] font-bold text-slate-400 leading-relaxed">                         አባሉ በሚቀጥለው ጊዜ ወደ መሊክ እቁብ ለመግባት <span className="text-rose-400 font-black">{addUserForm.phone || 'ስልክ ቁጥራቸው'}</span> እና ከላይ ያስገቡትን <span className="text-rose-400 font-black">የይለፍ ቃል</span> በመጠቀም መግባት ይችላሉ። ሲመዘገቡ የሚሰጣቸውን የአባል መለያ ኮድም ከገቡ በኋላ ያገኙታል።                      </p>                   </div>                 </div>               </div>            </form>
+            ) : (
+              <form onSubmit={handleTransferUsersSubmit} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar pb-32">
+                 {/* Target Group selection */}
+                 <div className="space-y-2">
+                    <label className="block text-xs font-black text-slate-900">ተቀባይ ምድብ (Target Group) *</label>
+                    <select 
+                      value={addUserForm.groupId} 
+                      onChange={e => setAddUserForm({...addUserForm, groupId: e.target.value})} 
+                      required
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                    >
+                      <option value="">-- ተቀባይ ምድብ ይምረጡ (Select Target) --</option>
+                      {groups.map(g => (
+                        <option key={g.id} value={g.id}>{g.name} ({(g.amount || 0).toLocaleString()} ETB - {g.type})</option>
+                      ))}
+                    </select>
                  </div>
-               </div>
-            </form>
+
+                 {/* Source Group selection */}
+                 <div className="space-y-2">
+                    <label className="block text-xs font-black text-slate-900">አባላት የሚመረጡበት መነሻ ምድብ (Source Group)</label>
+                    <select 
+                      value={transferSourceGroupId} 
+                      onChange={e => {
+                        setTransferSourceGroupId(e.target.value);
+                        setTransferSelectedUserIds([]); // Reset selection when group changes
+                      }} 
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                    >
+                      <option value="">-- ከሁሉም ምድቦች (All Groups / No Group) --</option>
+                      {groups.map(g => (
+                        <option key={g.id} value={g.id}>{g.name} ({(g.amount || 0).toLocaleString()} ETB - {g.type})</option>
+                      ))}
+                    </select>
+                 </div>
+
+                 {/* Search bar & Select All */}
+                 <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                    <div className="relative w-full sm:max-w-xs">
+                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                       <input 
+                         type="text" 
+                         placeholder={language === 'am' ? 'በስም ወይም በስልክ ፈልግ...' : 'Search name or phone...'}
+                         value={transferSearchQuery}
+                         onChange={e => setTransferSearchQuery(e.target.value)}
+                         className="w-full bg-white border border-slate-200 rounded-2xl pl-11 pr-4 py-2.5 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all"
+                       />
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <button
+                         type="button"
+                         onClick={() => {
+                           const filtered = allUsers.filter(u => {
+                             if (addUserForm.groupId && u.groupId === addUserForm.groupId) return false;
+                             if (transferSourceGroupId && u.groupId !== transferSourceGroupId) return false;
+                             if (transferSearchQuery) {
+                               const q = transferSearchQuery.toLowerCase();
+                               return u.fullName?.toLowerCase().includes(q) || u.phone?.includes(q);
+                             }
+                             return true;
+                           });
+                           setTransferSelectedUserIds(filtered.map(u => u.id));
+                         }}
+                         className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-colors"
+                       >
+                         {language === 'am' ? 'ሁሉንም ምረጥ' : 'Select All'}
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setTransferSelectedUserIds([])}
+                         className="px-3 py-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-slate-200 transition-colors"
+                       >
+                         {language === 'am' ? 'ሁሉንም ሰርዝ' : 'Deselect All'}
+                       </button>
+                    </div>
+                 </div>
+
+                 {/* Members list to select from */}
+                 <div className="space-y-1.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-2 border border-slate-100 rounded-3xl p-3 bg-slate-50/50">
+                    {(() => {
+                      const filteredUsers = allUsers.filter(u => {
+                        if (addUserForm.groupId && u.groupId === addUserForm.groupId) return false;
+                        if (transferSourceGroupId && u.groupId !== transferSourceGroupId) return false;
+                        if (transferSearchQuery) {
+                          const q = transferSearchQuery.toLowerCase();
+                          return u.fullName?.toLowerCase().includes(q) || u.phone?.includes(q);
+                        }
+                        return true;
+                      });
+
+                      if (filteredUsers.length === 0) {
+                        return (
+                          <div className="text-center py-10 opacity-60">
+                            <Users size={32} className="mx-auto text-slate-300 mb-2" />
+                            <p className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                              {language === 'am' ? 'ሊዛወሩ የሚችሉ አባላት አልተገኙም' : 'No transferable members found'}
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return filteredUsers.map(u => {
+                        const isChecked = transferSelectedUserIds.includes(u.id);
+                        const userGroup = groups.find(g => g.id === u.groupId);
+                        return (
+                          <div 
+                            key={u.id}
+                            onClick={() => {
+                              if (isChecked) {
+                                setTransferSelectedUserIds(prev => prev.filter(id => id !== u.id));
+                              } else {
+                                setTransferSelectedUserIds(prev => [...prev, u.id]);
+                              }
+                            }}
+                            className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer \${
+                              isChecked 
+                                ? 'bg-indigo-50/50 border-indigo-200 shadow-sm' 
+                                : 'bg-white border-slate-100 hover:border-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all \${
+                                isChecked ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'
+                              }`}>
+                                {isChecked && <CheckCircle size={14} className="stroke-[3]" />}
+                              </div>
+                              <div>
+                                <p className="text-sm font-black text-slate-800 leading-none mb-1">{u.fullName}</p>
+                                <p className="text-[10px] font-bold text-slate-500 leading-none">{u.phone}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {userGroup ? (
+                                <span className="px-2 py-1 bg-amber-50 text-amber-700 border border-amber-100 text-[8px] font-black uppercase rounded-lg">
+                                  {userGroup.name}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[8px] font-black uppercase rounded-lg">
+                                  {language === 'am' ? 'ምድብ የሌለው' : 'No Group'}
+                                </span>
+                              )}
+                              <span className="px-2 py-1 bg-slate-900 text-white text-[8px] font-mono font-bold rounded-lg">
+                                {u.slots || 1} Slots
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                 </div>
+
+                 {/* Selection stats & summary */}
+                 <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-2xl flex items-center justify-between text-xs font-bold text-indigo-800">
+                    <span>{language === 'am' ? 'የተመረጡ አባላት ብዛት:' : 'Selected Members:'} <strong>{transferSelectedUserIds.length}</strong></span>
+                    <span>
+                      {language === 'am' ? 'ጠቅላላ እጣዎች (Slots):' : 'Total Slots:'}{' '}
+                      <strong>
+                        {allUsers
+                          .filter(u => transferSelectedUserIds.includes(u.id))
+                          .reduce((sum, u) => sum + (parseInt(u.slots as any) || 1), 0)}
+                      </strong>
+                    </span>
+                 </div>
+              </form>
+            )}
 
             {/* Footer Actions */}
-            <div className="absolute bottom-0 left-0 right-0 p-8 pt-4 bg-white/80 backdrop-blur-md border-t border-slate-50 flex gap-4">
-              <button 
-                type="button" 
-                onClick={() => setShowAddUserModal(false)}
-                className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-100 transition-all"
-              >
-                አቋርጥ (Cancel)
-              </button>
-              <button 
-                onClick={(e) => { e.preventDefault(); handleAddUserSubmit(e); }}
-                disabled={isAddingUser}
-                className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-              >
-                {isAddingUser ? <RefreshCw size={18} className="animate-spin" /> : <><Users size={18} /> አባሉን መዝግብ</>}
-              </button>
-            </div>
+             <div className="absolute bottom-0 left-0 right-0 p-8 pt-4 bg-white/80 backdrop-blur-md border-t border-slate-50 flex gap-4">
+               <button 
+                 type="button" 
+                 onClick={() => {
+                   setShowAddUserModal(false);
+                   setAddUserModalTab("register");
+                 }}
+                 className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-100 transition-all"
+               >
+                 አቋርጥ (Cancel)
+               </button>
+               <button 
+                 onClick={(e) => { 
+                   e.preventDefault(); 
+                   if (addUserModalTab === 'register') {
+                     handleAddUserSubmit(e); 
+                   } else {
+                     handleTransferUsersSubmit(e);
+                   }
+                 }}
+                 disabled={addUserModalTab === 'register' ? isAddingUser : isTransferringUsers}
+                 className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+               >
+                 {addUserModalTab === 'register' ? (
+                   isAddingUser ? <RefreshCw size={18} className="animate-spin" /> : <><Users size={18} /> አባሉን መዝግብ</>
+                 ) : (
+                   isTransferringUsers ? <RefreshCw size={18} className="animate-spin" /> : <><RefreshCw size={18} /> አባላትን አዛውር/አሸጋግር</>
+                 )}
+               </button>
+             </div>
           </motion.div>
         </div>
       )}

@@ -823,9 +823,9 @@ export default function Signup() {
         const groupsSnap = await getDocs(qGroups);
         const allGroups = groupsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
         
-        // Find the oldest open group with enough capacity for user's slots
+        // Find the oldest open group with enough capacity for user's slots (or any open group that is not yet full)
         const openGroup = allGroups
-          .filter(g => ['open', 'registration'].includes(g.status) && (g.memberCount + formData.slots) <= g.limit)
+          .filter(g => ['open', 'registration'].includes(g.status) && g.memberCount < g.limit)
           .sort((a, b) => {
             const dateA = a.createdAt?.seconds || 0;
             const dateB = b.createdAt?.seconds || 0;
