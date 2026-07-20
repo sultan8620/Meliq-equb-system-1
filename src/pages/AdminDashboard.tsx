@@ -5,7 +5,7 @@ import Barcode from 'react-barcode';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
 import { auth, db, handleFirestoreError, OperationType, storage } from '../firebase';
-import { signOut, getAuth, createUserWithEmailAndPassword, updateEmail, updatePassword } from 'firebase/auth';
+import { signOut, getAuth, createUserWithEmailAndPassword, updateEmail, updatePassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { initializeApp, deleteApp } from 'firebase/app';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -2955,6 +2955,40 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!editUserForm || !editUserForm.id) return;
     try {
+      const originalUser = allUsers.find(u => u.id === editUserForm.id);
+      const hasPasswordChanged = originalUser && editUserForm.password && editUserForm.password !== originalUser.password;
+
+      if (hasPasswordChanged) {
+        const userEmail = editUserForm.email || `${editUserForm.phone.trim().replace(/\D/g, '')}@melikekub.com`;
+        const oldPassword = originalUser.password;
+        const newPassword = editUserForm.password;
+
+        if (oldPassword && newPassword) {
+          try {
+            const tempAppName = 'tempUpdatePass-' + Date.now();
+            const tempApp = initializeApp(firebaseConfig, tempAppName);
+            const tempAuth = getAuth(tempApp);
+            
+            // Sign in as user
+            const cred = await signInWithEmailAndPassword(tempAuth, userEmail, oldPassword);
+            // Update password
+            await updatePassword(cred.user, newPassword);
+            // Sign out
+            await signOut(tempAuth);
+            await deleteApp(tempApp);
+            console.log("Successfully synced password to Firebase Auth for", userEmail);
+          } catch (authError: any) {
+            console.error("Failed to sync password to Firebase Auth:", authError);
+            triggerSuccess(
+              language === 'am' ? 'ማሳሰቢያ' : 'Notice',
+              language === 'am'
+                ? 'በFirebase Auth ውስጥ የይለፍ ቃል ማመሳሰል አልተቻለም። ግን በፊዚካል ዴታቤዝ ውስጥ ተቀምጧል።'
+                : 'Could not sync password in Firebase Auth (incorrect old password), but stored in Firestore.'
+            );
+          }
+        }
+      }
+
       await updateDoc(doc(db, 'users', editUserForm.id), {
         fullName: editUserForm.fullName || '',
         phone: editUserForm.phone || '',
@@ -2969,15 +3003,15 @@ export default function AdminDashboard() {
         ekubType: editUserForm.ekubType || '',
         memberCode: editUserForm.memberCode || '',
         amount: parseFloat(editUserForm.amount) || 0,
-        status: editUserForm.status || 'pending'
+        status: 'active' // Immediately approved/activated as requested: "ወዲያው እንዲፀድቅ አድርግልኝ"
       });
       setShowEditUserModal(false);
       
       await notifyUserAdminChange(
         editUserForm.id, 
-        'የመረጃ ማሻሻያ', 'Profile Updated',
-        'አድሚን የግል መረጃዎን አሻሽሏል። እባክዎ መረጃዎን ያረጋግጡ።', 
-        'Admin updated your personal profile. Please verify your details.'
+        'የመረጃ ማሻሻያ', 'Profile Updated & Approved',
+        'አድሚን የግል መረጃዎን አሻሽሏል እንዲሁም መለያዎን አጽድቋል።', 
+        'Admin updated and immediately approved your profile.'
       );
       
       triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', t('admin.user_updated'));
@@ -12363,7 +12397,7 @@ export default function AdminDashboard() {
                           <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የይለፍ ቃል (Password)' : 'User Password'}</p>
                           <div className="flex items-center gap-2">
                              <Lock size={12} className="text-rose-500" />
-                             <p className="text-sm font-black text-rose-600 font-mono tracking-tight">********</p>
+                             <p className="text-sm font-black text-rose-600 font-mono tracking-tight">{selectedUser.password || 'N/A'}</p>
                           </div>
                           <p className="text-[7px] font-bold text-rose-400 mt-1 italic leading-tight">
                              {language === 'am' ? '* ይህ መረጃ ለአድሚን ብቻ የሚታይ ነው።' : '* Visible to administrator only.'}

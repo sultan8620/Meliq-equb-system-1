@@ -892,6 +892,7 @@ export default function Signup() {
         const userDocRaw = {
           uid: userCredential.user.uid, 
           phone: cleanPhone,
+          password: formData.password,
           profession: formData.profession || '',
           email: dummyEmail,
           authEmail: dummyEmail,

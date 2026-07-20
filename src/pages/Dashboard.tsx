@@ -721,6 +721,9 @@ export default function Dashboard() {
         await reauthenticateWithCredential(auth.currentUser, credential);
       }
       await updatePassword(auth.currentUser, changePasswordForm.newPassword);
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        password: changePasswordForm.newPassword
+      });
       triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የይለፍ ቃል ተቀይሯል። እባክዎ እንደገና ይግቡ' : 'Password updated. Please log in again.');
       setChangePasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setShowChangePasswordModal(false);
