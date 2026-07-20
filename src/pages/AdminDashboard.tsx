@@ -15,6 +15,13 @@ import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCirc
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { sendSMS } from '../lib/smsHelper';
 
+const formatSlots = (s: number | undefined): string => {
+  if (!s) return '1';
+  if (s % 1 === 0) return s.toString();
+  const roundedSplit = Math.round(1 / s);
+  return `1/${roundedSplit}`;
+};
+
 const getBankPrefix = (bankName: string) => {
   if (!bankName) return 'REC';
   const name = bankName.toLowerCase();
@@ -4444,7 +4451,7 @@ export default function AdminDashboard() {
                               </div>
                               <span className="text-[7px] font-black uppercase tracking-widest text-slate-400">Slots</span>
                            </div>
-                           <p className="text-[10px] font-black text-slate-800 tabular-nums">{u.slots || 1}</p>
+                           <p className="text-[10px] font-black text-slate-800 tabular-nums">{formatSlots(u.slots)}</p>
                         </div>
                         <div className={`col-span-2 p-2.5 rounded-2xl flex items-center justify-between transition-all ${selectedUserIds.includes(u.id) ? 'bg-indigo-900 shadow-xl' : 'bg-indigo-600 shadow-md group-hover:shadow-lg'}`}>
                            <div className="flex items-center gap-2.5">
@@ -4533,7 +4540,7 @@ export default function AdminDashboard() {
                               </p>
                               <div className="h-1 w-1 rounded-full bg-slate-200"></div>
                               <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
-                                 <Folder size={10} /> {u.slots || 1} Slots
+                                 <Folder size={10} /> {formatSlots(u.slots)} Slots
                               </p>
                            </div>
                         </div>
@@ -4891,7 +4898,7 @@ export default function AdminDashboard() {
                                        )}
                                        <div className="flex items-center gap-1.5 mt-1">
                                           <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-indigo-100">
-                                             Slots: {member.slots || 1}
+                                             Slots: {formatSlots(member.slots)}
                                           </span>
                                           {member.wonDraw && (
                                             <span className="text-[9px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-amber-100 flex items-center gap-1">
@@ -12386,7 +12393,7 @@ export default function AdminDashboard() {
                        </div>
                        <div>
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የእጣ ብዛት' : 'Slots'}</p>
-                          <p className="text-xs font-black text-slate-900">{selectedUser.slots || 1}</p>
+                          <p className="text-xs font-black text-slate-900">{formatSlots(selectedUser.slots)}</p>
                        </div>
                     </div>
                   </div>

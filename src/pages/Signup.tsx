@@ -63,7 +63,7 @@ const InputField = ({ icon: Icon, ...props }: any) => (
       <Icon className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors w-5 h-5" />
       <input 
         {...props} 
-        className="w-full pl-14 pr-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[15px] font-bold text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all" 
+        className="w-full pl-14 pr-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[15px] font-bold text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all" 
       />
     </div>
   </div>
@@ -165,6 +165,8 @@ export default function Signup() {
     addressCountry: 'ኢትዮጵያ', addressRegion: 'አዲስ አበባ', addressZone: '', addressWoreda: '', addressKebele: '', addressHouseNumber: '',
     birthDate: '',
     frequency: 'tendays', memberLimit: 10, amount: 1000, customAmount: '', slots: 1,
+    isSharedSlot: false,
+    splitFactor: 2,
     nationalId: '', idFront: null as string | null, idBack: null as string | null, faceScan: null as string | null, preferredItem: 'Cash (ጥሬ ገንዘብ)'
   });
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -337,10 +339,16 @@ export default function Signup() {
     }
   }, [formData.frequency]);
 
+  const actualUserSlots = useMemo(() => {
+    return formData.isSharedSlot 
+      ? formData.slots / formData.splitFactor 
+      : formData.slots;
+  }, [formData.isSharedSlot, formData.splitFactor, formData.slots]);
+
   const commissionPerSlot = finalAmount * 0.1; // 10% commission per slot
   const totalPerSlot = finalAmount + commissionPerSlot;
   const totalPayoutPerSlot = finalAmount * multiplier * formData.memberLimit;
-  const totalCyclePayment = totalPerSlot * multiplier * formData.memberLimit * formData.slots;
+  const totalCyclePayment = totalPerSlot * multiplier * formData.memberLimit * actualUserSlots;
 
   // Age and Ethiopian Date Calculation (Fully synchronized)
   const birthInfo = useMemo(() => {
@@ -440,10 +448,15 @@ export default function Signup() {
           groups = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as any))
             .filter(g => ['open', 'registration'].includes(g.status))
-            .sort((a, b) => a.name.localeCompare(b.name));
+            .sort((a, b) => {
+              const dateA = a.createdAt?.seconds || 0;
+              const dateB = b.createdAt?.seconds || 0;
+              return dateA - dateB;
+            });
         }
 
-        const validOpenGroups = groups.filter(g => g.memberCount < g.limit);
+        const chosenSlots = actualUserSlots;
+        const validOpenGroups = groups.filter(g => (g.memberCount + chosenSlots) <= g.limit);
 
         if (validOpenGroups.length === 0) {
           if (active) {
@@ -452,15 +465,10 @@ export default function Signup() {
           }
         } else {
           if (active) {
-            setAvailableGroups(groups);
-            // If currently selected group isn't in the loaded groups, or is full, or none chosen, auto-select first open group with enough slots
-            const currentSelectedInList = groups.find(g => g.id === selectedGroup?.id);
-            const chosenSlots = formData.slots || 1;
-            
-            if (!selectedGroup || !currentSelectedInList || (currentSelectedInList.memberCount + chosenSlots > currentSelectedInList.limit)) {
-              const firstWithSpace = groups.find(g => (g.memberCount + chosenSlots) <= g.limit) || groups[0];
-              setSelectedGroup(firstWithSpace);
-            }
+            // Only expose the oldest open group with capacity to prevent starting or joining another group
+            const oldestOpenGroup = validOpenGroups[0];
+            setAvailableGroups([oldestOpenGroup]);
+            setSelectedGroup(oldestOpenGroup);
           }
         }
       } catch (error) {
@@ -472,7 +480,7 @@ export default function Signup() {
     return () => {
       active = false;
     };
-  }, [formData.frequency, formData.memberLimit, finalAmount, formData.slots]);
+  }, [formData.frequency, formData.memberLimit, finalAmount, actualUserSlots]);
 
   const startScan = (mode: 'face' | 'idFront' | 'idBack' = 'face') => {
     setCameraMode(mode);
@@ -563,7 +571,7 @@ export default function Signup() {
   };
 
   const captureScan = async () => {
-    if (videoRef.current && videoRef.current.readyState >= 2 && cameraMode) {
+    if (videoRef.current && (videoRef.current.readyState >= 1 || videoRef.current.videoWidth > 0) && cameraMode) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
@@ -877,6 +885,10 @@ export default function Signup() {
       try {
         await deleteDoc(doc(db, 'rejected_members', userCredential.user.uid)).catch(() => {});
         const { password: _, confirmPassword: __, ...userDataToSave } = updatedFormData;
+        delete (userDataToSave as any).slots;
+        delete (userDataToSave as any).isSharedSlot;
+        delete (userDataToSave as any).splitFactor;
+
         const userDocRaw = {
           uid: userCredential.user.uid, 
           phone: cleanPhone,
@@ -888,7 +900,10 @@ export default function Signup() {
           amount: finalAmount,
           commission: commissionPerSlot,
           totalPerSlot,
-          totalPayout: totalPayoutPerSlot,
+          slots: actualUserSlots,
+          isSharedSlot: formData.isSharedSlot || false,
+          splitFactor: formData.isSharedSlot ? formData.splitFactor : 1,
+          totalPayout: totalPayoutPerSlot * actualUserSlots,
           totalCyclePayment,
           age: birthInfo.age,
           ethBirthDate: birthInfo.ethDate,
@@ -934,8 +949,8 @@ export default function Signup() {
       
       try {
         await updateDoc(doc(db, 'groups', targetGroup.id), { 
-          memberCount: increment(formData.slots),
-          status: (targetGroup.memberCount + formData.slots >= targetGroup.limit) ? 'closed' : 'open'
+          memberCount: increment(actualUserSlots),
+          status: (targetGroup.memberCount + actualUserSlots >= targetGroup.limit) ? 'closed' : 'open'
         });
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `groups/${targetGroup.id}`);
@@ -1093,7 +1108,7 @@ export default function Signup() {
                           setPhoneNumber(val);
                           setFormData({...formData, phone: val});
                         }}
-                        className={`w-full pl-14 pr-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[15px] font-bold text-slate-900 outline-none transition-all ${
+                        className={`w-full pl-14 pr-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[15px] font-bold text-slate-900 outline-none transition-all ${
                           phoneNumber.length > 0
                             ? isPhoneValid
                               ? 'border-emerald-500 bg-white shadow-[0_0_0_4px_rgba(16,185,129,0.1)]'
@@ -1117,7 +1132,7 @@ export default function Signup() {
                             type={showPassword ? "text" : "password"} 
                             value={formData.password} 
                             onChange={(e) => setFormData({...formData, password: e.target.value})} 
-                            className={`w-full pl-14 pr-12 py-5 bg-slate-50 border rounded-2xl text-[15px] font-bold text-slate-900 outline-none transition-all ${
+                            className={`w-full pl-14 pr-12 py-5 bg-slate-50 border rounded-2xl text-[16px] md:text-[15px] font-bold text-slate-900 outline-none transition-all ${
                               formData.password.length > 0
                                 ? /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(formData.password)
                                   ? 'border-emerald-500 bg-white shadow-[0_0_0_4px_rgba(16,185,129,0.1)]' 
@@ -1138,7 +1153,7 @@ export default function Signup() {
                             type={showConfirmPassword ? "text" : "password"} 
                             value={formData.confirmPassword} 
                             onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})} 
-                            className={`w-full pl-14 pr-12 py-5 bg-slate-50 border rounded-2xl text-[15px] font-bold text-slate-900 outline-none transition-all ${
+                            className={`w-full pl-14 pr-12 py-5 bg-slate-50 border rounded-2xl text-[16px] md:text-[15px] font-bold text-slate-900 outline-none transition-all ${
                               formData.confirmPassword.length > 0
                                 ? formData.password === formData.confirmPassword
                                   ? 'border-emerald-500 bg-white shadow-[0_0_0_4px_rgba(16,185,129,0.1)]'
@@ -1222,7 +1237,7 @@ export default function Signup() {
                     <InputField icon={MapPin} type="text" placeholder={t('country')} value={formData.birthCountry} onChange={(e: any) => setFormData({...formData, birthCountry: e.target.value})} />
                     <div className="space-y-2">
                       <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{t('region')}</label>
-                      <select value={formData.birthRegion} onChange={(e) => setFormData({...formData, birthRegion: e.target.value})} className="w-full px-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[15px] font-bold text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all">
+                      <select value={formData.birthRegion} onChange={(e) => setFormData({...formData, birthRegion: e.target.value})} className="w-full px-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[15px] font-bold text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all">
                         {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
                       </select>
                     </div>
@@ -1240,7 +1255,7 @@ export default function Signup() {
                   <InputField icon={MapPin} type="text" placeholder={t('country')} value={formData.addressCountry} onChange={(e: any) => setFormData({...formData, addressCountry: e.target.value})} />
                   <div className="space-y-2">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{t('region')}</label>
-                    <select value={formData.addressRegion} onChange={(e) => setFormData({...formData, addressRegion: e.target.value})} className="w-full px-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[15px] font-bold text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all">
+                    <select value={formData.addressRegion} onChange={(e) => setFormData({...formData, addressRegion: e.target.value})} className="w-full px-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[15px] font-bold text-slate-900 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all">
                       {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
@@ -1262,7 +1277,7 @@ export default function Signup() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{t('signup.frequency')}</label>
-                      <select value={formData.frequency} onChange={(e) => setFormData({...formData, frequency: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
+                      <select value={formData.frequency} onChange={(e) => setFormData({...formData, frequency: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
                         <option value="tendays">{t('signup.tendays')}</option>
                         <option value="fivedays">{t('signup.fivedays')}</option>
                         <option value="weekly">{t('signup.weekly')}</option>
@@ -1272,7 +1287,7 @@ export default function Signup() {
 
                     <div className="space-y-2">
                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{t('signup.member_limit')}</label>
-                      <select value={formData.memberLimit} onChange={(e) => setFormData({...formData, memberLimit: Number(e.target.value)})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
+                      <select value={formData.memberLimit} onChange={(e) => setFormData({...formData, memberLimit: Number(e.target.value)})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
                         {currentMemberLimits.map(limit => <option key={limit} value={limit}>{limit} {t('common.members')}</option>)}
                       </select>
                     </div>
@@ -1302,21 +1317,62 @@ export default function Signup() {
                      </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{t('signup.contribution')}</label>
-                      <select value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
+                      <select value={formData.amount} onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
                         {currentAmounts.map(amt => <option key={amt} value={amt}>{amt} {t('common.etb')}</option>)}
                         <option value="0">{language === 'am' ? 'ሌላ' : 'Other'}</option>
                       </select>
                     </div>
-                    
+
                     <div className="space-y-2">
-                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{language === 'am' ? 'የእጣ ብዛት' : 'Slots'}</label>
-                      <select value={formData.slots} onChange={(e) => setFormData({...formData, slots: Number(e.target.value)})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
-                        {[1, 2, 3, 4, 5].map(s => <option key={s} value={s}>{s} {language === 'am' ? 'እጣ' : 'Slots'}</option>)}
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                        {language === 'am' ? 'የእጣ ዓይነት' : 'Slot Type'}
+                      </label>
+                      <select 
+                        value={formData.isSharedSlot ? 'shared' : 'full'} 
+                        onChange={(e) => {
+                          const isShared = e.target.value === 'shared';
+                          setFormData({
+                            ...formData, 
+                            isSharedSlot: isShared,
+                            slots: isShared ? 1 : formData.slots
+                          });
+                        }} 
+                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500"
+                      >
+                        <option value="full">{language === 'am' ? 'ሙሉ እጣ (Full)' : 'Full Slot'}</option>
+                        <option value="shared">{language === 'am' ? 'የተጋጨ እጣ (Shared)' : 'Shared Slot'}</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    {!formData.isSharedSlot ? (
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{language === 'am' ? 'የእጣ ብዛት' : 'Slots'}</label>
+                        <select value={formData.slots} onChange={(e) => setFormData({...formData, slots: Number(e.target.value)})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
+                          {[1, 2, 3, 4, 5].map(s => <option key={s} value={s}>{s} {language === 'am' ? 'እጣ' : 'Slots'}</option>)}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                          {language === 'am' ? 'የተጋጭ/ድርሻ ብዛት' : 'Split / Share Count'}
+                        </label>
+                        <select 
+                          value={formData.splitFactor} 
+                          onChange={(e) => setFormData({...formData, splitFactor: Number(e.target.value)})} 
+                          className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500"
+                        >
+                          <option value="2">{language === 'am' ? 'ለሁለት (1/2 - 50%)' : 'For Two (1/2 - 50%)'}</option>
+                          <option value="3">{language === 'am' ? 'ለሶስት (1/3 - 33.3%)' : 'For Three (1/3 - 33.3%)'}</option>
+                          <option value="4">{language === 'am' ? 'ለአራት (1/4 - 25%)' : 'For Four (1/4 - 25%)'}</option>
+                          <option value="5">{language === 'am' ? 'ለአምስት (1/5 - 20%)' : 'For Five (1/5 - 20%)'}</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
                   
                   {formData.amount === 0 && (
@@ -1325,7 +1381,7 @@ export default function Signup() {
                   
                   <div className="space-y-2">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{language === 'am' ? 'የእጣ ፍላጎት (Preferred Payout)' : 'Preferred Payout'}</label>
-                    <select value={formData.preferredItem} onChange={(e) => setFormData({...formData, preferredItem: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
+                    <select value={formData.preferredItem} onChange={(e) => setFormData({...formData, preferredItem: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[14px] font-bold text-slate-900 outline-none focus:border-emerald-500">
                       <option value="Cash (ጥሬ ገንዘብ)">{language === 'am' ? 'Cash (ጥሬ ገንዘብ)' : 'Cash'}</option>
                       <option value="Car (መኪና)">{language === 'am' ? 'Car (መኪና)' : 'Car'}</option>
                       <option value="House (ቤት)">{language === 'am' ? 'House (ቤት)' : 'House'}</option>
@@ -1334,6 +1390,68 @@ export default function Signup() {
                       <option value="Other (ሌላ)">{language === 'am' ? 'Other (ሌላ)' : 'Other'}</option>
                     </select>
                   </div>
+
+                  {/* Real-time group vacancy/status display */}
+                  {selectedGroup ? (
+                    <div className="p-5 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/20 rounded-3xl space-y-3 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <Users className="text-emerald-600 w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase text-emerald-800 tracking-wider">
+                          {language === 'am' ? 'የመረጡት ምድብ ወቅታዊ ሁኔታ' : 'Chosen Group Live Status'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/90 p-3 rounded-2xl border border-emerald-500/10 flex flex-col justify-between">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                            {language === 'am' ? 'ተመዝጋቢዎች' : 'Registered'}
+                          </span>
+                          <span className="text-lg font-black text-slate-800 mt-1">
+                            {selectedGroup.memberCount} <span className="text-xs font-normal text-slate-500">ከ {selectedGroup.limit}</span>
+                          </span>
+                        </div>
+                        <div className="bg-white/90 p-3 rounded-2xl border border-emerald-500/10 flex flex-col justify-between">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                            {language === 'am' ? 'የሚቀረው ክፍት ቦታ' : 'Remaining slots'}
+                          </span>
+                          <span className="text-lg font-black text-emerald-600 mt-1">
+                            {selectedGroup.limit - selectedGroup.memberCount} <span className="text-xs font-normal text-slate-500">{language === 'am' ? 'ሰው' : 'left'}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-5 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-500/20 rounded-3xl space-y-3 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <Zap className="text-amber-600 w-4 h-4" />
+                        <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider">
+                          {language === 'am' ? 'አዲስ ምድብ ይፈጠራል' : 'New Group Creation'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/90 p-3 rounded-2xl border border-amber-500/10 flex flex-col justify-between">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                            {language === 'am' ? 'ተመዝጋቢዎች' : 'Registered'}
+                          </span>
+                          <span className="text-lg font-black text-slate-800 mt-1">
+                            0 <span className="text-xs font-normal text-slate-500">ከ {formData.memberLimit}</span>
+                          </span>
+                        </div>
+                        <div className="bg-white/90 p-3 rounded-2xl border border-amber-500/10 flex flex-col justify-between">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                            {language === 'am' ? 'የሚቀረው ክፍት ቦታ' : 'Remaining slots'}
+                          </span>
+                          <span className="text-lg font-black text-amber-600 mt-1">
+                            {formData.memberLimit} <span className="text-xs font-normal text-slate-500">{language === 'am' ? 'ሰው' : 'left'}</span>
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] font-bold text-amber-700 leading-relaxed">
+                        {language === 'am' 
+                          ? '* ለዚህ የእቁብ አይነት ክፍት ምድብ ስለሌለ፣ የእርስዎ ምዝገባ ሲጠናቀቅ አዲስ ምድብ በራስ-ሰር ይፈጠራል።' 
+                          : '* No open groups exist for this option. A new group will be created automatically upon registration.'}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="space-y-3">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">{language === 'am' ? 'ምድብ ይምረጡ' : 'Select Group'}</label>
@@ -1561,7 +1679,12 @@ export default function Signup() {
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[11px] font-bold text-slate-400 uppercase">{t('signup.contribution')}</span>
-                        <span className="text-sm font-bold text-slate-900">{finalAmount.toLocaleString()} {t('common.etb')} ({formData.slots} Slots)</span>
+                        <span className="text-sm font-bold text-slate-900">
+                          {finalAmount.toLocaleString()} {t('common.etb')}{' '}
+                          ({formData.isSharedSlot 
+                            ? (language === 'am' ? `ተጋጭቶ 1/${formData.splitFactor} እጣ` : `Shared 1/${formData.splitFactor} Slot`) 
+                            : `${formData.slots} ${language === 'am' ? 'እጣ' : 'Slots'}`})
+                        </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[11px] font-bold text-slate-400 uppercase">{language === 'am' ? 'የእጣ ምርጫ' : 'Preference'}</span>
@@ -1570,6 +1693,22 @@ export default function Signup() {
                       <div className="flex justify-between items-center">
                         <span className="text-[11px] font-bold text-slate-400 uppercase">{language === 'am' ? 'ምድብ' : 'Group'}</span>
                         <span className="text-sm font-bold text-emerald-600">{selectedGroup ? selectedGroup.name : (language === 'am' ? 'አዲስ አውቶማቲክ' : 'Auto Allocation')}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">{language === 'am' ? 'በምድቡ የተመዘገቡ አባላት' : 'Registered in Group'}</span>
+                        <span className="text-sm font-bold text-slate-900">
+                          {selectedGroup 
+                            ? (language === 'am' ? `${selectedGroup.memberCount} ከ ${selectedGroup.limit} ሰው` : `${selectedGroup.memberCount} of ${selectedGroup.limit} members`)
+                            : (language === 'am' ? `0 ከ ${formData.memberLimit} ሰው (አዲስ)` : `0 of ${formData.memberLimit} members (New)`)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">{language === 'am' ? 'የሚቀረው ክፍት ቦታ' : 'Remaining Vacancies'}</span>
+                        <span className="text-sm font-black text-emerald-600">
+                          {selectedGroup 
+                            ? (language === 'am' ? `${selectedGroup.limit - selectedGroup.memberCount} ሰው ብቻ` : `${selectedGroup.limit - selectedGroup.memberCount} left`)
+                            : (language === 'am' ? `${formData.memberLimit} ክፍት ቦታ` : `${formData.memberLimit} left`)}
+                        </span>
                       </div>
                       <div className="pt-3 border-t border-slate-200 space-y-2 mt-2">
                          <div className="flex justify-between items-center">

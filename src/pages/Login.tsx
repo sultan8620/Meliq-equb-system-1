@@ -575,7 +575,7 @@ export default function Login() {
                           placeholder={language === 'am' ? "ስልክ ወይም ኢሜይል ያስገቡ" : "Phone or Email"} 
                           value={phoneNumber} 
                           onChange={(e) => setPhoneNumber(e.target.value)} 
-                          className={`w-full pl-14 pr-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[15px] font-bold text-slate-900 outline-none transition-all ${
+                          className={`w-full pl-14 pr-5 py-5 bg-slate-50 border border-slate-100 rounded-2xl text-[16px] md:text-[15px] font-bold text-slate-900 outline-none transition-all ${
                             phoneNumber.length > 0 
                               ? isInputValid 
                                 ? 'border-emerald-500 bg-white shadow-[0_0_0_4px_rgba(16,185,129,0.1)]' 
@@ -601,7 +601,7 @@ export default function Login() {
                           placeholder="••••••••" 
                           value={password} 
                           onChange={(e) => setPassword(e.target.value)} 
-                          className={`w-full pl-14 pr-12 py-5 bg-slate-50 border rounded-2xl text-[15px] font-bold text-slate-900 outline-none transition-all ${
+                          className={`w-full pl-14 pr-12 py-5 bg-slate-50 border rounded-2xl text-[16px] md:text-[15px] font-bold text-slate-900 outline-none transition-all ${
                             password.length > 0 
                               ? /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(password) 
                                 ? 'border-emerald-500 bg-white shadow-[0_0_0_4px_rgba(16,185,129,0.1)]' 

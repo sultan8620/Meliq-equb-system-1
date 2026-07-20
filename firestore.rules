@@ -91,7 +91,7 @@ service cloud.firestore {
       
       allow update: if (isOwner(userId) && isValidId(userId) && (
         // Action: Self Update (Restricted)
-        incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'birthCountry', 'birthRegion', 'birthZone', 'birthWoreda', 'birthKebele', 'addressCountry', 'addressRegion', 'addressZone', 'addressWoreda', 'addressKebele', 'preferredItem', 'faceScan', 'idFront', 'idBack', 'nationalId', 'teamId', 'groupId', 'memberCode', 'slots'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'birthCountry', 'birthRegion', 'birthZone', 'birthWoreda', 'birthKebele', 'addressCountry', 'addressRegion', 'addressZone', 'addressWoreda', 'addressKebele', 'preferredItem', 'faceScan', 'idFront', 'idBack', 'nationalId', 'teamId', 'groupId', 'memberCode', 'slots', 'isSharedSlot', 'splitFactor'])
         && (incoming().role == existing().role || isAdmin())
         && (incoming().status == existing().status || isAdmin())
       )) || isAdmin();
