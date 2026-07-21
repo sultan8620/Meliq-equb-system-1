@@ -28,6 +28,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [flow, setFlow] = useState<'login' | 'forgot' | 'verify' | 'reset' | 'login_verify'>('login');
+  const [loginRoleTab, setLoginRoleTab] = useState<'member' | 'admin'>('member');
   const [detectedRole, setDetectedRole] = useState<'admin' | 'user' | null>(null);
   const [detectedEmail, setDetectedEmail] = useState<string | null>(null);
   const [isCheckingAccount, setIsCheckingAccount] = useState(false);
@@ -366,41 +367,33 @@ export default function Login() {
       const currentUser = auth.currentUser;
       let actualPhone = phoneNumber.trim();
       let actualName = 'User';
-      let pendingData: any = { isAdminPhone, uid: currentUser?.uid };
+      let userDocData: any = null;
 
-      if (!isAdminPhone && currentUser) {
+      if (currentUser) {
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
         if (userDoc.exists()) {
-          const data = userDoc.data();
-          actualPhone = data.phone || actualPhone;
-          actualName = data.fullName || actualName;
-          pendingData = { ...pendingData, userData: data };
+          userDocData = userDoc.data();
+          actualPhone = userDocData.phone || actualPhone;
+          actualName = userDocData.fullName || actualName;
         }
       }
 
-      // setPendingLoginData(pendingData);
+      const currentUserEmail = currentUser?.email?.toLowerCase() || '';
+      const isSuperAdminUser = currentUserEmail === 'sefadinkedir@gmail.com' || 
+                               currentUserEmail === '0900000000@melikekub.com' || 
+                               currentUserEmail === '900000000@melikekub.com' || 
+                               currentUserEmail === '0986204981@melikekub.com' || 
+                               currentUserEmail === '0926925237@melikekub.com' || 
+                               currentUserEmail?.startsWith('admin.') ||
+                               currentUser?.uid === 'EbINObixvBPYds6caQQXkv1s0482';
 
-      // // Generate and Send OTP
-      // const code = Math.floor(100000 + Math.random() * 900000).toString();
-      // setGeneratedCode(code);
-      // 
-      // try {
-      //   const smsMsg = language === 'am' ? `የእርስዎ ማረጋገጫ ኮድ፡ ${code}` : `Your verification code is: ${code}`;
-      //   await sendSMS(actualPhone, smsMsg, actualName, 'otp');
-      //   setError(language === 'am' ? 'የማረጋገጫ ኮድ በስልክዎ ተልኳል' : 'Verification code sent to your phone');
-      // } catch (smsErr) {
-      //   console.warn("SMS sending failed, falling back to UI:", smsErr);
-      //   setError(`${t('auth.verification_code_sms').replace('{code}', code)}`); // Fallback
-      // }
-
-      // setVerificationCode('');
-      // setFlow('login_verify');
+      const isUserAdmin = isSuperAdminUser || userDocData?.role === 'admin' || userDocData?.role === 'super_admin' || isAdminPhone || loginRoleTab === 'admin';
 
       // Immediate Navigation (OTP bypassed for now)
-      if (pendingData?.isAdminPhone) {
+      if (isUserAdmin) {
         navigate('/admin');
       } else {
-        const data = pendingData?.userData;
+        const data = userDocData;
         if (data && (data.status === 'pending' || data.status === 'rejected')) {
           navigate('/pending-approval', {
             state: {
@@ -576,6 +569,42 @@ export default function Login() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 10 }}
                 >
+                  {/* Role Tab Selector */}
+                  <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-6 border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginRoleTab('member');
+                        setError(null);
+                      }}
+                      className={`flex-1 py-3 text-center text-[11px] font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer ${
+                        loginRoleTab === 'member'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      {language === 'am' ? 'የአባል መግቢያ' : 'Member Login'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginRoleTab('admin');
+                        setError(null);
+                        // Optional prefill for convenience
+                        if (!phoneNumber) {
+                          setPhoneNumber('sefadinkedir@gmail.com');
+                        }
+                      }}
+                      className={`flex-1 py-3 text-center text-[11px] font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer ${
+                        loginRoleTab === 'admin'
+                          ? 'bg-slate-950 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      {language === 'am' ? 'የአድሚን መግቢያ' : 'Admin Login'}
+                    </button>
+                  </div>
+
                   <form onSubmit={handleLogin} className="space-y-6">
                     {error && (
                       <div className="space-y-4">

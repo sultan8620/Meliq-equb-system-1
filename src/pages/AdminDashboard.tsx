@@ -18,8 +18,28 @@ import { sendSMS } from '../lib/smsHelper';
 const formatSlots = (s: number | undefined): string => {
   if (!s) return '1';
   if (s % 1 === 0) return s.toString();
-  const roundedSplit = Math.round(1 / s);
+  const integerPart = Math.floor(s);
+  const fractionalPart = s % 1;
+  const roundedSplit = Math.round(1 / fractionalPart);
+  if (integerPart > 0) {
+    return `${integerPart} & 1/${roundedSplit}`;
+  }
   return `1/${roundedSplit}`;
+};
+
+const getSinglePaymentAmount = (userData: any, group: any): number => {
+  if (!userData) return 0;
+  if (userData.isSharedSlot) {
+    const split = Number(userData.splitFactor) || 2;
+    const baseAmount = Number(userData.totalPerSlot) || (group?.amount ? (group.amount * 1.1) : 0);
+    return baseAmount / split;
+  }
+  const slots = Number(userData.slots);
+  if (!isNaN(slots) && slots > 0) {
+    const baseAmount = Number(userData.totalPerSlot) || (group?.amount ? (group.amount * 1.1) : 0);
+    return baseAmount * slots;
+  }
+  return Number(userData.totalPerSlot) || (group?.amount ? (group.amount * 1.1) : 0);
 };
 
 const getBankPrefix = (bankName: string) => {
@@ -525,10 +545,63 @@ export default function AdminDashboard() {
 
 
   const groupsWithMembers = useMemo(() => {
-    let list = groups.map(group => ({
-      ...group,
-      members: allUsers.filter(u => u.groupId === group.id)
-    }));
+    let list = groups.map(group => {
+      const groupUsers = allUsers.filter(u => u.groupId === group.id);
+      
+      // Group users by phone number to handle joint slots (and additional share accounts) as one entry
+      const groupedByPhone: { [phone: string]: any[] } = {};
+      groupUsers.forEach(u => {
+        const phone = u.phone || '';
+        if (!groupedByPhone[phone]) {
+          groupedByPhone[phone] = [];
+        }
+        groupedByPhone[phone].push(u);
+      });
+
+      const mergedUsers = Object.values(groupedByPhone).map(accounts => {
+        if (accounts.length === 1) return accounts[0];
+
+        // Find primary account (non-shared slots first, then the highest slot count)
+        const sorted = [...accounts].sort((a, b) => {
+          const aShared = a.isSharedSlot === true || (a.slots && Number(a.slots) < 1);
+          const bShared = b.isSharedSlot === true || (b.slots && Number(b.slots) < 1);
+          if (!aShared && bShared) return -1;
+          if (aShared && !bShared) return 1;
+          return (Number(b.slots) || 0) - (Number(a.slots) || 0);
+        });
+
+        const primary = sorted[0];
+
+        // Calculate total slots sum
+        const totalSlots = accounts.reduce((sum, u) => {
+          let sVal = Number(u.slots) || 0;
+          if (u.isSharedSlot && u.splitFactor) {
+            sVal = 1 / Number(u.splitFactor);
+          }
+          return sum + sVal;
+        }, 0);
+
+        // Combined member codes
+        const combinedMemberCode = accounts
+          .map(u => u.memberCode)
+          .filter(Boolean)
+          .filter((v, i, self) => self.indexOf(v) === i)
+          .join(' / ');
+
+        return {
+          ...primary,
+          slots: totalSlots,
+          isGrouped: true,
+          allAccounts: accounts,
+          memberCode: combinedMemberCode
+        };
+      });
+
+      return {
+        ...group,
+        members: mergedUsers
+      };
+    });
 
     if (!isSuperAdmin) {
       const assignedTypes = userData?.permissions?.assignedGroupTypes || [];
@@ -3653,27 +3726,41 @@ export default function AdminDashboard() {
   const [downloadFormat, setDownloadFormat] = useState<'pdf' | 'jpg'>('pdf');
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
   const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [selectedSubAccount, setSelectedSubAccount] = useState<any>(null);
   const [paymentCount, setPaymentCount] = useState(1);
   const [manualPaymentGroup, setManualPaymentGroup] = useState<any>(null);
+
+  useEffect(() => {
+    if (selectedMember) {
+      if (selectedMember.isGrouped && selectedMember.allAccounts?.length > 0) {
+        setSelectedSubAccount(selectedMember.allAccounts[0]);
+      } else {
+        setSelectedSubAccount(selectedMember);
+      }
+    } else {
+      setSelectedSubAccount(null);
+    }
+  }, [selectedMember]);
 
   const [showSelectUserForPayment, setShowSelectUserForPayment] = useState(false);
   const [searchTermForPayment, setSearchTermForPayment] = useState('');
 
   const handleManualPayment = async () => {
-    if (!selectedMember || !manualPaymentGroup) return;
+    const targetAccount = selectedSubAccount || selectedMember;
+    if (!targetAccount || !manualPaymentGroup) return;
     try {
-      const amountPerSlot = selectedMember.totalPerSlot || manualPaymentGroup.amount;
-      const totalAmount = amountPerSlot * paymentCount * (selectedMember.slots || 1);
+      const baseAmount = getSinglePaymentAmount(targetAccount, manualPaymentGroup);
+      const totalAmount = baseAmount * paymentCount;
       
       const now = new Date();
       const receiptId = generateReceiptId('CASH');
 
       await addDoc(collection(db, 'payments'), {
-        userId: selectedMember.id,
-        userName: selectedMember.fullName,
+        userId: targetAccount.id,
+        userName: targetAccount.fullName,
         groupId: manualPaymentGroup.id,
         groupName: manualPaymentGroup.name,
-        memberCode: selectedMember.memberCode || '',
+        memberCode: targetAccount.memberCode || '',
         amount: totalAmount,
         paymentDays: paymentCount,
         status: 'active',
@@ -13795,10 +13882,45 @@ export default function AdminDashboard() {
               </button>
             </div>
 
+            {selectedMember.isGrouped && selectedMember.allAccounts?.length > 1 && (
+              <div className="mb-4 space-y-1.5">
+                <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                  {language === 'am' ? 'የክፍያ እጣ ይምረጡ' : 'Select Slot to Pay'}
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedSubAccount?.id || ''}
+                    onChange={(e) => {
+                      const acc = selectedMember.allAccounts.find((a: any) => a.id === e.target.value);
+                      if (acc) setSelectedSubAccount(acc);
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black text-slate-900 focus:outline-none focus:ring-1 focus:ring-gold-500/20 uppercase tracking-wide appearance-none cursor-pointer"
+                  >
+                    {selectedMember.allAccounts.map((acc: any) => {
+                      const isShared = acc.isSharedSlot === true || (acc.slots && Number(acc.slots) < 1);
+                      const label = isShared 
+                        ? (language === 'am' ? `በጋራ እጣ (${formatSlots(acc.slots)})` : `Joint Slot (${formatSlots(acc.slots)})`)
+                        : (language === 'am' ? `ሙሉ እጣ (${formatSlots(acc.slots)})` : `Full Slot (${formatSlots(acc.slots)})`);
+                      return (
+                        <option key={acc.id} value={acc.id}>
+                          {label} [{acc.memberCode || 'No Code'}]
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400">
+                    <ChevronRight className="rotate-90" size={14} />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="bg-slate-50 rounded-xl p-4 mb-6 space-y-3 border border-slate-100">
               <div className="flex justify-between items-center">
                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Rate / Slot</span>
-                <span className="text-xs font-black text-slate-900">{(selectedMember.totalPerSlot || manualPaymentGroup.amount)} ETB</span>
+                <span className="text-xs font-black text-slate-900">
+                  {getSinglePaymentAmount(selectedSubAccount || selectedMember, manualPaymentGroup).toLocaleString()} ETB
+                </span>
               </div>
               
               <div>
@@ -13815,7 +13937,9 @@ export default function AdminDashboard() {
               <div className="h-px bg-slate-200" />
               <div className="flex justify-between items-center">
                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Record</span>
-                <span className="text-base font-black text-gold-600">{((selectedMember.totalPerSlot || manualPaymentGroup.amount) * paymentCount)} ETB</span>
+                <span className="text-base font-black text-gold-600">
+                  {(getSinglePaymentAmount(selectedSubAccount || selectedMember, manualPaymentGroup) * paymentCount).toLocaleString()} ETB
+                </span>
               </div>
             </div>
 
