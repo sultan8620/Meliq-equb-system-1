@@ -327,20 +327,29 @@ export default function Login() {
         const cleanPhone = normalizePhone(phoneNumber);
         const nineDigit = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
         
-        // If we already detected an email, try ONLY that one first to avoid rate limits
+        const possibleEmails = new Set<string>();
         if (localDetectedEmail) {
-          uniqueFormats = [localDetectedEmail];
-        } else {
-          // Fallback formats if Firestore lookup failed but we want to try anyway
-          uniqueFormats = Array.from(new Set([
-            `admin.${cleanPhone}@melikekub.com`,
-            `admin.${nineDigit}@melikekub.com`,
-            `${cleanPhone}@melikekub.com`,
-            `${nineDigit}@melikekub.com`,
-            `251${nineDigit}@melikekub.com`,
-            `0${nineDigit}@melikekub.com`
-          ])).filter(Boolean) as string[];
+          possibleEmails.add(localDetectedEmail);
         }
+        
+        // If detected as admin or is a bootstrap admin phone, add admin email formats
+        const isUserAnAdmin = detectedRole === 'admin' || 
+                             cleanPhone === '0900000000' || 
+                             cleanPhone === '0986204981' || 
+                             cleanPhone === '0926925237';
+                             
+        if (isUserAnAdmin) {
+          possibleEmails.add(`admin.${cleanPhone}@melikekub.com`);
+          possibleEmails.add(`admin.${nineDigit}@melikekub.com`);
+        }
+        
+        // Add default fallback email formats
+        possibleEmails.add(`${cleanPhone}@melikekub.com`);
+        possibleEmails.add(`${nineDigit}@melikekub.com`);
+        possibleEmails.add(`251${nineDigit}@melikekub.com`);
+        possibleEmails.add(`0${nineDigit}@melikekub.com`);
+        
+        uniqueFormats = Array.from(possibleEmails).filter(Boolean) as string[];
       }
       console.log('Login attempt sequence:', uniqueFormats);
       
