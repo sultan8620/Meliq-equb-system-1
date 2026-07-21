@@ -300,7 +300,7 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
         <div className="md:col-span-2">
-          <div className="bg-slate-900 rounded-[2.5rem] sm:rounded-[3.5rem] p-8 sm:p-12 text-white relative overflow-hidden shadow-2xl group h-full">
+          <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 rounded-[2.5rem] sm:rounded-[3.5rem] p-8 sm:p-12 text-white relative overflow-hidden shadow-2xl group h-full">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gold-500/10 rounded-full blur-[120px] -mr-48 -mt-48 transition-all group-hover:bg-gold-500/20" />
             <div className="flex items-center gap-12 text-center md:text-left relative z-10">
               <div className="flex-1">
@@ -2328,7 +2328,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-slate-50 flex font-sans">
+    <div className="h-[100dvh] overflow-hidden bg-[#f8fafc] flex font-sans">
       {/* Mobile Drawer Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -2661,7 +2661,7 @@ export default function Dashboard() {
               
               <button 
                 onClick={() => setShowSuccessModal(false)}
-                className="w-full bg-slate-900 text-white h-16 rounded-[2rem] font-display font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95"
+                className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 text-white h-16 rounded-[2rem] font-display font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 hover:from-indigo-700 hover:to-indigo-800 transition-all active:scale-95"
               >
                 {successModalConfig.buttonText}
               </button>
@@ -2888,7 +2888,7 @@ export default function Dashboard() {
 
                 <button 
                   onClick={() => setSelectedMemberModal(null)}
-                  className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-display font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95"
+                  className="w-full py-5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-[1.5rem] font-display font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 hover:from-indigo-700 hover:to-indigo-800 transition-all active:scale-95"
                 >
                   {language === 'am' ? 'ተመለስ' : 'Close Details'}
                 </button>
@@ -3133,12 +3133,12 @@ export default function Dashboard() {
            )}
 
            {/* Beautiful Hero Card */}
-           <div className="bg-slate-900 rounded-[3rem] p-8 md:p-10 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 text-white shadow-2xl shadow-indigo-900/20 mt-2">
-              <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/20 rounded-full blur-[100px] -mt-[250px] -mr-[250px]" />
-              <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-gold-500/10 rounded-full blur-[80px] -mb-[150px] -ml-[150px]" />
+           <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 rounded-[3rem] p-8 md:p-10 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 text-white shadow-2xl shadow-slate-950/40 mt-2">
+              <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/20 rounded-full blur-[100px] -mt-[250px] -mr-[250px] pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-indigo-400/10 rounded-full blur-[80px] -mb-[150px] -ml-[150px] pointer-events-none" />
               
               <div className="flex items-center flex-col md:flex-row gap-6 relative z-10 w-full md:w-auto text-center md:text-left">
-                 <div className="w-24 h-24 bg-white/10 rounded-full overflow-hidden border-4 border-white/10 backdrop-blur-md relative group shrink-0 shadow-xl">
+                 <div className="w-24 h-24 bg-white/10 rounded-full overflow-hidden border-4 border-white/10 ring-4 ring-indigo-500/30 backdrop-blur-md relative group shrink-0 shadow-2xl">
                     {userData.faceScan ? (
                        <img src={userData.faceScan} alt="Profile" className="w-full h-full object-cover" />
                     ) : (
@@ -3148,7 +3148,7 @@ export default function Dashboard() {
                  <div>
                     <div className="flex flex-col md:flex-row items-center gap-3 mb-3">
                        <h1 className="text-3xl font-display font-black tracking-tighter leading-none">
-                          {language === 'am' ? 'እንኳን ደህና መጡ፣' : 'Welcome back,'} <span className="text-gold-400">{userData.fullName}</span> 
+                          {language === 'am' ? 'እንኳን ደህና መጡ፣' : 'Welcome back,'} <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-indigo-300 font-extrabold">{userData.fullName}</span> 
                        </h1>
                        {(group?.currentRound || 1) > 1 && (
                          <div className="bg-white/20 text-white border border-white/30 rounded-full px-4 py-1.5 text-[10px] tracking-[0.2em] font-black uppercase backdrop-blur-md shadow-xl">
@@ -3195,7 +3195,8 @@ export default function Dashboard() {
 
            {/* Financial Stats Bento Grid */}
            <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="glass-card p-6 rounded-[2rem] flex flex-col justify-between hover:-translate-y-1 transition-transform cursor-pointer border border-slate-100 hover:border-indigo-500/30 shadow-lg shadow-slate-200/20">
+              <div className="relative overflow-hidden bg-white/90 p-6 rounded-[2rem] flex flex-col justify-between hover:-translate-y-1.5 transition-all duration-300 cursor-pointer border border-slate-100 hover:border-indigo-500/30 shadow-md shadow-slate-200/15 hover:shadow-lg hover:shadow-indigo-500/5">
+                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-indigo-600" />
                  <div className="flex justify-between items-start mb-6">
                     <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center border border-indigo-100 shadow-sm"><Layers size={20} /></div>
                     <span className="text-[10px] font-black uppercase text-indigo-500/50 bg-indigo-50 px-2 py-1 rounded-lg">Slots</span>
@@ -3206,7 +3207,8 @@ export default function Dashboard() {
                  </div>
               </div>
 
-              <div className="glass-card p-6 rounded-[2rem] flex flex-col justify-between hover:-translate-y-1 transition-transform cursor-pointer border border-slate-100 hover:border-emerald-500/30 shadow-lg shadow-slate-200/20">
+              <div className="relative overflow-hidden bg-white/90 p-6 rounded-[2rem] flex flex-col justify-between hover:-translate-y-1.5 transition-all duration-300 cursor-pointer border border-slate-100 hover:border-emerald-500/30 shadow-md shadow-slate-200/15 hover:shadow-lg hover:shadow-emerald-500/5">
+                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-600" />
                  <div className="flex justify-between items-start mb-6">
                     <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm"><DollarSign size={20} /></div>
                     <span className="text-[10px] font-black uppercase text-emerald-500/50 bg-emerald-50 px-2 py-1 rounded-lg">Funds</span>
@@ -3220,7 +3222,8 @@ export default function Dashboard() {
                  </div>
               </div>
 
-              <div className="glass-card p-6 rounded-[2rem] flex flex-col justify-between hover:-translate-y-1 transition-transform cursor-pointer border border-slate-100 hover:border-amber-500/30 shadow-lg shadow-slate-200/20">
+              <div className="relative overflow-hidden bg-white/90 p-6 rounded-[2rem] flex flex-col justify-between hover:-translate-y-1.5 transition-all duration-300 cursor-pointer border border-slate-100 hover:border-amber-500/30 shadow-md shadow-slate-200/15 hover:shadow-lg hover:shadow-amber-500/5">
+                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-600" />
                  <div className="flex justify-between items-start mb-6">
                     <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center border border-amber-100 shadow-sm"><Trophy size={20} /></div>
                     <span className="text-[10px] font-black uppercase text-amber-500/50 bg-amber-50 px-2 py-1 rounded-lg">Status</span>
@@ -3357,7 +3360,7 @@ export default function Dashboard() {
                   <div className="w-full h-px bg-slate-100 my-6" />
                   
                   {/* My Team Status (NEW) */}
-                  <div className="bg-slate-900 rounded-[2rem] p-6 text-white relative overflow-hidden mb-6">
+                  <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 rounded-[2rem] p-6 text-white relative overflow-hidden mb-6 shadow-xl shadow-slate-900/40">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl" />
                     <div className="relative z-10 flex items-center justify-between">
                       <div>
@@ -3721,10 +3724,10 @@ export default function Dashboard() {
                                     whileHover={{ scale: 1.02 }}
                                     className={`p-3.5 rounded-[1.5rem] border flex flex-col justify-between min-h-[140px] relative overflow-hidden transition-all shadow-sm ${
                                       allPaid 
-                                        ? "bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-950" 
+                                        ? "bg-emerald-50/75 border-emerald-200/60 hover:border-emerald-400/40 hover:bg-emerald-100/40 text-emerald-900" 
                                         : !allUnpaid
-                                          ? "bg-amber-500/10 border-amber-500/20 hover:border-amber-500/40 text-amber-950"
-                                          : "bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-white text-slate-900 cursor-pointer"
+                                          ? "bg-amber-50/75 border-amber-200/60 hover:border-amber-400/40 hover:bg-amber-100/40 text-amber-900"
+                                          : "bg-white border-slate-100 hover:border-indigo-200 hover:bg-slate-50/30 text-slate-900 cursor-pointer"
                                     }`}
                                     onClick={() => {
                                       const hasOwnUnpaid = slotStatuses.some(s => s.isSelf && !s.isPaid);
@@ -3795,11 +3798,11 @@ export default function Dashboard() {
                                   }}
                                   className={`p-4 rounded-[1.5rem] border flex flex-col justify-between h-32 relative overflow-hidden transition-all shadow-sm ${
                                     isPaidActive 
-                                      ? "bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-950" 
+                                      ? "bg-emerald-50/75 border-emerald-200/60 hover:border-emerald-400/40 hover:bg-emerald-100/40 text-emerald-900" 
                                       : isPaidPending
-                                        ? "bg-amber-500/10 border-amber-500/20 hover:border-amber-500/40 text-amber-950"
+                                        ? "bg-amber-50/75 border-amber-200/60 hover:border-amber-400/40 hover:bg-amber-100/40 text-amber-900"
                                         : selectedTrackerRound === (group.currentRound || 1)
-                                          ? "bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-white text-slate-900 cursor-pointer"
+                                          ? "bg-white border-slate-100 hover:border-indigo-200 hover:bg-slate-50/30 text-slate-900 cursor-pointer"
                                           : "bg-slate-100/50 border-slate-100 text-slate-400 opacity-60"
                                     }`}
                                 >
@@ -4814,7 +4817,7 @@ export default function Dashboard() {
                      pdf.addImage(imgData, 'PNG', 15, 40, 267, 85);
                      pdf.save(`${userData?.fullName || 'Member'}_ID.pdf`);
                    }}
-                   className="w-full max-w-sm py-4 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-slate-800 transition-all shadow-xl flex items-center justify-center gap-2"
+                   className="w-full max-w-sm py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:from-indigo-700 hover:to-indigo-800 transition-all shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2"
                  >
                     <Download size={16} /> {language === 'am' ? 'ካርዱን ያውርዱ' : 'Download ID Card'}
                  </button>
@@ -4973,7 +4976,7 @@ export default function Dashboard() {
                     </div>
                  </div>
 
-                 <button type="submit" disabled={isSubmitting} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-black transition-all active:scale-[0.98]">
+                 <button type="submit" disabled={isSubmitting} className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-600/30 hover:from-indigo-700 hover:to-indigo-800 transition-all active:scale-[0.98]">
                     {isSubmitting ? (language === 'am' ? 'በመላክ ላይ' : 'Sending...') : (language === 'am' ? 'ክፍያ ይላኩ' : 'Send Payment')}
                  </button>
                </form>
@@ -5233,7 +5236,7 @@ export default function Dashboard() {
                   </div>
 
                   {/* Past Tickets */}
-                  <div className="bg-slate-900 rounded-[2.5rem] p-10 flex flex-col h-full shadow-2xl">
+                  <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 rounded-[2.5rem] p-10 flex flex-col h-full shadow-2xl shadow-slate-900/40">
                     <h3 className="text-2xl font-black text-white mb-8 uppercase tracking-tighter flex items-center justify-between">
                       {language === 'am' ? 'ያለፉ መልእክቶች' : 'History'}
                       <span className="text-xs font-black bg-white/10 text-white px-4 py-1.5 rounded-full">{userTickets.length}</span>
@@ -5480,7 +5483,7 @@ export default function Dashboard() {
                     ))}
                   </div>
 
-                  <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden">
+                  <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-xl shadow-slate-900/40">
                     <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-[100px] -translate-x-1/4 -translate-y-1/4" />
                     <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
                       <div className="w-32 h-32 bg-white/10 rounded-[2.5rem] flex items-center justify-center border border-white/20 shrink-0">
@@ -5510,7 +5513,7 @@ export default function Dashboard() {
           {activeTab === 'settings' && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 max-w-5xl mx-auto pb-24">
               {/* Header Header */}
-              <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl">
+              <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl shadow-slate-900/40">
                 <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/10 rounded-full blur-[100px] -mr-40 -mt-40" />
                 <div className="relative z-10">
                    <div className="flex items-center gap-6 mb-4">
@@ -5619,7 +5622,7 @@ export default function Dashboard() {
 
                 {/* Right Sidebar - Critical Actions */}
                 <div className="space-y-8">
-                  <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
+                  <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-slate-900/40 relative overflow-hidden">
                     <div className="absolute bottom-0 right-0 w-32 h-32 bg-white/5 rounded-tl-full" />
                     <h3 className="text-md font-black uppercase tracking-widest mb-6 text-gold-400">{language === 'am' ? 'የአካውንት አስተዳደር' : 'Account Hub'}</h3>
                     
@@ -5676,7 +5679,7 @@ export default function Dashboard() {
           {activeTab === 'market' && <Marketplace />}
           {activeTab === 'rules' && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-20">
-              <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl">
+              <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl shadow-slate-900/40">
                 <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-gold-500/10 rounded-full blur-[120px] -mr-20 -mt-20" />
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
                   <div className="flex items-center gap-6">
@@ -5792,7 +5795,7 @@ export default function Dashboard() {
               {guarantorSubTab === 'hub' && (
                 <>
                   {/* Ultra Modern Header */}
-                  <div className="bg-slate-900 rounded-[4rem] p-12 text-white relative overflow-hidden shadow-2xl mb-8">
+                  <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 rounded-[4rem] p-12 text-white relative overflow-hidden shadow-2xl shadow-slate-900/40 mb-8">
                     <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] -mr-48 -mt-48" />
                     <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] -ml-32 -mb-32" />
                     
@@ -6258,7 +6261,7 @@ export default function Dashboard() {
                          <button 
                            type="submit"
                            disabled={isSubmittingGuarantor}
-                           className="w-full h-16 bg-slate-900 text-white rounded-2xl font-display font-black text-xs uppercase tracking-[0.4em] hover:bg-slate-800 transition-all active:scale-[0.98] shadow-2xl shadow-slate-900/10 flex items-center justify-center gap-4 disabled:opacity-50"
+                           className="w-full h-16 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-2xl font-display font-black text-xs uppercase tracking-[0.4em] hover:from-indigo-700 hover:to-indigo-800 transition-all active:scale-[0.98] shadow-2xl shadow-indigo-600/30 flex items-center justify-center gap-4 disabled:opacity-50"
                          >
                             {isSubmittingGuarantor ? (
                               <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -6468,7 +6471,7 @@ export default function Dashboard() {
           </div>
 
           {/* Quick Support */}
-          <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-slate-900/20 relative overflow-hidden group">
+          <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 border border-slate-800/80 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-slate-900/40 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-48 h-48 bg-gold-500/10 rounded-full blur-[60px] -translate-x-1/2 -translate-y-1/2 group-hover:bg-gold-500/20 transition-all duration-700" />
             <div className="relative z-10">
               <div className="w-12 h-12 bg-white/10 backdrop-blur-xl rounded-xl flex items-center justify-center border border-white/10 mb-6 shadow-inner">
