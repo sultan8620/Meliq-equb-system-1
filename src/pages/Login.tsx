@@ -178,10 +178,10 @@ export default function Login() {
     }
   };
 
-  // Check user role dynamically when phone or email is entered
+  // Check user role dynamically when phone or email is entered (debounced)
   React.useEffect(() => {
     if (isInputValid) {
-      const checkRole = async () => {
+      const timeoutId = setTimeout(async () => {
         setIsCheckingAccount(true);
         const input = phoneNumber.trim();
         
@@ -193,8 +193,8 @@ export default function Login() {
               where('email', '==', lowerEmail)
             );
             const snap = await getDocs(q).catch(err => {
-              if (err.message?.includes('permissions')) {
-                 console.warn("Permission denied for anonymous role check.");
+              if (err.message?.includes('permissions') || err.message?.includes('quota')) {
+                 console.warn("Role check failed:", err.message);
                  return { empty: true, docs: [] };
               }
               throw err;
@@ -219,8 +219,8 @@ export default function Login() {
               where('phone', 'in', [cleanPhone, nineDigit, countryCodeOnly])
             );
             const snap = await getDocs(q).catch(err => {
-              if (err.message?.includes('permissions')) {
-                 console.warn("Permission denied for anonymous role check. This is expected if rules are strict.");
+              if (err.message?.includes('permissions') || err.message?.includes('quota')) {
+                 console.warn("Role check failed:", err.message);
                  return { empty: true, docs: [] };
               }
               throw err;
@@ -228,7 +228,6 @@ export default function Login() {
             
             if (snap && !snap.empty) {
               const userDataList = snap.docs.map(d => d.data());
-              // Prioritize admin role if multiple accounts found (unlikely but safe)
               const adminUser = userDataList.find(u => u.role === 'admin' || u.role === 'super_admin');
               if (adminUser) {
                 setDetectedRole('admin');
@@ -238,7 +237,6 @@ export default function Login() {
                 setDetectedEmail(userDataList[0].email || `${cleanPhone}@melikekub.com`);
               }
             } else {
-              // Fallback for bootstrap admins if not found in DB or permission denied
               if (cleanPhone === '0900000000' || cleanPhone === '0986204981' || cleanPhone === '0926925237') {
                 setDetectedRole('admin');
                 setDetectedEmail(`${cleanPhone}@melikekub.com`);
@@ -253,8 +251,9 @@ export default function Login() {
         } finally {
           setIsCheckingAccount(false);
         }
-      };
-      checkRole();
+      }, 600); // 600ms debounce
+      
+      return () => clearTimeout(timeoutId);
     } else {
       setDetectedRole(null);
       setDetectedEmail(null);
@@ -329,16 +328,18 @@ export default function Login() {
         const cleanPhone = normalizePhone(phoneNumber);
         const nineDigit = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
         
-        const formats = [
-          localDetectedEmail, // Detected from Firestore synchronously
-          `${cleanPhone}@melikekub.com`,
-          `${nineDigit}@melikekub.com`,
-          `251${nineDigit}@melikekub.com`,
-          `0${nineDigit}@melikekub.com`
-        ].filter(Boolean) as string[];
-
-        // Remove duplicates
-        uniqueFormats = Array.from(new Set(formats));
+        // If we already detected an email, try ONLY that one first to avoid rate limits
+        if (localDetectedEmail) {
+          uniqueFormats = [localDetectedEmail];
+        } else {
+          // Fallback formats if Firestore lookup failed but we want to try anyway
+          uniqueFormats = Array.from(new Set([
+            `${cleanPhone}@melikekub.com`,
+            `${nineDigit}@melikekub.com`,
+            `251${nineDigit}@melikekub.com`,
+            `0${nineDigit}@melikekub.com`
+          ])).filter(Boolean) as string[];
+        }
       }
       console.log('Login attempt sequence:', uniqueFormats);
       

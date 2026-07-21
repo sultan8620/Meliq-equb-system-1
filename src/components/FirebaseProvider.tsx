@@ -28,22 +28,40 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     let unsubData: (() => void) | null = null;
     
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      // If user logs in or switches, show loading until we fetch their data
+      // Only update status if it's a new login or change
       if (currentUser && (!user || currentUser.uid !== user.uid)) {
         setLoading(true);
-        // Update user status to online
-        await updateDoc(doc(db, 'users', currentUser.uid), {
-            isOnline: true,
-            lastLogin: serverTimestamp(),
-            lastActive: serverTimestamp()
-        }).catch(console.error);
+        // Fetch current status before updating to avoid redundant writes if possible
+        try {
+          const userRef = doc(db, 'users', currentUser.uid);
+          const snap = await getDoc(userRef);
+          const currentData = snap.data();
+          
+          // Only update if not already online or last login was more than 1 hour ago
+          const lastLoginDate = currentData?.lastLogin?.toDate();
+          const oneHourAgo = new Date(Date.now() - 3600000);
+          
+          if (!currentData?.isOnline || !lastLoginDate || lastLoginDate < oneHourAgo) {
+            await updateDoc(userRef, {
+                isOnline: true,
+                lastLogin: serverTimestamp(),
+                lastActive: serverTimestamp()
+            }).catch(e => console.warn("Status update error (non-critical):", e.message));
+          }
+        } catch (err) {
+          console.warn("Could not check user status before update:", err);
+        }
       } else if (!currentUser && user) {
         // User logged out - update status to offline
-        await updateDoc(doc(db, 'users', user.uid), {
-            isOnline: false,
-            lastLogout: serverTimestamp(),
-            lastActive: serverTimestamp()
-        }).catch(console.error);
+        try {
+          await updateDoc(doc(db, 'users', user.uid), {
+              isOnline: false,
+              lastLogout: serverTimestamp(),
+              lastActive: serverTimestamp()
+          }).catch(e => console.warn("Status update error (non-critical):", e.message));
+        } catch (err) {
+          console.warn("Could not set offline status:", err);
+        }
       }
       setUser(currentUser);
       

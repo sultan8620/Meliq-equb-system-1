@@ -5505,6 +5505,32 @@ export default function AdminDashboard() {
                                                <Trophy size={8} /> Winner
                                             </span>
                                           )}
+                                          <button
+                                            onClick={async () => {
+                                              const currentStatus = member.isDailyPaymentActive !== false;
+                                              const actionLabel = currentStatus ? (language === 'am' ? 'የቀን ክፍያ ለማጥፋት' : 'deactivate daily payments') : (language === 'am' ? 'የቀን ክፍያ ለማብራት' : 'activate daily payments');
+                                              if (await confirmAction(language === 'am' ? `ይህንን አባል ${actionLabel} ይፈልጋሉ?` : `Are you sure you want to ${actionLabel} for this member?`)) {
+                                                try {
+                                                  await updateDoc(doc(db, 'users', member.id), {
+                                                    isDailyPaymentActive: !currentStatus
+                                                  });
+                                                  triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'ሁኔታው ተቀይሯል' : 'Status updated successfully');
+                                                } catch (error) {
+                                                  handleFirestoreError(error, OperationType.UPDATE, `users/${member.id}`);
+                                                }
+                                              }
+                                            }}
+                                            className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest border transition-all flex items-center gap-1 cursor-pointer ${
+                                              member.isDailyPaymentActive !== false
+                                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-500 hover:text-white'
+                                                : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-500 hover:text-white'
+                                            }`}
+                                          >
+                                            <span className={`w-1 h-1 rounded-full ${member.isDailyPaymentActive !== false ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                            {member.isDailyPaymentActive !== false 
+                                              ? (language === 'am' ? 'የቀን ክፍያ፡ በርቷል' : 'Daily Pay: ON') 
+                                              : (language === 'am' ? 'የቀን ክፍያ፡ ጠፍቷል' : 'Daily Pay: OFF')}
+                                          </button>
                                        </div>
                                     </div>
                                  </div>
