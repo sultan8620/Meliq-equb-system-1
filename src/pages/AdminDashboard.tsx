@@ -31,6 +31,9 @@ const getSinglePaymentAmount = (userData: any, group: any): number => {
   if (!userData) return 0;
   if (userData.isSharedSlot) {
     const split = Number(userData.splitFactor) || 2;
+    if (split === 2) return 225;
+    if (split === 3) return 183.33;
+    if (split === 4) return 137.5;
     const baseAmount = Number(userData.totalPerSlot) || (group?.amount ? (group.amount * 1.1) : 0);
     return baseAmount / split;
   }
@@ -5736,52 +5739,160 @@ export default function AdminDashboard() {
                                         Math.max(0, totalPaidDays - (adminTrackerRound - 1) * stepsPerRound)
                                       );
 
-                                      return (
-                                        <div className="space-y-3">
-                                          <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
-                                            <span>ጠቅላላ ክፍያ: <strong className="text-slate-800">${totalPaidDays} ቀናት</strong></span>
-                                            <span>ዙር ${adminTrackerRound}: <strong className="text-slate-800">${paidStepsInSelectedRound}/${stepsPerRound} ቀናት</strong></span>
-                                          </div>
+                                      // 1. Get all individual slots/accounts to track for this member
+                                       const displaySlots = (() => {
+                                         const myAccounts = (member.allAccounts || [member]).map((s: any) => ({
+                                           id: s.id || s.uid,
+                                           label: s.isSharedSlot 
+                                             ? (language === 'am' ? `የጋራ 1/${s.splitFactor || 2}` : `Joint 1/${s.splitFactor || 2}`)
+                                             : (language === 'am' ? `ሙሉ` : `Full`),
+                                           fullName: s.fullName,
+                                           isShared: s.isSharedSlot === true,
+                                           memberCode: s.memberCode || ''
+                                         }));
 
-                                          {/* Mini day grid */}
-                                          <div className="grid grid-cols-5 gap-2">
-                                            {Array.from({ length: stepsPerRound }).map((_, sIdx) => {
-                                              const stepNo = sIdx + 1;
-                                              const isPaid = stepNo <= paidStepsInSelectedRound;
+                                         const partnerAccounts = [];
+                                         if (member.isSharedSlot) {
+                                           const actualPartners = member.jointId
+                                             ? allUsers.filter((u: any) => u.groupId === vGroup.id && u.jointId === member.jointId && u.id !== member.id)
+                                             : allUsers.filter((u: any) => u.groupId === vGroup.id && u.id !== member.id && u.isSharedSlot === true);
 
-                                              return (
-                                                <div 
-                                                  key={stepNo} 
-                                                  className={`p-2 rounded-lg border text-center relative overflow-hidden ${
-                                                    isPaid
-                                                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-900"
-                                                      : "bg-slate-50 border-slate-100 text-slate-400"
-                                                  }`}
-                                                >
-                                                  <div className="text-[8px] font-black uppercase tracking-wider opacity-60">
-                                                    ቀን ${stepNo}
-                                                  </div>
-                                                  <div className="flex flex-col items-center justify-center mt-1">
-                                                     {isPaid ? (
-                                                       <div className="flex flex-col items-center">
-                                                         <span className="text-emerald-600 font-bold text-xs">✓</span>
-                                                         {(member.slots || 1) > 1 && (
-                                                           <span className="bg-amber-100 text-amber-800 text-[6px] px-1 rounded font-black tracking-tighter" title="Stacked Payment">
-                                                             x{member.slots}
+                                           actualPartners.forEach((p: any) => {
+                                             const pId = p.id || p.uid;
+                                             if (!myAccounts.some((s: any) => s.id === pId)) {
+                                               partnerAccounts.push({
+                                                 id: pId,
+                                                 label: language === 'am' ? `አጋር: ${p.fullName}` : `Partner: ${p.fullName}`,
+                                                 fullName: p.fullName,
+                                                 isShared: true,
+                                                 memberCode: p.memberCode || ''
+                                               });
+                                             }
+                                           });
+                                         }
+
+                                         return [...myAccounts, ...partnerAccounts];
+                                       })();
+
+                                       return (
+                                         <div className="space-y-3">
+                                           <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                                             <span>
+                                               {language === 'am' ? 'የአባሉ ጠቅላላ ክፍያ:' : 'Member Total:'}{' '}
+                                               <strong className="text-slate-800">{totalPaidDays} {language === 'am' ? 'ቀናት' : 'Days'}</strong>
+                                             </span>
+                                             <span>
+                                               {language === 'am' ? `ዙር ${adminTrackerRound}:` : `Round ${adminTrackerRound}:`}{' '}
+                                               <strong className="text-slate-800">{paidStepsInSelectedRound}/{stepsPerRound} {language === 'am' ? 'ቀናት' : 'Days'}</strong>
+                                             </span>
+                                           </div>
+
+                                           {/* Day grid */}
+                                           <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-2">
+                                             {Array.from({ length: stepsPerRound }).map((_, sIdx) => {
+                                               const stepNo = sIdx + 1;
+                                               const absoluteDayNo = (adminTrackerRound - 1) * stepsPerRound + stepNo;
+
+                                               // Calculate status for each slot
+                                               const slotStatuses = displaySlots.map(s => {
+                                                 const sPayments = groupPayments.filter(p => p.userId === s.id);
+                                                 const sActiveDays = sPayments.filter(p => p.status === 'active' || p.status === 'verified' || p.status === 'completed')
+                                                   .reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                                                 const sPendingDays = sPayments.filter(p => p.status === 'pending')
+                                                   .reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+
+                                                 const isPaid = absoluteDayNo <= sActiveDays;
+                                                 const isPending = !isPaid && absoluteDayNo <= (sActiveDays + sPendingDays);
+
+                                                 return {
+                                                   ...s,
+                                                   isPaid,
+                                                   isPending
+                                                 };
+                                               });
+
+                                               const allPaid = slotStatuses.every(s => s.isPaid);
+                                               const anyPaid = slotStatuses.some(s => s.isPaid || s.isPending);
+
+                                               if (displaySlots.length > 1) {
+                                                 return (
+                                                   <div 
+                                                     key={stepNo} 
+                                                     className={`p-2 rounded-xl border relative overflow-hidden transition-all duration-300 col-span-2 xs:col-span-1 min-h-[90px] flex flex-col justify-between ${
+                                                       allPaid
+                                                         ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-950"
+                                                         : anyPaid
+                                                           ? "bg-amber-500/5 border-amber-500/20 text-amber-950 animate-pulse"
+                                                           : "bg-slate-50 border-slate-100 text-slate-400"
+                                                     }`}
+                                                   >
+                                                     <div className="flex justify-between items-center pb-1 border-b border-black/5">
+                                                       <span className="text-[8px] font-black uppercase tracking-wider opacity-60">
+                                                         ቀን {stepNo}
+                                                       </span>
+                                                       <span className="text-[8px] font-bold text-slate-500 bg-white/60 px-1 rounded">
+                                                         {slotStatuses.filter(s => s.isPaid).length}/{displaySlots.length}
+                                                       </span>
+                                                     </div>
+                                                     
+                                                     <div className="mt-1.5 space-y-1">
+                                                       {slotStatuses.map((sStatus, idx) => (
+                                                         <div key={idx} className="flex items-center justify-between gap-1 text-[8px] font-bold">
+                                                           <span className="truncate max-w-[70px] text-slate-600" title={sStatus.fullName}>
+                                                             {sStatus.fullName.split(' ')[0]} ({sStatus.label})
                                                            </span>
-                                                         )}
-                                                       </div>
-                                                     ) : (
-                                                       <span className="text-slate-300 font-bold text-xs">✗</span>
-                                                     )}
-                                                  </div>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
+                                                           <span className={sStatus.isPaid ? "text-emerald-600" : sStatus.isPending ? "text-amber-500" : "text-slate-300"}>
+                                                             {sStatus.isPaid ? "✓" : sStatus.isPending ? "⏳" : "✗"}
+                                                           </span>
+                                                         </div>
+                                                       ))}
+                                                     </div>
+                                                   </div>
+                                                 );
+                                               }
+
+                                               // Standard Single Slot view
+                                               const sStatus = slotStatuses[0];
+                                               const isPaid = sStatus?.isPaid || false;
+                                               const isPending = sStatus?.isPending || false;
+
+                                               return (
+                                                 <div 
+                                                   key={stepNo} 
+                                                   className={`p-2 rounded-lg border text-center relative overflow-hidden ${
+                                                     isPaid
+                                                       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-900"
+                                                       : isPending
+                                                         ? "bg-amber-500/10 border-amber-500/20 text-amber-900 animate-pulse"
+                                                         : "bg-slate-50 border-slate-100 text-slate-400"
+                                                   }`}
+                                                 >
+                                                   <div className="text-[8px] font-black uppercase tracking-wider opacity-60">
+                                                     ቀን {stepNo}
+                                                   </div>
+                                                   <div className="flex flex-col items-center justify-center mt-1">
+                                                      {isPaid ? (
+                                                        <div className="flex flex-col items-center">
+                                                          <span className="text-emerald-600 font-bold text-xs">✓</span>
+                                                          {(member.slots || 1) > 1 && (
+                                                            <span className="bg-amber-100 text-amber-800 text-[6px] px-1 rounded font-black tracking-tighter" title="Stacked Payment">
+                                                              x{member.slots}
+                                                            </span>
+                                                          )}
+                                                        </div>
+                                                      ) : isPending ? (
+                                                        <span className="text-amber-500 font-bold text-xs">⏳</span>
+                                                      ) : (
+                                                        <span className="text-slate-300 font-bold text-xs">✗</span>
+                                                      )}
+                                                   </div>
+                                                 </div>
+                                               );
+                                             })}
+                                           </div>
+                                         </div>
+                                       );
+                                     })()}
                                   </div>
                                )}
                             </div>

@@ -25,6 +25,9 @@ const getSinglePaymentAmount = (userData: any, group: any): number => {
   if (!userData) return 0;
   if (userData.isSharedSlot) {
     const split = Number(userData.splitFactor) || 2;
+    if (split === 2) return 225;
+    if (split === 3) return 183.33;
+    if (split === 4) return 137.5;
     const baseAmount = Number(userData.totalPerSlot) || (group?.amount ? (group.amount * 1.1) : 0);
     return baseAmount / split;
   }
@@ -167,6 +170,9 @@ interface GroupMember {
   phone?: string;
   memberCode?: string;
   wonDraw?: boolean;
+  isSharedSlot?: boolean;
+  splitFactor?: number;
+  jointId?: string;
 }
 
 const RULES_CONTENT = [
@@ -716,6 +722,7 @@ export default function Dashboard() {
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [groupPayments, setGroupPayments] = useState<any[]>([]);
   const [selectedTrackerRound, setSelectedTrackerRound] = useState<number>(1);
 
   useEffect(() => {
@@ -1763,6 +1770,7 @@ export default function Dashboard() {
         if (data.groupId) {
           let unsubMembers = () => {};
           let unsubMessages = () => {};
+          let unsubGroupPayments = () => {};
 
           const setupSubscriptions = async () => {
             const groupDoc = await getDoc(doc(db, 'groups', data.groupId));
@@ -1779,9 +1787,24 @@ export default function Dashboard() {
                 slots: doc.data().slots || 1,
                 status: doc.data().status,
                 faceScan: doc.data().faceScan,
-                wonDraw: doc.data().wonDraw || false
+                wonDraw: doc.data().wonDraw || false,
+                isSharedSlot: doc.data().isSharedSlot || false,
+                splitFactor: doc.data().splitFactor || 2,
+                phone: doc.data().phone || '',
+                memberCode: doc.data().memberCode || '',
+                jointId: doc.data().jointId || ''
               }));
               setMembers(memberData);
+            });
+
+            // Real-time group payments
+            const qGroupPayments = query(
+              collection(db, 'payments'),
+              where('groupId', '==', data.groupId),
+              where('status', 'in', ['active', 'verified', 'completed', 'pending'])
+            );
+            unsubGroupPayments = onSnapshot(qGroupPayments, (snapshot) => {
+              setGroupPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             });
 
             // Real-time chat messages
@@ -1815,6 +1838,7 @@ export default function Dashboard() {
           return () => {
             unsubMembers();
             unsubMessages();
+            unsubGroupPayments();
           };
         }
       } else {
@@ -3622,83 +3646,204 @@ export default function Dashboard() {
                         </div>
 
                         {/* Calendar Day Grid */}
-                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-3.5">
-                          {Array.from({ length: stepsPerRound }).map((_, sIdx) => {
-                            const stepNo = sIdx + 1;
-                            const isPaidActive = stepNo <= activeStepsInSelectedRound;
-                            const isPaidPending = !isPaidActive && stepNo <= accountedStepsInSelectedRound;
-                            const isPaid = isPaidActive || isPaidPending;
+                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3.5">
+                          {(() => {
+                            const displaySlots = (() => {
+                              if (!group || !userData) return [];
+                              
+                              const myGroupSlots = associatedSlots.filter(s => s.groupId === group.id).map(s => ({
+                                id: s.id,
+                                label: s.isSharedSlot 
+                                  ? (language === 'am' ? `የጋራ 1/${s.splitFactor || 2}` : `Joint 1/${s.splitFactor || 2}`)
+                                  : (language === 'am' ? `ሙሉ` : `Full`),
+                                fullName: s.fullName,
+                                isSelf: s.id === userData.id,
+                                isShared: s.isSharedSlot === true,
+                                memberCode: s.memberCode || ''
+                              }));
 
-                            let statusTextAm = isPaidActive
-                              ? `የራይት ምልክት (ተረጋግጧል)${(userData?.slots || 1) > 1 ? ` - ተደርቧል (x${userData.slots})` : ''}`
-                              : isPaidPending
-                                ? `በመጠባበቅ ላይ (ክፍያ ተልኳል)`
-                                : "የኤክስ ምልክት (ያልተከፈለ)";
-                            let statusTextEn = isPaidActive
-                              ? `Verified (Paid)${(userData?.slots || 1) > 1 ? ` - Stacked (x${userData.slots})` : ''}`
-                              : isPaidPending
-                                ? `Pending Review (Submitted)`
-                                : "Unpaid";
-
-                            return (
-                              <motion.div
-                                key={stepNo}
-                                whileHover={{ scale: 1.02 }}
-                                onClick={() => {
-                                  if (!isPaid && selectedTrackerRound === (group.currentRound || 1)) {
-                                    setActiveTab('payment-send');
+                              const partnerSlots = [];
+                              if (userData.isSharedSlot) {
+                                const otherSharedMembers = members.filter(m => m.uid !== userData.id && m.isSharedSlot === true);
+                                const actualPartners = userData.jointId
+                                  ? members.filter(m => m.jointId === userData.jointId && m.uid !== userData.id)
+                                  : otherSharedMembers;
+                                  
+                                actualPartners.forEach(p => {
+                                  if (!myGroupSlots.some(s => s.id === p.uid)) {
+                                    partnerSlots.push({
+                                      id: p.uid,
+                                      label: language === 'am' ? `አጋር: ${p.fullName}` : `Partner: ${p.fullName}`,
+                                      fullName: p.fullName,
+                                      isSelf: false,
+                                      isShared: true,
+                                      memberCode: p.memberCode || ''
+                                    });
                                   }
-                                }}
-                                className={`p-4 rounded-[1.5rem] border flex flex-col justify-between h-32 relative overflow-hidden transition-all shadow-sm ${
-                                  isPaidActive 
-                                    ? "bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-950" 
-                                    : isPaidPending
-                                      ? "bg-amber-500/10 border-amber-500/20 hover:border-amber-500/40 text-amber-950"
-                                      : selectedTrackerRound === (group.currentRound || 1)
-                                        ? "bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-white text-slate-900 cursor-pointer"
-                                        : "bg-slate-100/50 border-slate-100 text-slate-400 opacity-60"
-                                  }`}
-                              >
-                                {/* Decorative circle */}
-                                <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-md opacity-20 ${isPaidActive ? 'bg-emerald-400' : isPaidPending ? 'bg-amber-400' : 'bg-slate-300'}`} />
+                                });
+                              }
+                              
+                              return [...myGroupSlots, ...partnerSlots];
+                            })();
 
-                                <div className="flex justify-between items-start relative z-10">
-                                  <span className="text-[9px] font-black uppercase tracking-widest font-mono opacity-60">
-                                    {language === 'am' ? `ቀን ${stepNo}` : `Day ${stepNo}`}
-                                  </span>
-                                  {isPaid ? (
-                                    <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
-                                      <CheckCircle size={12} strokeWidth={3} />
-                                    </div>
-                                  ) : (
-                                    <div className="w-5 h-5 rounded-full bg-slate-300 text-slate-500 flex items-center justify-center">
-                                      <XCircle size={12} strokeWidth={3} />
-                                    </div>
-                                  )}
-                                </div>
+                            return Array.from({ length: stepsPerRound }).map((_, sIdx) => {
+                              const stepNo = sIdx + 1;
+                              const absoluteDayNo = (selectedTrackerRound - 1) * stepsPerRound + stepNo;
 
-                                <div className="mt-auto relative z-10">
-                                  <p className="text-xs font-black tracking-tight leading-none mb-1">
-                                    {isPaidActive 
-                                      ? (language === 'am' ? 'የራይት ምልክት (ተረጋግጧል)' : 'Verified')
-                                      : isPaidPending
-                                        ? (language === 'am' ? 'በግምገማ ላይ (Pending)' : 'Under Review')
-                                        : (language === 'am' ? 'ኤክስ ምልክት (ያልተከፈለ)' : 'Unpaid')}
-                                  </p>
-                                  {isPaid && (userData?.slots || 1) > 1 && (
-                                    <div className="mb-1">
-                                      <span className="bg-amber-100 border border-amber-200 text-amber-900 text-[6px] px-1 py-0.5 rounded font-black uppercase tracking-widest">
-                                        {language === 'am' ? 'የድርብ እጣ ክፍያ' : 'Stacked Payment'}
+                              // Calculate status for each display slot
+                              const slotStatuses = displaySlots.map(s => {
+                                const sPayments = groupPayments.filter(p => p.userId === s.id);
+                                const sActiveDays = sPayments.filter(p => p.status === 'active' || p.status === 'verified' || p.status === 'completed')
+                                  .reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                                const sPendingDays = sPayments.filter(p => p.status === 'pending')
+                                  .reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+
+                                const isPaidActive = absoluteDayNo <= sActiveDays;
+                                const isPaidPending = !isPaidActive && absoluteDayNo <= (sActiveDays + sPendingDays);
+                                const isPaid = isPaidActive || isPaidPending;
+
+                                return {
+                                  ...s,
+                                  isPaidActive,
+                                  isPaidPending,
+                                  isPaid
+                                };
+                              });
+
+                              const allPaid = slotStatuses.every(s => s.isPaidActive);
+                              const anyPaid = slotStatuses.some(s => s.isPaid);
+                              const allUnpaid = slotStatuses.every(s => !s.isPaid);
+
+                              if (displaySlots.length > 1) {
+                                return (
+                                  <motion.div
+                                    key={stepNo}
+                                    whileHover={{ scale: 1.02 }}
+                                    className={`p-3.5 rounded-[1.5rem] border flex flex-col justify-between min-h-[140px] relative overflow-hidden transition-all shadow-sm ${
+                                      allPaid 
+                                        ? "bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-950" 
+                                        : !allUnpaid
+                                          ? "bg-amber-500/10 border-amber-500/20 hover:border-amber-500/40 text-amber-950"
+                                          : "bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-white text-slate-900 cursor-pointer"
+                                    }`}
+                                    onClick={() => {
+                                      const hasOwnUnpaid = slotStatuses.some(s => s.isSelf && !s.isPaid);
+                                      if (hasOwnUnpaid && selectedTrackerRound === (group.currentRound || 1)) {
+                                        setActiveTab('payment-send');
+                                      }
+                                    }}
+                                  >
+                                    {/* Decorative circle */}
+                                    <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-md opacity-20 ${allPaid ? 'bg-emerald-400' : !allUnpaid ? 'bg-amber-400' : 'bg-slate-300'}`} />
+
+                                    <div className="flex justify-between items-center relative z-10 pb-1.5 border-b border-black/5">
+                                      <span className="text-[10px] font-black uppercase tracking-widest font-mono opacity-60">
+                                        {language === 'am' ? `ቀን ${stepNo}` : `Day ${stepNo}`}
+                                      </span>
+                                      <span className="text-[9px] font-black bg-white/70 px-2 py-0.5 rounded-full border border-black/5">
+                                        {slotStatuses.filter(s => s.isPaidActive).length}/{displaySlots.length}
                                       </span>
                                     </div>
-                                  )}
-                                  <p className="text-[8px] font-bold uppercase tracking-widest opacity-60 leading-tight">
-                                    {language === 'am' ? statusTextAm : statusTextEn}
-                                  </p>
-                                </div>
-                              </motion.div>
-                            );
-                          })}
+
+                                    <div className="mt-2.5 space-y-2 relative z-10">
+                                      {slotStatuses.map((sStatus, idx) => (
+                                        <div key={idx} className="flex items-center justify-between gap-2 text-[10px] font-bold">
+                                          <div className="flex items-center gap-1.5 min-w-0">
+                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${sStatus.isPaidActive ? 'bg-emerald-500' : sStatus.isPaidPending ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} />
+                                            <span className={`truncate text-slate-700 ${sStatus.isSelf ? 'font-black underline decoration-indigo-500' : ''}`} title={sStatus.fullName}>
+                                              {sStatus.isSelf ? (language === 'am' ? 'የእኔ' : 'Me') : sStatus.fullName.split(' ')[0]} ({sStatus.label})
+                                            </span>
+                                          </div>
+                                          <span className={`text-[10px] uppercase font-black tracking-tight shrink-0 ${sStatus.isPaidActive ? 'text-emerald-600' : sStatus.isPaidPending ? 'text-amber-500' : 'text-slate-400'}`}>
+                                            {sStatus.isPaidActive 
+                                              ? (language === 'am' ? '✓ ሙሉ' : '✓ Paid')
+                                              : sStatus.isPaidPending
+                                                ? (language === 'am' ? '⏳ ይገምገም' : '⏳ Pend')
+                                                : (language === 'am' ? '✗ ባዶ' : '✗ Unpaid')}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                );
+                              }
+
+                              // Default single slot view
+                              const isPaidActive = slotStatuses[0]?.isPaidActive || false;
+                              const isPaidPending = slotStatuses[0]?.isPaidPending || false;
+                              const isPaid = slotStatuses[0]?.isPaid || false;
+
+                              let statusTextAm = isPaidActive
+                                ? `የራይት ምልክት (ተረጋግጧል)${(userData?.slots || 1) > 1 ? ` - ተደርቧል (x${userData.slots})` : ''}`
+                                : isPaidPending
+                                  ? `በመጠባበቅ ላይ (ክፍያ ተልኳል)`
+                                  : "የኤክስ ምልክት (ያልተከፈለ)";
+                              let statusTextEn = isPaidActive
+                                ? `Verified (Paid)${(userData?.slots || 1) > 1 ? ` - Stacked (x${userData.slots})` : ''}`
+                                : isPaidPending
+                                  ? `Pending Review (Submitted)`
+                                  : "Unpaid";
+
+                              return (
+                                <motion.div
+                                  key={stepNo}
+                                  whileHover={{ scale: 1.02 }}
+                                  onClick={() => {
+                                    if (!isPaid && selectedTrackerRound === (group.currentRound || 1)) {
+                                      setActiveTab('payment-send');
+                                    }
+                                  }}
+                                  className={`p-4 rounded-[1.5rem] border flex flex-col justify-between h-32 relative overflow-hidden transition-all shadow-sm ${
+                                    isPaidActive 
+                                      ? "bg-emerald-500/10 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-950" 
+                                      : isPaidPending
+                                        ? "bg-amber-500/10 border-amber-500/20 hover:border-amber-500/40 text-amber-950"
+                                        : selectedTrackerRound === (group.currentRound || 1)
+                                          ? "bg-slate-50 border-slate-100 hover:border-indigo-100 hover:bg-white text-slate-900 cursor-pointer"
+                                          : "bg-slate-100/50 border-slate-100 text-slate-400 opacity-60"
+                                    }`}
+                                >
+                                  {/* Decorative circle */}
+                                  <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-md opacity-20 ${isPaidActive ? 'bg-emerald-400' : isPaidPending ? 'bg-amber-400' : 'bg-slate-300'}`} />
+
+                                  <div className="flex justify-between items-start relative z-10">
+                                    <span className="text-[9px] font-black uppercase tracking-widest font-mono opacity-60">
+                                      {language === 'am' ? `ቀን ${stepNo}` : `Day ${stepNo}`}
+                                    </span>
+                                    {isPaid ? (
+                                      <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+                                        <CheckCircle size={12} strokeWidth={3} />
+                                      </div>
+                                    ) : (
+                                      <div className="w-5 h-5 rounded-full bg-slate-300 text-slate-500 flex items-center justify-center">
+                                        <XCircle size={12} strokeWidth={3} />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="mt-auto relative z-10">
+                                    <p className="text-xs font-black tracking-tight leading-none mb-1">
+                                      {isPaidActive 
+                                        ? (language === 'am' ? 'የራይት ምልክት (ተረጋግጧል)' : 'Verified')
+                                        : isPaidPending
+                                          ? (language === 'am' ? 'በግምገማ ላይ (Pending)' : 'Under Review')
+                                          : (language === 'am' ? 'ኤክስ ምልክት (ያልተከፈለ)' : 'Unpaid')}
+                                    </p>
+                                    {isPaid && (userData?.slots || 1) > 1 && (
+                                      <div className="mb-1">
+                                        <span className="bg-amber-100 border border-amber-200 text-amber-900 text-[6px] px-1 py-0.5 rounded font-black uppercase tracking-widest">
+                                          {language === 'am' ? 'የድርብ እጣ ክፍያ' : 'Stacked Payment'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <p className="text-[8px] font-bold uppercase tracking-widest opacity-60 leading-tight">
+                                      {language === 'am' ? statusTextAm : statusTextEn}
+                                    </p>
+                                  </div>
+                                </motion.div>
+                              );
+                            });
+                          })()}
                         </div>
 
                         {/* Helper tip */}

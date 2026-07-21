@@ -347,8 +347,20 @@ export default function Signup() {
 
   const commissionPerSlot = finalAmount * 0.1; // 10% commission per slot
   const totalPerSlot = finalAmount + commissionPerSlot;
+
+  const singleSlotPaymentAmount = useMemo(() => {
+    if (formData.isSharedSlot) {
+      const split = Number(formData.splitFactor) || 2;
+      if (split === 2) return 225;
+      if (split === 3) return 183.33;
+      if (split === 4) return 137.5;
+      return totalPerSlot / split;
+    }
+    return totalPerSlot * Number(formData.slots);
+  }, [formData.isSharedSlot, formData.splitFactor, formData.slots, totalPerSlot]);
+
   const totalPayoutPerSlot = finalAmount * multiplier * formData.memberLimit;
-  const totalCyclePayment = totalPerSlot * multiplier * formData.memberLimit * actualUserSlots;
+  const totalCyclePayment = singleSlotPaymentAmount * multiplier * formData.memberLimit;
 
   // Age and Ethiopian Date Calculation (Fully synchronized)
   const birthInfo = useMemo(() => {
