@@ -289,37 +289,35 @@ export default function Login() {
 
       let localDetectedEmail = detectedEmail;
 
-      if (!isBootstrapAdmin) {
-        if (isEmailInput) {
-          const lowerEmail = inputVal.toLowerCase();
-          const q = query(collection(db, 'users'), where('email', '==', lowerEmail));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            hasAccount = true;
-          }
-        } else {
-          const nineDigit = cleanInputPhone.startsWith('0') ? cleanInputPhone.substring(1) : cleanInputPhone;
-          const countryCodeOnly = `251${nineDigit}`;
-          const formatsToSearch = [cleanInputPhone, nineDigit, countryCodeOnly];
-          
-          const q = query(
-            collection(db, 'users'),
-            where('phone', 'in', formatsToSearch)
-          );
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            hasAccount = true;
-            const docData = snap.docs[0].data();
-            if (docData.email) {
-              setDetectedEmail(docData.email);
-              localDetectedEmail = docData.email;
-            }
+      if (isEmailInput) {
+        const lowerEmail = inputVal.toLowerCase();
+        const q = query(collection(db, 'users'), where('email', '==', lowerEmail));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          hasAccount = true;
+        }
+      } else {
+        const nineDigit = cleanInputPhone.startsWith('0') ? cleanInputPhone.substring(1) : cleanInputPhone;
+        const countryCodeOnly = `251${nineDigit}`;
+        const formatsToSearch = [cleanInputPhone, nineDigit, countryCodeOnly];
+        
+        const q = query(
+          collection(db, 'users'),
+          where('phone', 'in', formatsToSearch)
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          hasAccount = true;
+          const docData = snap.docs[0].data();
+          if (docData.email) {
+            setDetectedEmail(docData.email);
+            localDetectedEmail = docData.email;
           }
         }
+      }
 
-        if (!hasAccount) {
-          throw { code: 'custom/account-not-found' };
-        }
+      if (!hasAccount && !isBootstrapAdmin) {
+        throw { code: 'custom/account-not-found' };
       }
 
       let uniqueFormats: string[] = [];
@@ -335,6 +333,8 @@ export default function Login() {
         } else {
           // Fallback formats if Firestore lookup failed but we want to try anyway
           uniqueFormats = Array.from(new Set([
+            `admin.${cleanPhone}@melikekub.com`,
+            `admin.${nineDigit}@melikekub.com`,
             `${cleanPhone}@melikekub.com`,
             `${nineDigit}@melikekub.com`,
             `251${nineDigit}@melikekub.com`,
@@ -569,41 +569,7 @@ export default function Login() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 10 }}
                 >
-                  {/* Role Tab Selector */}
-                  <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-6 border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginRoleTab('member');
-                        setError(null);
-                      }}
-                      className={`flex-1 py-3 text-center text-[11px] font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer ${
-                        loginRoleTab === 'member'
-                          ? 'bg-white text-slate-900 shadow-sm'
-                          : 'text-slate-400 hover:text-slate-600'
-                      }`}
-                    >
-                      {language === 'am' ? 'የአባል መግቢያ' : 'Member Login'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginRoleTab('admin');
-                        setError(null);
-                        // Optional prefill for convenience
-                        if (!phoneNumber) {
-                          setPhoneNumber('sefadinkedir@gmail.com');
-                        }
-                      }}
-                      className={`flex-1 py-3 text-center text-[11px] font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer ${
-                        loginRoleTab === 'admin'
-                          ? 'bg-slate-950 text-white shadow-sm'
-                          : 'text-slate-400 hover:text-slate-600'
-                      }`}
-                    >
-                      {language === 'am' ? 'የአድሚን መግቢያ' : 'Admin Login'}
-                    </button>
-                  </div>
+
 
                   <form onSubmit={handleLogin} className="space-y-6">
                     {error && (
