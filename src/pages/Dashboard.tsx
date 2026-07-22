@@ -3662,18 +3662,18 @@ export default function Dashboard() {
                                 fullName: s.fullName,
                                 isSelf: s.id === userData.id,
                                 isShared: s.isSharedSlot === true,
-                                memberCode: s.memberCode || ''
+                                memberCode: s.memberCode || '',
+                                jointId: s.jointId
                               }));
 
-                              const partnerSlots = [];
-                              if (userData.isSharedSlot) {
-                                const otherSharedMembers = members.filter(m => m.uid !== userData.id && m.isSharedSlot === true);
-                                const actualPartners = userData.jointId
-                                  ? members.filter(m => m.jointId === userData.jointId && m.uid !== userData.id)
-                                  : otherSharedMembers;
+                              const partnerSlots: any[] = [];
+                              myGroupSlots.filter(s => s.isShared).forEach(sharedSlot => {
+                                const actualPartners = sharedSlot.jointId
+                                  ? members.filter(m => m.jointId === sharedSlot.jointId && m.uid !== sharedSlot.id)
+                                  : members.filter(m => m.uid !== sharedSlot.id && m.isSharedSlot === true);
                                   
                                 actualPartners.forEach(p => {
-                                  if (!myGroupSlots.some(s => s.id === p.uid)) {
+                                  if (!myGroupSlots.some(s => s.id === p.uid) && !partnerSlots.some(s => s.id === p.uid)) {
                                     partnerSlots.push({
                                       id: p.uid,
                                       label: language === 'am' ? `አጋር: ${p.fullName}` : `Partner: ${p.fullName}`,
@@ -3684,7 +3684,7 @@ export default function Dashboard() {
                                     });
                                   }
                                 });
-                              }
+                              });
                               
                               return [...myGroupSlots, ...partnerSlots];
                             })();

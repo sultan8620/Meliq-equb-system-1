@@ -1758,7 +1758,7 @@ export default function AdminDashboard() {
       handleFirestoreError(error, OperationType.LIST, 'payments');
     });
 
-    const unsubAllPayments = onSnapshot(query(collection(db, 'payments'), where('status', '==', 'active')), (snapshot) => {
+    const unsubAllPayments = onSnapshot(query(collection(db, 'payments'), where('status', 'in', ['active', 'verified', 'completed'])), (snapshot) => {
       setAllPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'payments');
@@ -5479,7 +5479,7 @@ export default function AdminDashboard() {
                       { label: 'ንቁ (Active)', value: groups.filter(g => g.status === 'active').length, icon: Play, color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/20' },
                       { label: 'ምዝገባ ላይ', value: groups.filter(g => g.status !== 'active').length, icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10 border-amber-400/20' },
                       { label: 'አሸናፊዎች', value: groups.filter(g => g.lastWinner).length, icon: Trophy, color: 'text-indigo-400', bg: 'bg-indigo-400/10 border-indigo-400/20' },
-                      { label: 'ድምር ገንዘብ', value: (groups.reduce((acc, g) => acc + (g.amount * (g.memberCount || 0)), 0) / 1000).toFixed(1) + 'k', icon: DollarSign, color: 'text-rose-400', bg: 'bg-rose-400/10 border-rose-400/20' }
+                      { label: 'የተሰበሰበ ብር', value: (allPayments.reduce((acc, p) => acc + (p.amount || 0), 0) / 1000).toFixed(1) + 'k', icon: DollarSign, color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/20' }
                     ].map((m, i) => (
                       <div key={i} className={`p-4 rounded-2xl border ${m.bg} flex flex-col items-center justify-center text-center hover:bg-white/10 transition-colors backdrop-blur-md relative overflow-hidden group/stat`}>
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 mb-2 group-hover/stat:scale-110 group-hover:stat:rotate-3 transition-transform duration-500 ${m.color}`}>
@@ -5748,18 +5748,19 @@ export default function AdminDashboard() {
                                              : (language === 'am' ? `ሙሉ` : `Full`),
                                            fullName: s.fullName,
                                            isShared: s.isSharedSlot === true,
-                                           memberCode: s.memberCode || ''
+                                           memberCode: s.memberCode || '',
+                                           jointId: s.jointId
                                          }));
 
-                                         const partnerAccounts = [];
-                                         if (member.isSharedSlot) {
-                                           const actualPartners = member.jointId
-                                             ? allUsers.filter((u: any) => u.groupId === vGroup.id && u.jointId === member.jointId && u.id !== member.id)
-                                             : allUsers.filter((u: any) => u.groupId === vGroup.id && u.id !== member.id && u.isSharedSlot === true);
+                                         const partnerAccounts: any[] = [];
+                                         myAccounts.filter((s: any) => s.isShared).forEach((sharedSlot: any) => {
+                                           const actualPartners = sharedSlot.jointId
+                                             ? allUsers.filter((u: any) => u.groupId === vGroup.id && u.jointId === sharedSlot.jointId && u.id !== sharedSlot.id)
+                                             : allUsers.filter((u: any) => u.groupId === vGroup.id && u.id !== sharedSlot.id && u.isSharedSlot === true);
 
                                            actualPartners.forEach((p: any) => {
                                              const pId = p.id || p.uid;
-                                             if (!myAccounts.some((s: any) => s.id === pId)) {
+                                             if (!myAccounts.some((s: any) => s.id === pId) && !partnerAccounts.some((s: any) => s.id === pId)) {
                                                partnerAccounts.push({
                                                  id: pId,
                                                  label: language === 'am' ? `አጋር: ${p.fullName}` : `Partner: ${p.fullName}`,
@@ -5769,7 +5770,7 @@ export default function AdminDashboard() {
                                                });
                                              }
                                            });
-                                         }
+                                         });
 
                                          return [...myAccounts, ...partnerAccounts];
                                        })();
@@ -6155,8 +6156,8 @@ export default function AdminDashboard() {
                           </button>
                         </div>
                         <div className="text-right mt-1">
-                          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">ድምር ገንዘብ</p>
-                          <p className="text-xs font-black text-slate-900 leading-none">{(group.amount * group.memberCount).toLocaleString()} <span className="text-[8px] text-slate-500">ብር</span></p>
+                          <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mb-1">የተሰበሰበ ብር</p>
+                          <p className="text-xs font-black text-slate-900 leading-none">{allPayments.filter(p => p.groupId === group.id).reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()} <span className="text-[8px] text-slate-500">ብር</span></p>
                         </div>
                       </div>
                     </div>
@@ -10595,8 +10596,11 @@ export default function AdminDashboard() {
                         <DollarSign size={24} />
                      </div>
                      <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">የፋይናንስ እንቅስቃሴ</p>
-                        <p className="text-xl font-black text-slate-900">{allPayments.length.toLocaleString()}</p>
+                        <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">የተሰበሰበ ብር</p>
+                        <div className="flex items-baseline gap-1">
+                          <p className="text-xl font-black text-slate-900">{allPayments.reduce((acc, p) => acc + (p.amount || 0), 0).toLocaleString()}</p>
+                          <span className="text-[10px] font-bold text-slate-400">ብር</span>
+                        </div>
                      </div>
                   </div>
                   <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
