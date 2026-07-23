@@ -226,7 +226,7 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
     const isShared = w.isSharedSlot === true || w.isShared === true || (w.slots && Number(w.slots) < 1);
     const isSelf = w.userId === userData?.id || w.uid === userData?.id || w.winnerId === userData?.id;
     if (!isAdminUser && isShared && !isSelf) {
-      return language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Member (Admin Only)';
+      return language === 'am' ? 'የጋራ አባል' : 'Shared Member';
     }
     return w.name || 'Anonymous';
   };
@@ -2882,7 +2882,7 @@ export default function Dashboard() {
                   
                   <h3 className="text-2xl font-display font-black text-slate-900 tracking-tight text-center mb-1">
                     {(!isAdmin && selectedMemberModal.uid !== user?.uid && (selectedMemberModal.isSharedSlot || (selectedMemberModal.slots && Number(selectedMemberModal.slots) < 1) || Boolean(selectedMemberModal.jointId)))
-                      ? (language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Member (Admin Only)')
+                      ? (language === 'am' ? 'የጋራ አባል' : 'Shared Member')
                       : selectedMemberModal.fullName}
                   </h3>
                   <div className="flex flex-col items-center">
@@ -3519,7 +3519,7 @@ export default function Dashboard() {
                                     <div key={partner.id} className="flex items-center justify-between text-xs font-medium text-slate-300">
                                       <span className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                        {isAdmin ? partner.fullName : (language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Partner (Admin Only)')}
+                                        {isAdmin ? partner.fullName : (language === 'am' ? 'የጋራ አባል' : 'Shared Member')}
                                       </span>
                                       <span className="text-slate-400 font-mono text-[11px]">{isAdmin ? partner.phone : '···'}</span>
                                     </div>
@@ -3739,7 +3739,7 @@ export default function Dashboard() {
                                       label: isAdmin 
                                          ? (language === 'am' ? `አጋር: ${p.fullName}` : `Partner: ${p.fullName}`)
                                          : (language === 'am' ? 'የጋራ አባል' : 'Shared Partner'),
-                                       fullName: isAdmin ? p.fullName : (language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Partner (Admin Only)'),
+                                       fullName: isAdmin ? p.fullName : (language === 'am' ? 'የጋራ አባል' : 'Shared Member'),
                                       isSelf: false,
                                       isShared: true,
                                       memberCode: p.memberCode || ''
@@ -4121,7 +4121,7 @@ export default function Dashboard() {
                       {/* Name */}
                       <h4 className="text-lg font-black tracking-tight text-slate-900 mb-1 text-center truncate w-full px-2">
                         {(!isAdmin && member.uid !== user?.uid && (member.isSharedSlot === true || (member.slots && Number(member.slots) < 1) || Boolean(member.jointId)))
-                          ? (language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Member (Admin Only)')
+                          ? (language === 'am' ? 'የጋራ አባል' : 'Shared Member')
                           : member.fullName}
                       </h4>
                       
@@ -6716,7 +6716,11 @@ export default function Dashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የአባል ስም' : 'Member Name'}</p>
-                      <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">{selectedPayment.userName || userData?.fullName}</p>
+                      <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">
+                        {(!isAdmin && selectedPayment.userId !== user?.uid && selectedPayment.userId !== userData?.id && (selectedPayment.isShared || selectedPayment.isSharedSlot))
+                          ? (language === 'am' ? 'የጋራ አባል' : 'Shared Member')
+                          : (selectedPayment.userName || userData?.fullName)}
+                      </p>
                       <p className="text-[9px] font-black text-indigo-600 font-mono mt-0.5 leading-none">
                         {language === 'am' ? 'መለያ: ' : 'ID: '}{selectedPayment.memberCode || userData?.memberCode || `M-${(selectedPayment.userId || '').slice(-5).toUpperCase()}`}
                       </p>
@@ -6763,7 +6767,9 @@ export default function Dashboard() {
                       <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
                         {selectedPayment.type === 'manual_contribution'
                           ? (language === 'am' ? 'አስተዳዳሪ (የመዘገበው)' : 'Admin Recorded')
-                          : (selectedPayment.userName || userData?.fullName || (language === 'am' ? 'አባል' : 'Member'))}
+                          : (!isAdmin && selectedPayment.userId !== user?.uid && selectedPayment.userId !== userData?.id && (selectedPayment.isShared || selectedPayment.isSharedSlot))
+                            ? (language === 'am' ? 'የጋራ አባል' : 'Shared Member')
+                            : (selectedPayment.userName || userData?.fullName || (language === 'am' ? 'አባል' : 'Member'))}
                       </p>
                     </div>
                     <div>
