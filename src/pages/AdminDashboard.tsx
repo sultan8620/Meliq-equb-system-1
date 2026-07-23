@@ -45,6 +45,29 @@ const getSinglePaymentAmount = (userData: any, group: any): number => {
   return Number(userData.totalPerSlot) || (group?.amount ? (group.amount * 1.1) : 0);
 };
 
+const getPaymentCalculatedAmount = (payment: any, usersList: any[] = [], groupsList: any[] = []): number => {
+  if (!payment) return 0;
+  const days = Number(payment.paymentDays) || 1;
+  const user = usersList.find((u: any) => u.id === payment.userId || u.memberCode === payment.memberCode);
+  const group = groupsList.find((g: any) => g.id === payment.groupId);
+  const singleAmt = user ? getSinglePaymentAmount(user, group) : (group?.amount ? (group.amount * 1.1) : 0);
+  
+  if (singleAmt > 0) {
+    const expected = singleAmt * days;
+    return Math.max(Number(payment.amount) || 0, expected);
+  }
+  return Number(payment.amount) || 0;
+};
+
+const calculateTotalCollected = (paymentsList: any[] = [], usersList: any[] = [], groupsList: any[] = []): number => {
+  const validPayments = paymentsList.filter((p: any) => 
+    ['verified', 'active', 'approved', 'completed'].includes(p.status)
+  );
+  return validPayments.reduce((sum: number, p: any) => {
+    return sum + getPaymentCalculatedAmount(p, usersList, groupsList);
+  }, 0);
+};
+
 const getBankPrefix = (bankName: string) => {
   if (!bankName) return 'REC';
   const name = bankName.toLowerCase();
@@ -5480,7 +5503,7 @@ export default function AdminDashboard() {
                       { label: 'ምዝገባ ላይ', value: groups.filter(g => g.status !== 'active').length, icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10 border-amber-400/20' },
                       { label: 'አሸናፊዎች', value: groups.filter(g => g.lastWinner).length, icon: Trophy, color: 'text-indigo-400', bg: 'bg-indigo-400/10 border-indigo-400/20' },
                       { label: 'የተሰበሰበ ብር', value: (() => {
-                        const total = allPayments.filter(p => ['verified', 'active', 'approved', 'completed'].includes(p.status)).reduce((acc, p) => acc + (p.amount || 0), 0);
+                        const total = calculateTotalCollected(allPayments, allUsers, groupsWithMembers);
                         return total >= 1000000 ? (total / 1000000).toFixed(1) + 'M' : total >= 1000 ? (total / 1000).toFixed(1) + 'k' : total.toLocaleString();
                       })(), icon: DollarSign, color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/20' }
                     ].map((m, i) => (
@@ -5513,7 +5536,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${vGroup.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                           <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                             {vGroup.status === 'active' ? 'ንቁ ቡድን' : 'ምዝገባ ላይ'} • {vGroup.type} • የተሰበሰበ: <span className="text-emerald-600 font-black">{allPayments.filter(p => p.groupId === vGroup.id && ['verified', 'active', 'approved', 'completed'].includes(p.status)).reduce((s, p) => s + (p.amount || 0), 0).toLocaleString()} ብር</span>
+                             {vGroup.status === 'active' ? 'ንቁ ቡድን' : 'ምዝገባ ላይ'} • {vGroup.type} • የተሰበሰበ: <span className="text-emerald-600 font-black">{calculateTotalCollected(allPayments.filter(p => p.groupId === vGroup.id), allUsers, groupsWithMembers).toLocaleString()} ብር</span>
                           </span>
                         </div>
                       </div>
@@ -6160,7 +6183,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="text-right mt-1">
                           <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mb-1">የተሰበሰበ ብር</p>
-                          <p className="text-xs font-black text-emerald-600 leading-none">{allPayments.filter(p => p.groupId === group.id && ['verified', 'active', 'approved', 'completed'].includes(p.status)).reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()} <span className="text-[8px] text-slate-500">ብር</span></p>
+                          <p className="text-xs font-black text-emerald-600 leading-none">{calculateTotalCollected(allPayments.filter(p => p.groupId === group.id), allUsers, groupsWithMembers).toLocaleString()} <span className="text-[8px] text-slate-500">ብር</span></p>
                         </div>
                       </div>
                     </div>
@@ -10093,7 +10116,7 @@ export default function AdminDashboard() {
                   </div>
                   <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">የተሰበሰበ መዋጮ (Collected)</p>
                   <p className="text-4xl font-black text-white tracking-tighter">
-                    {allPayments.filter(p => ['verified', 'active', 'approved', 'completed'].includes(p.status)).reduce((acc, curr) => acc + (curr.amount || 0), 0).toLocaleString()} <span className="text-xs">ETB</span>
+                    {calculateTotalCollected(allPayments, allUsers, groupsWithMembers).toLocaleString()} <span className="text-xs">ETB</span>
                   </p>
                   <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-[10px] font-bold text-emerald-100">
                      <CheckCircle size={14} /> Safe & Verified
@@ -10280,9 +10303,7 @@ export default function AdminDashboard() {
                      <tbody className="divide-y divide-slate-100">
                         {groups.filter(g => g.name.toLowerCase().includes(reportSearch.toLowerCase())).map((group, idx) => {
                            const groupMembers = allUsers.filter(u => u.groupId === group.id);
-                           const groupIncome = allPayments
-                              .filter(p => p.groupId === group.id && ['active', 'verified', 'completed', 'approved'].includes(p.status))
-                              .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+                           const groupIncome = calculateTotalCollected(allPayments.filter(p => p.groupId === group.id), allUsers, groupsWithMembers);
                            
                            return (
                               <motion.tr 
@@ -10601,7 +10622,7 @@ export default function AdminDashboard() {
                      <div>
                         <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">የተሰበሰበ ብር</p>
                         <div className="flex items-baseline gap-1">
-                          <p className="text-xl font-black text-slate-900">{allPayments.filter(p => ['verified', 'active', 'approved', 'completed'].includes(p.status)).reduce((acc, p) => acc + (p.amount || 0), 0).toLocaleString()}</p>
+                          <p className="text-xl font-black text-slate-900">{calculateTotalCollected(allPayments, allUsers, groupsWithMembers).toLocaleString()}</p>
                           <span className="text-[10px] font-bold text-slate-400">ብር</span>
                         </div>
                      </div>
