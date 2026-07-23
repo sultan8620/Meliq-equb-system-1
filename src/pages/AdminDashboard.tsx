@@ -117,6 +117,36 @@ const formatPaymentDate = (createdAt: any, lang: string = 'am') => {
   });
 };
 
+const formatPresenceTime = (ts: any, lang: string = 'am') => {
+  if (!ts) return lang === 'am' ? 'አልተመዘገበም' : 'Not recorded';
+  let date: Date;
+  if (typeof ts.toDate === 'function') {
+    date = ts.toDate();
+  } else if (ts.seconds !== undefined) {
+    date = new Date(ts.seconds * 1000);
+  } else if (ts._seconds !== undefined) {
+    date = new Date(ts._seconds * 1000);
+  } else if (ts instanceof Date) {
+    date = ts;
+  } else {
+    date = new Date(ts);
+  }
+  
+  if (isNaN(date.getTime())) {
+    return lang === 'am' ? 'አልተመዘገበም' : 'Not recorded';
+  }
+  
+  const dateStr = date.toLocaleDateString(lang === 'am' ? 'am-ET' : 'en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
+  const timeStr = date.toLocaleTimeString(lang === 'am' ? 'am-ET' : 'en-US', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  return `${dateStr}, ${timeStr}`;
+};
+
 const displayReceiptId = (payment: any) => {
   if (!payment) return '';
   if (payment.receiptId) return payment.receiptId;
@@ -1309,7 +1339,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const [insightFilter, setInsightFilter] = useState<{type: 'region' | 'status' | 'verification' | 'slots' | null, value: string | null}>({type: null, value: null});
+  const [insightFilter, setInsightFilter] = useState<{type: 'region' | 'status' | 'verification' | 'slots' | 'online' | null, value: string | null}>({type: null, value: null});
 
   const escapeRegExp = (string: string) => {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1373,6 +1403,7 @@ export default function AdminDashboard() {
       if (insightFilter.type === 'status') matchesInsight = u.status === insightFilter.value;
       if (insightFilter.type === 'verification') matchesInsight = insightFilter.value === 'verified' ? u.isVerified : !u.isVerified;
       if (insightFilter.type === 'slots') matchesInsight = u.slots > 1;
+      if (insightFilter.type === 'online') matchesInsight = u.isOnline === true;
 
       return matchesSearch && matchesRegionFilter && matchesInsight;
     }).sort((a, b) => {
@@ -4589,6 +4620,20 @@ export default function AdminDashboard() {
                                 <Clock size={8} className="text-amber-500" />
                                 <span className="text-[7px] font-black text-amber-700 uppercase tracking-widest">{getTimeSince(user.createdAt)}</span>
                               </div>
+                              <div className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg border ${user.isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${user.isOnline ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`}></span>
+                                <span className="text-[7px] font-black uppercase tracking-widest">{user.isOnline ? (language === 'am' ? 'ኦንላይን' : 'Online') : (language === 'am' ? 'ኦፍላይን' : 'Offline')}</span>
+                              </div>
+                           </div>
+                           <div className="mt-2 text-[8px] font-bold text-slate-600 space-y-0.5 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                              <div className="flex items-center justify-between">
+                                 <span className="text-slate-400 uppercase font-black">{language === 'am' ? 'ገባ፦' : 'In:'}</span>
+                                 <span className="font-black text-indigo-600">{formatPresenceTime(user.lastLogin, language)}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                 <span className="text-slate-400 uppercase font-black">{language === 'am' ? 'ወጣ፦' : 'Out:'}</span>
+                                 <span className="font-black text-slate-700">{formatPresenceTime(user.lastLogout || user.lastActive, language)}</span>
+                              </div>
                            </div>
                          </div>
                        </div>
@@ -4765,27 +4810,40 @@ export default function AdminDashboard() {
                     
                     <div className="grid grid-cols-2 gap-4 w-full lg:w-[450px]">
                       {[
-                        { label: 'ንቁ አባላት', value: allUsers.filter(u => u.status === 'active').length, sub: 'Active now', icon: Zap, color: 'text-amber-400', bg: 'bg-amber-400/5 border-amber-400/20' },
-                        { label: 'ያልተረጋገጡ', value: allUsers.filter(u => !u.isVerified).length, sub: 'Needs verification', icon: ShieldAlert, color: 'text-rose-400', bg: 'bg-rose-400/5 border-rose-400/20' },
-                        { label: 'አሸናፊዎች', value: allUsers.filter(u => u.wonDraw).length, sub: 'Draw winners', icon: Trophy, color: 'text-indigo-400', bg: 'bg-indigo-400/5 border-indigo-400/20' },
-                        { label: 'ጠቅላላ እጣ', value: allUsers.reduce((acc, curr) => acc + (curr.slots || 1), 0), sub: 'Total Slots', icon: Folder, color: 'text-emerald-400', bg: 'bg-emerald-400/5 border-emerald-400/20' }
-                      ].map((m, i) => (
-                        <div key={i} className={`p-5 rounded-[2rem] border ${m.bg} flex flex-col items-start justify-between min-h-[140px] hover:bg-white/5 transition-all duration-500 relative group/stat cursor-default`}>
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 mb-2 group-hover/stat:rotate-6 group-hover/stat:scale-110 transition-all ${m.color}`}>
-                             <m.icon size={20} />
-                          </div>
-                          <div>
-                            <p className="text-3xl font-black text-white leading-none mb-1 tracking-tighter tabular-nums">{m.value}</p>
-                            <div className="flex flex-col">
-                              <p className="text-[8px] font-black uppercase tracking-widest text-slate-200">{m.label}</p>
-                              <p className="text-[6px] font-bold uppercase tracking-[0.2em] text-slate-500 mt-0.5">{m.sub}</p>
+                        { label: 'ንቁ አባላት', value: allUsers.filter(u => u.status === 'active').length, sub: 'Active members', icon: Zap, color: 'text-amber-400', bg: 'bg-amber-400/5 border-amber-400/20', fType: 'status', fVal: 'active' },
+                        { label: 'ኦንላይን ያሉ', value: allUsers.filter(u => u.isOnline).length, sub: 'Online Now', icon: Activity, color: 'text-emerald-400', bg: 'bg-emerald-400/5 border-emerald-400/20', fType: 'online', fVal: 'online' },
+                        { label: 'ያልተረጋገጡ', value: allUsers.filter(u => !u.isVerified).length, sub: 'Needs verification', icon: ShieldAlert, color: 'text-rose-400', bg: 'bg-rose-400/5 border-rose-400/20', fType: 'verification', fVal: 'unverified' },
+                        { label: 'ጠቅላላ እጣ', value: allUsers.reduce((acc, curr) => acc + (curr.slots || 1), 0), sub: 'Total Slots', icon: Folder, color: 'text-indigo-400', bg: 'bg-indigo-400/5 border-indigo-400/20', fType: '', fVal: '' }
+                      ].map((m, i) => {
+                        const isActiveFilter = insightFilter.type === m.fType;
+                        return (
+                          <div 
+                            key={i} 
+                            onClick={() => {
+                              if (!m.fType) return;
+                              setInsightFilter(prev => prev.type === m.fType ? { type: null, value: null } : { type: m.fType as any, value: m.fVal });
+                            }}
+                            className={`p-5 rounded-[2rem] border ${m.bg} ${isActiveFilter ? 'ring-2 ring-emerald-400 bg-white/10' : ''} flex flex-col items-start justify-between min-h-[140px] hover:bg-white/10 transition-all duration-300 relative group/stat cursor-pointer`}
+                          >
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 mb-2 group-hover/stat:rotate-6 group-hover/stat:scale-110 transition-all ${m.color}`}>
+                               <m.icon size={20} />
+                            </div>
+                            <div>
+                              <p className="text-3xl font-black text-white leading-none mb-1 tracking-tighter tabular-nums flex items-center gap-2">
+                                {m.value}
+                                {m.fType === 'online' && <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping inline-block" />}
+                              </p>
+                              <div className="flex flex-col">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-slate-200">{m.label}</p>
+                                <p className="text-[6px] font-bold uppercase tracking-[0.2em] text-slate-500 mt-0.5">{m.sub}</p>
+                              </div>
+                            </div>
+                            <div className="absolute right-4 bottom-4 opacity-10 blur-[2px] group-hover:opacity-20 transition-opacity">
+                              <m.icon size={48} />
                             </div>
                           </div>
-                          <div className="absolute right-4 bottom-4 opacity-10 blur-[2px] group-hover:opacity-20 transition-opacity">
-                            <m.icon size={48} />
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                </div>
@@ -5142,6 +5200,10 @@ export default function AdminDashboard() {
                                     <span className={`w-1 h-1 rounded-full ${u.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
                                     {u.status === 'active' ? 'Active' : 'Pending'}
                                  </div>
+                                 <div className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest border flex items-center gap-1 ${u.isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${u.isOnline ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`}></span>
+                                    {u.isOnline ? (language === 'am' ? 'ኦንላይን' : 'Online') : (language === 'am' ? 'ኦፍላይን' : 'Offline')}
+                                 </div>
                               </div>
                            </div>
                         </div>
@@ -5166,6 +5228,19 @@ export default function AdminDashboard() {
                            </div>
                            <p className="text-[10px] font-black text-slate-800 tabular-nums">{formatSlots(u.slots)}</p>
                         </div>
+                        
+                        {/* Login & Logout Timestamps Card */}
+                        <div className="col-span-2 p-2.5 bg-slate-50 border border-slate-100 rounded-2xl text-[8px] font-bold text-slate-600 space-y-1 text-left">
+                           <div className="flex items-center justify-between">
+                              <span className="text-slate-400 font-black uppercase tracking-wider">{language === 'am' ? 'የገባበት ሰዓት:' : 'Login:'}</span>
+                              <span className="font-black text-indigo-600">{formatPresenceTime(u.lastLogin, language)}</span>
+                           </div>
+                           <div className="flex items-center justify-between">
+                              <span className="text-slate-400 font-black uppercase tracking-wider">{language === 'am' ? 'የወጣበት ሰዓት:' : 'Logout:'}</span>
+                              <span className="font-black text-slate-700">{formatPresenceTime(u.lastLogout || u.lastActive, language)}</span>
+                           </div>
+                        </div>
+
                         <div className={`col-span-2 p-2.5 rounded-2xl flex items-center justify-between transition-all ${selectedUserIds.includes(u.id) ? 'bg-indigo-900 shadow-xl' : 'bg-indigo-600 shadow-md group-hover:shadow-lg'}`}>
                            <div className="flex items-center gap-2.5">
                               <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white backdrop-blur-md">
@@ -5241,9 +5316,13 @@ export default function AdminDashboard() {
                               <div className={`px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest border ${u.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                                  {u.status === 'active' ? 'Active' : 'Pending'}
                               </div>
+                              <div className={`px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest border flex items-center gap-1 ${u.isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                                 <span className={`w-1.5 h-1.5 rounded-full ${u.isOnline ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`}></span>
+                                 {u.isOnline ? (language === 'am' ? 'ኦንላይን' : 'Online') : (language === 'am' ? 'ኦፍላይን' : 'Offline')}
+                              </div>
                               {u.isVerified && <CheckCircle size={14} className="text-emerald-500" />}
                            </div>
-                           <div className="flex items-center gap-4">
+                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                               <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
                                  <Phone size={10} /> {highlightText(u.phone || '', searchTerm)}
                               </p>
@@ -5255,6 +5334,13 @@ export default function AdminDashboard() {
                               <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
                                  <Folder size={10} /> {formatSlots(u.slots)} Slots
                               </p>
+                              <div className="h-1 w-1 rounded-full bg-slate-200"></div>
+                              <span className="text-[9px] font-black text-indigo-600">
+                                 {language === 'am' ? 'ገባ፦ ' : 'In: '}{formatPresenceTime(u.lastLogin, language)}
+                              </span>
+                              <span className="text-[9px] font-black text-slate-500">
+                                 {language === 'am' ? 'ወጣ፦ ' : 'Out: '}{formatPresenceTime(u.lastLogout || u.lastActive, language)}
+                              </span>
                            </div>
                         </div>
 
@@ -13223,6 +13309,48 @@ export default function AdminDashboard() {
                       <FileText size={18} />
                    </div>
                    <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">{language === 'am' ? 'ሙሉ የአባላት መረጃ' : 'Full Member Details'}</h4>
+                </div>
+
+                {/* Online Status & Login/Logout Activity Card */}
+                <div className="p-6 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-3xl space-y-4 shadow-xl border border-indigo-900/50">
+                   <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                         <Activity size={18} className="text-indigo-400 animate-pulse" />
+                         <span className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">
+                            {language === 'am' ? 'የኦንላይን ሁኔታ እና የሰዓት መዝገብ' : 'Online Presence & Time Log'}
+                         </span>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-md ${selectedUser.isOnline ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                         <span className={`w-2 h-2 rounded-full ${selectedUser.isOnline ? 'bg-white animate-ping' : 'bg-slate-500'}`}></span>
+                         {selectedUser.isOnline ? (language === 'am' ? 'ኦንላይን' : 'Online') : (language === 'am' ? 'ኦፍላይን' : 'Offline')}
+                      </span>
+                   </div>
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                      <div className="p-3 bg-white/5 border border-white/10 rounded-2xl">
+                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                            {language === 'am' ? 'የገባበት ሰዓት (Login)' : 'Last Login Time'}
+                         </p>
+                         <p className="text-xs font-black text-indigo-300">
+                            {formatPresenceTime(selectedUser.lastLogin, language)}
+                         </p>
+                      </div>
+                      <div className="p-3 bg-white/5 border border-white/10 rounded-2xl">
+                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                            {language === 'am' ? 'የወጣበት ሰዓት (Logout)' : 'Last Logout Time'}
+                         </p>
+                         <p className="text-xs font-black text-rose-300">
+                            {formatPresenceTime(selectedUser.lastLogout, language)}
+                         </p>
+                      </div>
+                      <div className="p-3 bg-white/5 border border-white/10 rounded-2xl">
+                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                            {language === 'am' ? 'የመጨረሻ እንቅስቃሴ' : 'Last Active Time'}
+                         </p>
+                         <p className="text-xs font-black text-emerald-300">
+                            {formatPresenceTime(selectedUser.lastActive, language)}
+                         </p>
+                      </div>
+                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

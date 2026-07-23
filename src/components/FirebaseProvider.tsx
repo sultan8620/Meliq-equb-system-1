@@ -31,23 +31,13 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       // Only update status if it's a new login or change
       if (currentUser && (!user || currentUser.uid !== user.uid)) {
         setLoading(true);
-        // Fetch current status before updating to avoid redundant writes if possible
         try {
           const userRef = doc(db, 'users', currentUser.uid);
-          const snap = await getDoc(userRef);
-          const currentData = snap.data();
-          
-          // Only update if not already online or last login was more than 1 hour ago
-          const lastLoginDate = currentData?.lastLogin?.toDate();
-          const oneHourAgo = new Date(Date.now() - 3600000);
-          
-          if (!currentData?.isOnline || !lastLoginDate || lastLoginDate < oneHourAgo) {
-            await updateDoc(userRef, {
-                isOnline: true,
-                lastLogin: serverTimestamp(),
-                lastActive: serverTimestamp()
-            }).catch(e => console.warn("Status update error (non-critical):", e.message));
-          }
+          await updateDoc(userRef, {
+            isOnline: true,
+            lastLogin: serverTimestamp(),
+            lastActive: serverTimestamp()
+          }).catch(e => console.warn("Status update error (non-critical):", e.message));
         } catch (err) {
           console.warn("Could not check user status before update:", err);
         }
@@ -55,9 +45,9 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         // User logged out - update status to offline
         try {
           await updateDoc(doc(db, 'users', user.uid), {
-              isOnline: false,
-              lastLogout: serverTimestamp(),
-              lastActive: serverTimestamp()
+            isOnline: false,
+            lastLogout: serverTimestamp(),
+            lastActive: serverTimestamp()
           }).catch(e => console.warn("Status update error (non-critical):", e.message));
         } catch (err) {
           console.warn("Could not set offline status:", err);
@@ -161,6 +151,38 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       if (unsubData) unsubData();
     };
   }, []);
+
+  // Heartbeat & Online Presence Tracking
+  useEffect(() => {
+    if (!user) return;
+
+    // Periodic heartbeat every 60s
+    const heartbeatInterval = setInterval(() => {
+      try {
+        updateDoc(doc(db, 'users', user.uid), {
+          isOnline: true,
+          lastActive: serverTimestamp()
+        }).catch(() => {});
+      } catch (e) {}
+    }, 60000);
+
+    const handleBeforeUnload = () => {
+      try {
+        updateDoc(doc(db, 'users', user.uid), {
+          isOnline: false,
+          lastLogout: serverTimestamp(),
+          lastActive: serverTimestamp()
+        }).catch(() => {});
+      } catch (e) {}
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [user]);
 
   const isSuperAdmin = user?.email?.toLowerCase() === 'sefadinkedir@gmail.com' || 
                        user?.email?.toLowerCase() === '0900000000@melikekub.com' || 
