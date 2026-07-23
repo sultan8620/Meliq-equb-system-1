@@ -604,17 +604,28 @@ export default function AdminDashboard() {
     let list = groups.map(group => {
       const groupUsers = allUsers.filter(u => u.groupId === group.id);
       
-      // Group users by phone number to handle joint slots (and additional share accounts) as one entry
-      const groupedByPhone: { [phone: string]: any[] } = {};
+      // Group users by phone number or jointId to handle joint slots as one entry
+      const groupedClusters: any[][] = [];
+      const processedIds = new Set<string>();
+
       groupUsers.forEach(u => {
-        const phone = u.phone || '';
-        if (!groupedByPhone[phone]) {
-          groupedByPhone[phone] = [];
-        }
-        groupedByPhone[phone].push(u);
+        const uId = u.id || u.uid;
+        if (processedIds.has(uId)) return;
+
+        const cluster = groupUsers.filter(other => {
+          const oId = other.id || other.uid;
+          if (processedIds.has(oId)) return false;
+          if (oId === uId) return true;
+          if (u.jointId && other.jointId === u.jointId) return true;
+          if (u.phone && other.phone && u.phone === other.phone) return true;
+          return false;
+        });
+
+        cluster.forEach(c => processedIds.add(c.id || c.uid));
+        groupedClusters.push(cluster);
       });
 
-      const mergedUsers = Object.values(groupedByPhone).map(accounts => {
+      const mergedUsers = groupedClusters.map(accounts => {
         if (accounts.length === 1) return accounts[0];
 
         // Find primary account (non-shared slots first, then the highest slot count)
@@ -627,6 +638,10 @@ export default function AdminDashboard() {
         });
 
         const primary = sorted[0];
+
+        // Combine full names for joint partners if names differ
+        const names = accounts.map(a => a.fullName).filter(Boolean).filter((v, i, self) => self.indexOf(v) === i);
+        const combinedName = names.join(' + ');
 
         // Calculate total slots sum
         const totalSlots = accounts.reduce((sum, u) => {
@@ -646,7 +661,8 @@ export default function AdminDashboard() {
 
         return {
           ...primary,
-          slots: totalSlots,
+          fullName: combinedName || primary.fullName,
+          slots: totalSlots >= 1 ? Math.round(totalSlots) : totalSlots,
           isGrouped: true,
           allAccounts: accounts,
           memberCode: combinedMemberCode

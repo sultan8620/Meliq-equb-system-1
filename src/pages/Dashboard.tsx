@@ -696,6 +696,72 @@ export default function Dashboard() {
     return associatedSlots.filter(s => (s.isSharedSlot === true || (s.slots && Number(s.slots) < 1)) && s.id !== user?.uid);
   }, [associatedSlots, userData?.phone, user?.uid]);
 
+  const groupedMembers = useMemo(() => {
+    const result: any[] = [];
+    const processedUids = new Set<string>();
+
+    members.forEach(m => {
+      if (processedUids.has(m.uid)) return;
+
+      // Check if this member is part of a joint slot or has partner(s)
+      if (m.isSharedSlot || m.jointId || (m.slots && Number(m.slots) < 1)) {
+        const partners = members.filter(p => 
+          p.uid !== m.uid && 
+          !processedUids.has(p.uid) &&
+          ((m.jointId && p.jointId && m.jointId === p.jointId) || 
+           (m.phone && p.phone && m.phone === p.phone) || 
+           (m.isSharedSlot && p.isSharedSlot))
+        );
+
+        if (partners.length > 0) {
+          const allPartners = [m, ...partners];
+          allPartners.forEach(p => processedUids.add(p.uid));
+
+          const isUserInGroup = allPartners.some(p => p.uid === user?.uid);
+          
+          let displayName = '';
+          if (isAdmin) {
+            displayName = allPartners.map(p => p.fullName).filter(Boolean).join(' + ');
+          } else if (isUserInGroup) {
+            displayName = language === 'am' ? 'እርስዎ + የጋራ አባል' : 'You + Shared Member';
+          } else {
+            displayName = language === 'am' ? 'የጋራ አባል (1 እጣ)' : 'Shared Member (1 Slot)';
+          }
+
+          const totalJointSlots = allPartners.reduce((acc, p) => {
+            let sVal = Number(p.slots) || 0.5;
+            if (p.isSharedSlot && p.splitFactor) {
+              sVal = 1 / Number(p.splitFactor);
+            }
+            return acc + sVal;
+          }, 0);
+
+          const hasWon = allPartners.some(p => p.wonDraw);
+          const isOnline = allPartners.some(p => p.isOnline);
+          const isActive = allPartners.every(p => p.status === 'active') ? 'active' : 'pending';
+
+          result.push({
+            ...m,
+            isJointGroup: true,
+            partners: allPartners,
+            fullName: displayName,
+            slots: totalJointSlots >= 1 ? 1 : totalJointSlots,
+            wonDraw: hasWon,
+            isOnline: isOnline,
+            status: isActive,
+            faceScan: allPartners.find(p => p.faceScan)?.faceScan || m.faceScan
+          });
+          return;
+        }
+      }
+
+      processedUids.add(m.uid);
+      result.push(m);
+    });
+
+    return result;
+  }, [members, isAdmin, user?.uid, language]);
+
   useEffect(() => {
     if (userData) {
       setIsAdmin(userData.role === 'admin' || userData.role === 'super_admin');
@@ -3714,10 +3780,10 @@ export default function Dashboard() {
                             const displaySlots = (() => {
                               if (!group || !userData) return [];
                               
-                              const myGroupSlots = associatedSlots.filter(s => s.groupId === group.id).map(s => ({
+                              return associatedSlots.filter(s => s.groupId === group.id).map(s => ({
                                 id: s.id,
                                 label: s.isSharedSlot 
-                                  ? (language === 'am' ? `የጋራ 1/${s.splitFactor || 2}` : `Joint 1/${s.splitFactor || 2}`)
+                                  ? (language === 'am' ? `የጋራ እጣ (1 እጣ)` : `Joint Slot (1 Slot)`)
                                   : (language === 'am' ? `ሙሉ` : `Full`),
                                 fullName: s.fullName,
                                 isSelf: s.id === userData.id,
@@ -3725,30 +3791,6 @@ export default function Dashboard() {
                                 memberCode: s.memberCode || '',
                                 jointId: s.jointId
                               }));
-
-                              const partnerSlots: any[] = [];
-                              myGroupSlots.filter(s => s.isShared).forEach(sharedSlot => {
-                                const actualPartners = sharedSlot.jointId
-                                  ? members.filter(m => m.jointId === sharedSlot.jointId && m.uid !== sharedSlot.id)
-                                  : members.filter(m => m.uid !== sharedSlot.id && m.isSharedSlot === true);
-                                  
-                                actualPartners.forEach(p => {
-                                  if (!myGroupSlots.some(s => s.id === p.uid) && !partnerSlots.some(s => s.id === p.uid)) {
-                                    partnerSlots.push({
-                                      id: p.uid,
-                                      label: isAdmin 
-                                         ? (language === 'am' ? `አጋር: ${p.fullName}` : `Partner: ${p.fullName}`)
-                                         : (language === 'am' ? 'የጋራ አባል' : 'Shared Partner'),
-                                       fullName: isAdmin ? p.fullName : (language === 'am' ? 'የጋራ አባል' : 'Shared Member'),
-                                      isSelf: false,
-                                      isShared: true,
-                                      memberCode: p.memberCode || ''
-                                    });
-                                  }
-                                });
-                              });
-                              
-                              return [...myGroupSlots, ...partnerSlots];
                             })();
 
                             return Array.from({ length: stepsPerRound }).map((_, sIdx) => {
