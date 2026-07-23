@@ -2327,6 +2327,33 @@ export default function Dashboard() {
     );
   }
 
+  if (userData.status === 'pending') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-white p-8 text-center max-w-md mx-auto">
+        <div className="w-24 h-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-8 shadow-lg shadow-amber-100">
+          <Clock size={48} />
+        </div>
+        <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-4 leading-tight">
+          {language === 'am' ? 'በግምገማ ላይ' : 'Under Review'}
+        </h2>
+        <p className="text-slate-500 font-medium mb-8 text-sm leading-relaxed">
+          {language === 'am'
+            ? 'ማመልከቻዎ በተሳካ ሁኔታ ገብቷል። በአሁኑ ጊዜ በአስተዳዳሪው እየታየ ነው። እባክዎ እስኪረጋገጥ ይጠብቁ።'
+            : 'Your application has been submitted successfully and is currently under review by the administrator. Please wait for approval.'}
+        </p>
+        <div className="flex flex-col gap-4 w-full">
+          <button
+            onClick={async () => { await signOut(auth); window.location.href = '/login'; }}
+            className="py-4.5 px-6 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-xl hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+          >
+            <LogOut size={16} />
+            {language === 'am' ? 'ውጣ (Logout)' : 'Logout'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[100dvh] overflow-hidden bg-[#f8fafc] flex font-sans">
       {/* Mobile Drawer Overlay */}
@@ -3283,25 +3310,7 @@ export default function Dashboard() {
                 </motion.div>
               )}
 
-              {userData.status === 'pending' && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-gold-50 border border-gold-100 p-8 rounded-[3rem] relative overflow-hidden"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-gold-50 rounded-2xl flex items-center justify-center text-gold-600 shrink-0">
-                      <Info size={24} />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-display font-black text-slate-900 mb-2">{t('dashboard.pending_title')}</h3>
-                      <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                        {t('dashboard.pending_desc')}
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+              
 
 
               <div className="glass-card p-10 rounded-[3rem] relative overflow-hidden bg-white/40 border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
