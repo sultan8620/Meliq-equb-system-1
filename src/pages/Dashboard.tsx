@@ -1599,6 +1599,35 @@ export default function Dashboard() {
     }
   };
 
+  const getReceiptDisplayName = (payment: any) => {
+    if (!payment) return '';
+    
+    // Find the user in members list
+    const memberObj = members.find(m => m.uid === payment.userId);
+    if (memberObj && (memberObj.isSharedSlot || memberObj.jointId || (memberObj.slots && Number(memberObj.slots) < 1))) {
+       const partners = members.filter(p => 
+          ((memberObj.jointId && p.jointId === memberObj.jointId) || 
+           (memberObj.phone && p.phone === memberObj.phone) || 
+           (memberObj.isSharedSlot && p.isSharedSlot))
+        );
+        const allPartners = Array.from(new Set([memberObj, ...partners]));
+        const combinedName = allPartners.map(p => p.fullName).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' + ');
+        
+        const isUserInGroup = allPartners.some(p => p.uid === user?.uid);
+        if (!isAdmin && !isUserInGroup) {
+           return language === 'am' ? 'የጋራ አባል' : 'Shared Member';
+        }
+        
+        return combinedName || payment.userName || userData?.fullName;
+    }
+    
+    if (!isAdmin && payment.userId !== user?.uid && (payment.isShared || payment.isSharedSlot)) {
+      return language === 'am' ? 'የጋራ አባል' : 'Shared Member';
+    }
+    
+    return payment.userName || userData?.fullName || (language === 'am' ? 'አባል' : 'Member');
+  };
+
   const handleDownloadReceipt = (payment: any) => {
     setSelectedPayment(payment);
     setShowReceiptModal(true);
@@ -6759,9 +6788,7 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የአባል ስም' : 'Member Name'}</p>
                       <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">
-                        {(!isAdmin && selectedPayment.userId !== user?.uid && selectedPayment.userId !== userData?.id && (selectedPayment.isShared || selectedPayment.isSharedSlot))
-                          ? (language === 'am' ? 'የጋራ አባል' : 'Shared Member')
-                          : (selectedPayment.userName || userData?.fullName)}
+                        {getReceiptDisplayName(selectedPayment)}
                       </p>
                       <p className="text-[9px] font-black text-indigo-600 font-mono mt-0.5 leading-none">
                         {language === 'am' ? 'መለያ: ' : 'ID: '}{selectedPayment.memberCode || userData?.memberCode || `M-${(selectedPayment.userId || '').slice(-5).toUpperCase()}`}
@@ -6809,9 +6836,7 @@ export default function Dashboard() {
                       <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
                         {selectedPayment.type === 'manual_contribution'
                           ? (language === 'am' ? 'አስተዳዳሪ (የመዘገበው)' : 'Admin Recorded')
-                          : (!isAdmin && selectedPayment.userId !== user?.uid && selectedPayment.userId !== userData?.id && (selectedPayment.isShared || selectedPayment.isSharedSlot))
-                            ? (language === 'am' ? 'የጋራ አባል' : 'Shared Member')
-                            : (selectedPayment.userName || userData?.fullName || (language === 'am' ? 'አባል' : 'Member'))}
+                          : getReceiptDisplayName(selectedPayment)}
                       </p>
                     </div>
                     <div>

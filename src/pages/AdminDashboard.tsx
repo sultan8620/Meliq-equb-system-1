@@ -3863,6 +3863,24 @@ export default function AdminDashboard() {
     }
   };
 
+  const getAdminReceiptDisplayName = (payment: any) => {
+    if (!payment) return '';
+    const memberObj = allUsers.find(u => u.id === payment.userId || u.uid === payment.userId);
+    if (memberObj && (memberObj.isSharedSlot || memberObj.jointId || (memberObj.slots && Number(memberObj.slots) < 1))) {
+       const partners = allUsers.filter(p => 
+          p.groupId === memberObj.groupId && 
+          ((memberObj.jointId && p.jointId === memberObj.jointId) || 
+           (memberObj.phone && p.phone === memberObj.phone) || 
+           (memberObj.isSharedSlot && p.isSharedSlot))
+        );
+        const allPartners = Array.from(new Set([memberObj, ...partners]));
+        const combinedName = allPartners.map(p => p.fullName).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' + ');
+        return combinedName || payment.userName || memberObj.fullName || 'Unknown Member';
+    }
+    const adminObj = admins.find(a => a.id === payment.userId || a.uid === payment.userId);
+    return payment.userName || memberObj?.fullName || adminObj?.fullName || 'N/A';
+  };
+
   const handleDownloadReceipt = (payment: any) => {
     setSelectedPayment(payment);
     setShowReceiptModal(true);
@@ -13571,7 +13589,7 @@ export default function AdminDashboard() {
                     <div>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የአባል ስም' : 'Member Name'}</p>
                       <p className="text-xs font-black text-slate-900 uppercase leading-tight truncate">
-                        {selectedPayment.userName || (allUsers.find(u => u.id === selectedPayment.userId || u.uid === selectedPayment.userId) || admins.find(a => a.id === selectedPayment.userId || a.uid === selectedPayment.userId))?.fullName || 'N/A'}
+                        {getAdminReceiptDisplayName(selectedPayment)}
                       </p>
                       {(() => {
                         const matchedUser = allUsers.find(u => u.id === selectedPayment.userId || u.uid === selectedPayment.userId) || admins.find(a => a.id === selectedPayment.userId || a.uid === selectedPayment.userId);
@@ -13625,7 +13643,7 @@ export default function AdminDashboard() {
                       <p className="text-[10px] font-black text-slate-900 font-mono leading-tight">
                         {selectedPayment.type === 'manual_contribution'
                           ? (language === 'am' ? 'አስተዳዳሪ (የመዘገበው)' : 'Admin Recorded')
-                          : (selectedPayment.userName || (allUsers.find(u => u.id === selectedPayment.userId || u.uid === selectedPayment.userId) || admins.find(a => a.id === selectedPayment.userId || a.uid === selectedPayment.userId))?.fullName || (language === 'am' ? 'አባል' : 'Member'))}
+                          : getAdminReceiptDisplayName(selectedPayment)}
                       </p>
                     </div>
                     <div>
