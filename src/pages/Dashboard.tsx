@@ -219,6 +219,17 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
   const [selectedDraw, setSelectedDraw] = useState<any>(null);
 
   const totalDistributed = winners.reduce((acc, curr) => acc + (parseInt(curr.amount) || 0), 0);
+  const isAdminUser = userData?.role === 'admin' || userData?.role === 'super_admin' || userData?.isAdmin === true;
+
+  const getWinnerDisplayName = (w: any) => {
+    if (!w) return 'Anonymous';
+    const isShared = w.isSharedSlot === true || w.isShared === true || (w.slots && Number(w.slots) < 1);
+    const isSelf = w.userId === userData?.id || w.uid === userData?.id || w.winnerId === userData?.id;
+    if (!isAdminUser && isShared && !isSelf) {
+      return language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Member (Admin Only)';
+    }
+    return w.name || 'Anonymous';
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-10 pb-20 relative">
@@ -543,7 +554,7 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
                         </div>
                      </div>
                      <div>
-                        <h5 className="font-display font-black text-slate-900 uppercase tracking-tight text-xl mb-1 leading-none">{winner.name}</h5>
+                        <h5 className="font-display font-black text-slate-900 uppercase tracking-tight text-xl mb-1 leading-none">{getWinnerDisplayName(winner)}</h5>
                         <div className="flex items-center gap-2">
                            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest italic">{language === 'am' ? 'ባለድለኛ አሸናፊ' : 'Verified Winner'}</span>
@@ -631,10 +642,10 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
                  winners.slice(0, 5).map((winner, i) => (
                    <div key={winner.id || i} className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all cursor-default">
                       <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-[10px] font-bold text-gold-400 border border-white/10">
-                         {winner.name ? winner.name.split(' ').map((n) => n[0]).join('') : 'W'}
+                         {getWinnerDisplayName(winner) ? getWinnerDisplayName(winner).split(' ').map((n: string) => n[0]).join('') : 'W'}
                       </div>
                       <div className="flex-1">
-                         <p className="text-[11px] font-black">{winner.name}</p>
+                         <p className="text-[11px] font-black">{getWinnerDisplayName(winner)}</p>
                          <p className="text-[10px] text-slate-400">
                            {language === 'am'
                              ? `ሳምንት #${winner.week || '---'} እጣ አሸንፏል - ${winner.amount ? winner.amount.toLocaleString() : '50,000'} ETB`
@@ -2869,7 +2880,11 @@ export default function Dashboard() {
                     </div>
                   </div>
                   
-                  <h3 className="text-2xl font-display font-black text-slate-900 tracking-tight text-center mb-1">{selectedMemberModal.fullName}</h3>
+                  <h3 className="text-2xl font-display font-black text-slate-900 tracking-tight text-center mb-1">
+                    {(!isAdmin && selectedMemberModal.uid !== user?.uid && (selectedMemberModal.isSharedSlot || (selectedMemberModal.slots && Number(selectedMemberModal.slots) < 1) || Boolean(selectedMemberModal.jointId)))
+                      ? (language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Member (Admin Only)')
+                      : selectedMemberModal.fullName}
+                  </h3>
                   <div className="flex flex-col items-center">
                     <p className="text-slate-400 font-bold tracking-widest text-[10px] uppercase bg-slate-50 px-4 py-1.5 rounded-full border border-slate-100 mb-2">
                       {selectedMemberModal.uid === user?.uid 
@@ -3328,6 +3343,11 @@ export default function Dashboard() {
                        <span className="px-4 py-2 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-100 shadow-sm">
                          {language === 'am' ? 'የእቁብ መረጃ' : 'Community Info'}
                        </span>
+                       {(userData?.isSharedSlot || (userData?.slots && Number(userData?.slots) < 1)) && (
+                         <span className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-md flex items-center gap-1.5">
+                           <Layers size={14} /> {language === 'am' ? 'የጋራ እጣ (1 ሙሉ እጣ)' : 'Joint Slot (1 Combined Slot)'}
+                         </span>
+                       )}
                     </div>
                   </div>
                   <button 
@@ -3442,6 +3462,18 @@ export default function Dashboard() {
                       </div>
                     </div>
 
+                    {/* Notice for Shared Slots */}
+                    <div className="bg-white/10 border border-white/15 rounded-2xl p-4 flex items-center gap-3 text-white mb-6">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-400/20 flex items-center justify-center text-indigo-300 shrink-0">
+                        <Layers size={18} />
+                      </div>
+                      <p className="text-xs font-bold text-indigo-100">
+                        {language === 'am'
+                          ? 'ማሳሰቢያ፦ የጋራ የተጋሩት አባሎች በአንድ እጣ እንደ 1 (አንድ) ሙሉ እጣ በምድባቸው አብረው ተያይዘው የሚቆጠሩ ናቸው።'
+                          : 'Notice: Shared members are linked and counted as 1 single combined slot within their respective group.'}
+                      </p>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {jointSlots.map((slot) => {
                         const targetGroup = allGroups.find(g => g.id === slot.groupId);
@@ -3487,9 +3519,9 @@ export default function Dashboard() {
                                     <div key={partner.id} className="flex items-center justify-between text-xs font-medium text-slate-300">
                                       <span className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                        {partner.fullName}
+                                        {isAdmin ? partner.fullName : (language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Partner (Admin Only)')}
                                       </span>
-                                      <span className="text-slate-400 font-mono text-[11px]">{partner.phone}</span>
+                                      <span className="text-slate-400 font-mono text-[11px]">{isAdmin ? partner.phone : '···'}</span>
                                     </div>
                                   ))}
                               </div>
@@ -3657,6 +3689,25 @@ export default function Dashboard() {
                           </div>
                         </div>
 
+                        {/* Notice for Shared / Joint Slots in Group Tracker */}
+                        {(userData?.isSharedSlot || (userData?.slots && Number(userData?.slots) < 1) || associatedSlots.some(s => s.groupId === group.id && (s.isSharedSlot || s.slots < 1))) && (
+                          <div className="bg-gradient-to-r from-indigo-50 to-slate-50 border border-indigo-200/80 rounded-2xl p-4 flex items-start gap-3.5 shadow-sm mb-4">
+                            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                              <Layers size={18} />
+                            </div>
+                            <div className="text-xs leading-relaxed min-w-0">
+                              <span className="font-black text-indigo-950 uppercase tracking-wider block text-[11px] mb-0.5">
+                                {language === 'am' ? 'የጋራ እጣዎች በምድቡ ውስጥ - ማሳሰቢያ' : 'Joint Slots Notice in Group'}
+                              </span>
+                              <p className="font-bold text-slate-700">
+                                {language === 'am'
+                                  ? 'በዚህ ምድብ ውስጥ የተጋሩት አባሎች በአንድ ላይ እንደ 1 (አንድ) ሙሉ እጣ በምድቡ ይቆጠራሉ። በእጣ እድል እና በክፍያ መከታተያ ላይ ተያይዘው በአንድ ላይ የሚሰሩ ናቸው።'
+                                  : 'In this group, shared members function together as 1 (one) single combined slot for draws and payment tracking.'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Calendar Day Grid */}
                         <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3.5">
                           {(() => {
@@ -3685,8 +3736,10 @@ export default function Dashboard() {
                                   if (!myGroupSlots.some(s => s.id === p.uid) && !partnerSlots.some(s => s.id === p.uid)) {
                                     partnerSlots.push({
                                       id: p.uid,
-                                      label: language === 'am' ? `አጋር: ${p.fullName}` : `Partner: ${p.fullName}`,
-                                      fullName: p.fullName,
+                                      label: isAdmin 
+                                         ? (language === 'am' ? `አጋር: ${p.fullName}` : `Partner: ${p.fullName}`)
+                                         : (language === 'am' ? 'የጋራ አባል' : 'Shared Partner'),
+                                       fullName: isAdmin ? p.fullName : (language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Partner (Admin Only)'),
                                       isSelf: false,
                                       isShared: true,
                                       memberCode: p.memberCode || ''
@@ -3762,8 +3815,8 @@ export default function Dashboard() {
                                         <div key={idx} className="flex items-center justify-between gap-2 text-[10px] font-bold">
                                           <div className="flex items-center gap-1.5 min-w-0">
                                             <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${sStatus.isPaidActive ? 'bg-emerald-500' : sStatus.isPaidPending ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} />
-                                            <span className={`truncate text-slate-700 ${sStatus.isSelf ? 'font-black underline decoration-indigo-500' : ''}`} title={sStatus.fullName}>
-                                              {sStatus.isSelf ? (language === 'am' ? 'የእኔ' : 'Me') : sStatus.fullName.split(' ')[0]} ({sStatus.label})
+                                            <span className={`truncate text-slate-700 ${sStatus.isSelf ? 'font-black underline decoration-indigo-500' : ''}`} title={isAdmin || sStatus.isSelf ? sStatus.fullName : (language === 'am' ? 'የጋራ አባል' : 'Shared Member')}>
+                                              {sStatus.isSelf ? (language === 'am' ? 'የእኔ' : 'Me') : (isAdmin ? sStatus.fullName.split(' ')[0] : (language === 'am' ? 'የጋራ አባል' : 'Shared Member'))} ({sStatus.label})
                                             </span>
                                           </div>
                                           <span className={`text-[10px] uppercase font-black tracking-tight shrink-0 ${sStatus.isPaidActive ? 'text-emerald-600' : sStatus.isPaidPending ? 'text-amber-500' : 'text-slate-400'}`}>
@@ -4067,7 +4120,9 @@ export default function Dashboard() {
                       
                       {/* Name */}
                       <h4 className="text-lg font-black tracking-tight text-slate-900 mb-1 text-center truncate w-full px-2">
-                        {member.fullName}
+                        {(!isAdmin && member.uid !== user?.uid && (member.isSharedSlot === true || (member.slots && Number(member.slots) < 1) || Boolean(member.jointId)))
+                          ? (language === 'am' ? 'የጋራ አባል (ለአድሚን ብቻ)' : 'Shared Member (Admin Only)')
+                          : member.fullName}
                       </h4>
                       
                       {/* Sub-label */}
@@ -4093,6 +4148,11 @@ export default function Dashboard() {
                             <Layers size={14} className="text-slate-400 mb-1" />
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'እጣ ብዛት' : 'Slots'}</span>
                             <span className="text-base font-black text-slate-900">{formatSlots(member.slots)}</span>
+                             {(member.isSharedSlot === true || (member.slots && Number(member.slots) < 1)) && (
+                               <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-full mt-1">
+                                 {language === 'am' ? 'የጋራ እጣ (1 እጣ)' : 'Joint (1 Slot)'}
+                               </span>
+                             )}
                          </div>
                          <div className="w-px h-8 bg-slate-100 mx-2" />
                          <div className="flex flex-col items-center flex-1">
