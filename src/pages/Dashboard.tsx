@@ -154,6 +154,8 @@ interface Group {
   cbeAccount?: string;
   telebirrAccount?: string;
   boaAccount?: string;
+  winnerVisibilityMode?: 'all' | 'selected' | 'none';
+  allowedWinnerViewerIds?: string[];
 }
 
 interface GroupMember {
@@ -173,6 +175,7 @@ interface GroupMember {
   isSharedSlot?: boolean;
   splitFactor?: number;
   jointId?: string;
+  isOnline?: boolean;
 }
 
 const RULES_CONTENT = [

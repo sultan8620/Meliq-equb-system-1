@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, updatePassword, createUserWithEmailAndPassword, signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, updatePassword, createUserWithEmailAndPassword, signInWithPhoneNumber, RecaptchaVerifier, signOut } from 'firebase/auth';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mail, Lock, LogIn, Chrome, ArrowRight, Phone, CheckCircle, ChevronLeft, ChevronRight, ShieldCheck as ShieldIcon, RefreshCw, Hash, Eye, EyeOff, MessageCircle, AlertTriangle } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
@@ -57,14 +57,29 @@ export default function Login() {
           } catch (e) {
             console.warn("Error double checking fresh status:", e);
           }
-          navigate('/pending-approval');
+          await signOut(auth).catch(() => {});
+          setError(
+            language === 'am'
+              ? 'መለያዎ ገና በአድሚን አልፀደቀም! አድሚን መረጃዎን ገምግሞ ሲያፀድቅልዎት ብቻ ነው መግባት የሚችሉት።'
+              : 'Your account is not approved by admin yet! You can only log in after the admin reviews and approves your account.'
+          );
+          navigate('/pending-approval', {
+            state: {
+              registeredInfo: {
+                name: userData.fullName,
+                phone: userData.phone,
+                group: userData.group || userData.groupId,
+                memberCode: userData.memberCode
+              }
+            }
+          });
         };
         checkFreshStatus();
       } else {
         navigate('/dashboard');
       }
     }
-  }, [user, userData, isAdmin, authLoading, navigate]);
+  }, [user, userData, isAdmin, authLoading, navigate, language]);
 
   // Validate phone number or email inputs
   const isEmailInput = phoneNumber.trim().includes('@');
@@ -457,6 +472,23 @@ export default function Login() {
       } else {
         const data = userDocData;
         if (data && (data.status === 'pending' || data.status === 'rejected')) {
+          await signOut(auth).catch(() => {});
+          sessionStorage.removeItem('is_active_session');
+          
+          if (data.status === 'rejected') {
+            setError(
+              language === 'am'
+                ? 'የምዝገባ ጥያቄዎ በአድሚን ውድቅ ተደርጓል። እባክዎ አድሚኑን ያነጋግሩ።'
+                : 'Your registration request was rejected by admin. Please contact the administrator.'
+            );
+          } else {
+            setError(
+              language === 'am'
+                ? 'መለያዎ ገና በአድሚን አልፀደቀም! አድሚን መረጃዎን ገምግሞ ሲያፀድቅልዎት ብቻ ነው መግባት የሚችሉት።'
+                : 'Your account is not approved by admin yet! You can only log in after the admin reviews and approves your account.'
+            );
+          }
+          
           navigate('/pending-approval', {
             state: {
               registeredInfo: {
@@ -540,10 +572,17 @@ export default function Login() {
       }
       
       // Navigate after a tiny delay to allow Firestore snapshots in FirebaseProvider to trigger
-      setTimeout(() => {
+      setTimeout(async () => {
         if (isAdmin) {
           navigate('/admin');
         } else if (existingData && (existingData.status === 'pending' || existingData.status === 'rejected')) {
+          await signOut(auth).catch(() => {});
+          sessionStorage.removeItem('is_active_session');
+          setError(
+            language === 'am'
+              ? 'መለያዎ ገና በአድሚን አልፀደቀም! አድሚን መረጃዎን ገምግሞ ሲያፀድቅልዎት ብቻ ነው መግባት የሚችሉት።'
+              : 'Your account is not approved by admin yet! You can only log in after the admin reviews and approves your account.'
+          );
           navigate('/pending-approval', {
             state: {
               registeredInfo: {
