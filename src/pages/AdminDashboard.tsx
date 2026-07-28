@@ -212,6 +212,16 @@ export const normalizePhone = (phone: string) => {
   return clean;
 };
 
+export const getStepsPerRound = (type: string) => {
+  const t = (type || 'weekly').toLowerCase();
+  if (t === 'daily') return 10;
+  if (t === 'fivedays') return 5;
+  if (t === 'tendays') return 10;
+  if (t === 'weekly') return 7;
+  if (t === 'monthly') return 10;
+  return 10;
+};
+
 export default function AdminDashboard() {
   const { user, isSuperAdmin, userData } = useAuth();
   const { language, setLanguage, t } = useLanguage();
@@ -1071,6 +1081,14 @@ export default function AdminDashboard() {
           winner = eligible[randomIndex];
         } else {
           winner = selectedDrawGroup.members.find((m: any) => m.id === winnerIdOrMode);
+          if (winner && ineligibleMembers.some((im: any) => im.id === winner.id) && !includeIneligible) {
+            triggerSuccess(
+              language === 'am' ? 'ማሳወቂያ' : 'Notice',
+              language === 'am' ? 'ይህ አባል ጎዶሎ ቀን ወይም ያልተከፈለ ክፍያ ስላለበት በእጣው ውስጥ አይሳተፍም!' : 'This member has incomplete payments or penalties and is excluded from the draw!'
+            );
+            setDrawStage('select');
+            return;
+          }
         }
 
         if (!winner) {
@@ -4108,13 +4126,15 @@ export default function AdminDashboard() {
     const groupPenalties = penalties.filter((p: any) => p.groupId === group.id);
     const unpaidMemberIds = new Set(groupPenalties.map((p: any) => p.userId));
     
-    // Check missing days based on payment count vs current round
+    // Check missing days based on payment count vs current round required days
     const currentRound = group.currentRound || 1;
+    const stepsPerRound = getStepsPerRound(group.type);
+    const requiredDays = currentRound * stepsPerRound;
     const missingDaysIds = new Set();
     group.members.forEach((m: any) => {
-       const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === group.id && ['verified', 'active', 'approved'].includes(p.status));
+       const userPayments = allPayments.filter(p => (p.userId === m.id || p.userId === m.uid) && p.groupId === group.id && ['verified', 'active', 'approved', 'completed'].includes(p.status));
        const paidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
-       if (paidDays < currentRound) { // They must have at least currentRound approved payments to be eligible!
+       if (paidDays < requiredDays) { // If they have missing days (even 1 day short of requiredDays for current round)
          missingDaysIds.add(m.id);
        }
     });
@@ -9426,13 +9446,15 @@ export default function AdminDashboard() {
                   const groupPenalties = penalties.filter((p: any) => p.groupId === group.id);
                   const unpaidMemberIds = new Set(groupPenalties.map((p: any) => p.userId));
                   const currentRound = group.currentRound || 1;
+                  const stepsPerRound = getStepsPerRound(group.type);
+                  const requiredDays = currentRound * stepsPerRound;
                   const missingDaysIds = new Set();
                   
                   if (group.members) {
                     group.members.forEach((m: any) => {
-                       const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === group.id && ['verified', 'active', 'approved'].includes(p.status));
+                       const userPayments = allPayments.filter(p => (p.userId === m.id || p.userId === m.uid) && p.groupId === group.id && ['verified', 'active', 'approved', 'completed'].includes(p.status));
                        const paidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
-                       if (paidDays < currentRound) {
+                       if (paidDays < requiredDays) {
                          missingDaysIds.add(m.id);
                        }
                     });
@@ -13011,9 +13033,11 @@ export default function AdminDashboard() {
                                     const hasPendingPenalties = penalties.some((p: any) => p.userId === m.id && p.groupId === selectedDrawGroup.id);
                                     
                                     const currentRound = selectedDrawGroup.currentRound || 1;
-                                    const userPayments = allPayments.filter(p => p.userId === m.id && p.groupId === selectedDrawGroup.id && ['verified', 'active', 'approved'].includes(p.status));
+                                    const stepsPerRound = getStepsPerRound(selectedDrawGroup.type);
+                                    const requiredDays = currentRound * stepsPerRound;
+                                    const userPayments = allPayments.filter(p => (p.userId === m.id || p.userId === m.uid) && p.groupId === selectedDrawGroup.id && ['verified', 'active', 'approved', 'completed'].includes(p.status));
                                     const paidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
-                                    const hasMissingDays = paidDays < currentRound;
+                                    const hasMissingDays = paidDays < requiredDays;
 
                                     let reasonAm = "የማይሳተፍ";
                                     let reasonEn = "Excluded";
@@ -13024,8 +13048,8 @@ export default function AdminDashboard() {
                                       reasonAm = "ያልተከፈለ ቅጣት አለበት";
                                       reasonEn = "Unpaid Penalty";
                                     } else if (hasMissingDays) {
-                                      reasonAm = "ክፍያ ጎዶሎ (ጎዶሎ ቀን)";
-                                      reasonEn = "Missing Payment";
+                                      reasonAm = `ክፍያ ጎዶሎ (${paidDays}/${requiredDays} ቀን)`;
+                                      reasonEn = `Incomplete (${paidDays}/${requiredDays} Days)`;
                                     }
 
                                     return (
