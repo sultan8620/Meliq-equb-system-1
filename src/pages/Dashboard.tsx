@@ -78,7 +78,7 @@ const Magnetic = ({ children, className }: { children: React.ReactNode, classNam
     </motion.div>
   );
 };
-import { Users, Image as ImageIcon, Paperclip, PhoneCall, Video as VideoCall, FileDown, DollarSign, Calendar, LogOut, ShieldCheck, User as UserIcon, Clock, CheckCircle, Info, CreditCard, History, Trophy, ArrowUpRight, Wallet, MessageCircle, Send, Video, Mic, Square, FileText, Camera, MapPin, Phone as PhoneIcon, Play, ChevronRight, Bell, Edit, Trash2, Upload, XCircle, Gift, HelpCircle, Settings, AlertOctagon, LayoutDashboard, ShoppingBag, Layers, Search, Hash, Copy, UserCheck, FileSignature, Download, Printer, AlertTriangle, X, Shield, Zap, Share2, Lightbulb, Home, MessageSquare, Menu } from 'lucide-react';
+import { Users, Image as ImageIcon, Paperclip, PhoneCall, Video as VideoCall, FileDown, DollarSign, Calendar, LogOut, ShieldCheck, User as UserIcon, Clock, CheckCircle, Info, CreditCard, History, Trophy, ArrowUpRight, Wallet, MessageCircle, Send, Video, Mic, Square, FileText, Camera, MapPin, Phone as PhoneIcon, Play, ChevronRight, Bell, Edit, Trash2, Upload, XCircle, Gift, HelpCircle, Settings, AlertOctagon, LayoutDashboard, ShoppingBag, Layers, Search, Hash, Copy, UserCheck, FileSignature, Download, Printer, AlertTriangle, X, Shield, Zap, Share2, Lightbulb, Home, MessageSquare, Menu, Eye, EyeOff, Lock } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore';
 import { ProfileEditFields } from '../components/MemberProfileEdit';
@@ -221,14 +221,36 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
   const totalDistributed = winners.reduce((acc, curr) => acc + (parseInt(curr.amount) || 0), 0);
   const isAdminUser = userData?.role === 'admin' || userData?.role === 'super_admin' || userData?.isAdmin === true;
 
+  const canUserSeeWinner = (w: any) => {
+    if (!w) return true;
+    if (isAdminUser) return true;
+    const currentUserId = userData?.id || userData?.uid;
+    const isSelf = w.winnerId === currentUserId || w.userId === currentUserId || w.uid === currentUserId || w.id === currentUserId;
+    if (isSelf) return true;
+
+    const targetGroup = (group && (group.id === w.groupId || group.id === w.group?.id)) ? group : (w.group || group);
+    const mode = targetGroup?.winnerVisibilityMode || w.winnerVisibilityMode || 'all';
+    const allowedIds = targetGroup?.allowedWinnerViewerIds || w.allowedWinnerViewerIds || [];
+
+    if (mode === 'all') return true;
+    if (mode === 'none') return false;
+    if (mode === 'selected') {
+      return Array.isArray(allowedIds) && allowedIds.includes(currentUserId);
+    }
+    return true;
+  };
+
   const getWinnerDisplayName = (w: any) => {
     if (!w) return 'Anonymous';
+    if (!canUserSeeWinner(w)) {
+      return language === 'am' ? '🔒 ምስጢራዊ አሸናፊ (ተሸፍኗል)' : '🔒 Confidential Winner (Hidden)';
+    }
     const isShared = w.isSharedSlot === true || w.isShared === true || (w.slots && Number(w.slots) < 1);
     const isSelf = w.userId === userData?.id || w.uid === userData?.id || w.winnerId === userData?.id;
     if (!isAdminUser && isShared && !isSelf) {
       return language === 'am' ? 'የጋራ አባል' : 'Shared Member';
     }
-    return w.name || 'Anonymous';
+    return w.winnerName || w.name || 'Anonymous';
   };
 
   return (
@@ -548,7 +570,7 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
                   
                   <div className="flex items-center gap-6 mb-10 relative z-10">
                      <div className="w-20 h-20 bg-slate-900 rounded-[2rem] flex items-center justify-center text-gold-500 shadow-2xl relative">
-                        <UserIcon size={32} />
+                        {canUserSeeWinner(winner) ? <UserIcon size={32} /> : <EyeOff size={32} className="text-amber-400" />}
                         <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 text-white rounded-full flex items-center justify-center border-4 border-white shadow-lg">
                            <Trophy size={14} />
                         </div>
@@ -556,8 +578,12 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
                      <div>
                         <h5 className="font-display font-black text-slate-900 uppercase tracking-tight text-xl mb-1 leading-none">{getWinnerDisplayName(winner)}</h5>
                         <div className="flex items-center gap-2">
-                           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                           <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest italic">{language === 'am' ? 'ባለድለኛ አሸናፊ' : 'Verified Winner'}</span>
+                           <span className={`w-2 h-2 rounded-full animate-pulse ${canUserSeeWinner(winner) ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                           <span className={`text-[9px] font-black uppercase tracking-widest italic ${canUserSeeWinner(winner) ? 'text-emerald-600' : 'text-rose-500'}`}>
+                              {canUserSeeWinner(winner) 
+                                ? (language === 'am' ? 'ባለድለኛ አሸናፊ' : 'Verified Winner') 
+                                : (language === 'am' ? '🔒 ምስጢራዊ እጣ' : '🔒 Confidential Draw')}
+                           </span>
                         </div>
                      </div>
                   </div>
@@ -4227,11 +4253,41 @@ export default function Dashboard() {
                          </div>
                          <div className="w-px h-8 bg-slate-100 mx-2" />
                          <div className="flex flex-col items-center flex-1">
-                            <Trophy size={14} className={member.wonDraw ? "text-amber-500 mb-1" : "text-slate-300 mb-1"} />
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'አሸናፊ' : 'Winner'}</span>
-                            <span className={`text-sm font-black ${member.wonDraw ? "text-amber-600" : "text-slate-900"}`}>
-                               {member.wonDraw ? (language === 'am' ? 'አዎ' : 'Yes') : (language === 'am' ? 'አይ' : 'No')}
-                            </span>
+                             {member.wonDraw ? (
+                               (() => {
+                                 const isWinVisible = (() => {
+                                   if (isAdmin) return true;
+                                   const curId = user?.uid || userData?.id;
+                                   if (member.uid === curId || member.id === curId) return true;
+                                   const mode = group?.winnerVisibilityMode || 'all';
+                                   const allowed = group?.allowedWinnerViewerIds || [];
+                                   if (mode === 'all') return true;
+                                   if (mode === 'none') return false;
+                                   if (mode === 'selected') return Array.isArray(allowed) && allowed.includes(curId);
+                                   return true;
+                                 })();
+
+                                 return isWinVisible ? (
+                                   <>
+                                     <Trophy size={14} className="text-amber-500 mb-1" />
+                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'አሸናፊ' : 'Winner'}</span>
+                                     <span className="text-sm font-black text-amber-600">{language === 'am' ? 'አዎ' : 'Yes'}</span>
+                                   </>
+                                 ) : (
+                                   <>
+                                     <EyeOff size={14} className="text-slate-400 mb-1" />
+                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'አሸናፊ' : 'Winner'}</span>
+                                     <span className="text-xs font-black text-slate-400">{language === 'am' ? 'ምስጢራዊ' : 'Hidden'}</span>
+                                   </>
+                                 );
+                               })()
+                             ) : (
+                               <>
+                                 <Trophy size={14} className="text-slate-300 mb-1" />
+                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'አሸናፊ' : 'Winner'}</span>
+                                 <span className="text-sm font-black text-slate-900">{language === 'am' ? 'አይ' : 'No'}</span>
+                               </>
+                             )}
                          </div>
                       </div>
                     </div>

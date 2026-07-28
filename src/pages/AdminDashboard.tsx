@@ -1001,6 +1001,45 @@ export default function AdminDashboard() {
   const [drawModalSearch, setDrawModalSearch] = useState('');
   const [drawsFilter, setDrawsFilter] = useState<'active' | 'registration'>('active');
 
+  // Winner Visibility States
+  const [showWinnerVisibilityModal, setShowWinnerVisibilityModal] = useState(false);
+  const [visibilityGroup, setVisibilityGroup] = useState<any>(null);
+  const [visibilityMode, setVisibilityMode] = useState<'all' | 'none' | 'selected'>('all');
+  const [allowedViewerIds, setAllowedViewerIds] = useState<string[]>([]);
+  const [visibilitySearch, setVisibilitySearch] = useState('');
+
+  const openWinnerVisibilityModal = (group: any) => {
+    setVisibilityGroup(group);
+    setVisibilityMode(group.winnerVisibilityMode || 'all');
+    setAllowedViewerIds(group.allowedWinnerViewerIds || []);
+    setVisibilitySearch('');
+    setShowWinnerVisibilityModal(true);
+  };
+
+  const handleSaveWinnerVisibility = async () => {
+    if (!visibilityGroup) return;
+    try {
+      const groupRef = doc(db, 'groups', visibilityGroup.id);
+      await updateDoc(groupRef, {
+        winnerVisibilityMode: visibilityMode,
+        allowedWinnerViewerIds: allowedViewerIds,
+        updatedAt: new Date()
+      });
+
+      triggerSuccess(
+        language === 'am' ? 'ተሳክቷል' : 'Success',
+        language === 'am' ? 'የእጣ አሸናፊ እይታ ቅንብር በተሳካ ሁኔታ ተዘምኗል!' : 'Winner visibility settings updated successfully!'
+      );
+      setShowWinnerVisibilityModal(false);
+    } catch (err) {
+      console.error("Error updating winner visibility:", err);
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'ቅንብሩን ለማስቀመጥ አልተሳካም::' : 'Failed to save visibility settings.'
+      );
+    }
+  };
+
   useEffect(() => {
     let interval: any;
     if (drawStage === 'animating' && selectedDrawGroup) {
@@ -1127,16 +1166,22 @@ export default function AdminDashboard() {
           console.error("Error updating user wonDraw status:", uErr);
         }
 
-        await addDoc(collection(db, 'draws'), {
+        const drawPayload = {
           groupId: selectedDrawGroup.id,
           groupName: selectedDrawGroup.name,
           winnerId: winner.id,
           winnerName: winner.fullName,
           winnerPhone: winner.phone,
           round: round,
-          amount: selectedDrawGroup.payoutAmount || 0,
+          week: round,
+          amount: selectedDrawGroup.payoutAmount || selectedDrawGroup.amount || 0,
+          winnerVisibilityMode: selectedDrawGroup.winnerVisibilityMode || 'all',
+          allowedWinnerViewerIds: selectedDrawGroup.allowedWinnerViewerIds || [],
           date: serverTimestamp()
-        });
+        };
+
+        await addDoc(collection(db, 'draws'), drawPayload);
+        await addDoc(collection(db, 'draw_history'), drawPayload);
 
         const titleAm = '🎉 የዕጣ አሸናፊ ማሳወቂያ';
         const titleEn = '🎉 Lucky Winner Notice';
@@ -9567,13 +9612,41 @@ export default function AdminDashboard() {
                       {/* Launcher Actions */}
                       <div className="mt-auto pt-2 relative z-10">
                          {drawsFilter === 'active' ? (
-                            <button
-                              onClick={() => openDrawModal(group)}
-                              className="w-full py-3.5 bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 hover:from-rose-950 hover:to-slate-900 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] shadow-lg shadow-rose-900/10 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                            >
-                              <Trophy size={14} className="text-amber-400 animate-bounce" />
-                              {language === 'am' ? 'እጣ አውጣ' : 'Perform Draw'}
-                            </button>
+                            <div className="flex flex-col gap-2">
+                               <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-[9px] font-bold text-slate-500">
+                                  <span className="flex items-center gap-1">
+                                     <Eye size={10} className="text-indigo-500" />
+                                     {language === 'am' ? 'የአሸናፊ እይታ:' : 'Winner Visibility:'}
+                                  </span>
+                                  <span className="font-black text-indigo-700">
+                                     {group.winnerVisibilityMode === 'none'
+                                       ? (language === 'am' ? '🔒 ምስጢራዊ' : '🔒 Confidential')
+                                       : group.winnerVisibilityMode === 'selected'
+                                       ? (language === 'am' ? `👥 ለ ${group.allowedWinnerViewerIds?.length || 0} አባል` : `👥 ${group.allowedWinnerViewerIds?.length || 0} Selected`)
+                                       : (language === 'am' ? '🌐 ለሁሉም' : '🌐 Everyone')}
+                                  </span>
+                               </div>
+                               <div className="flex gap-2">
+                                  <button
+                                    onClick={() => openDrawModal(group)}
+                                    className="flex-1 py-3.5 bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 hover:from-rose-950 hover:to-slate-900 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-[0.15em] shadow-lg shadow-rose-900/10 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                  >
+                                    <Trophy size={14} className="text-amber-400 animate-bounce" />
+                                    {language === 'am' ? 'እጣ አውጣ' : 'Perform Draw'}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openWinnerVisibilityModal(group);
+                                    }}
+                                    className="px-3.5 py-3.5 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 rounded-2xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all border border-indigo-100 shadow-sm shrink-0"
+                                    title={language === 'am' ? 'የእጣ አሸናፊ እይታ ቅንብር' : 'Winner Visibility Settings'}
+                                  >
+                                    <Eye size={14} />
+                                    <span className="hidden sm:inline">{language === 'am' ? 'እይታ ቅንብር' : 'Visibility'}</span>
+                                  </button>
+                               </div>
+                            </div>
                          ) : (
                             <button
                               onClick={() => startGroup(group.id)}
@@ -12832,6 +12905,33 @@ export default function AdminDashboard() {
                        <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Select Winner for Round {selectedDrawGroup.currentRound || 1}</p>
                     </div>
 
+                    {/* Winner Visibility Summary & Quick Edit */}
+                    <div className="bg-indigo-50/80 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between gap-4 max-w-xl mx-auto shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                          <ShieldCheck size={20} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-900 uppercase tracking-wider">
+                            {language === 'am' ? 'የአሸናፊ እይታ ቅንብር' : 'Winner Visibility Setting'}
+                          </p>
+                          <p className="text-[11px] font-bold text-indigo-700">
+                            {selectedDrawGroup.winnerVisibilityMode === 'none'
+                              ? (language === 'am' ? '🔒 ለማንም እንዳይታይ (ምስጢራዊ)' : '🔒 Hidden from Everyone')
+                              : selectedDrawGroup.winnerVisibilityMode === 'selected'
+                              ? (language === 'am' ? `👥 ለተመረጡ ${selectedDrawGroup.allowedWinnerViewerIds?.length || 0} አባላት ብቻ` : `👥 Show to Selected (${selectedDrawGroup.allowedWinnerViewerIds?.length || 0} Members)`)
+                              : (language === 'am' ? '🌐 ለሁሉም የምድቡ አባላት ይታያል' : '🌐 Visible to All Group Members')}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => openWinnerVisibilityModal(selectedDrawGroup)}
+                        className="px-3.5 py-2 bg-white text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-indigo-200 shadow-sm shrink-0"
+                      >
+                        {language === 'am' ? 'ቅንብር ቀይር' : 'Change Setting'}
+                      </button>
+                    </div>
+
                     {/* Toggle Eligibility Requirement Option */}
                     {ineligibleMembers.length > 0 && (
                       <div className="bg-amber-50 border border-amber-100 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 max-w-xl mx-auto shadow-sm">
@@ -13263,6 +13363,271 @@ export default function AdminDashboard() {
                      </button>
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Winner Visibility Settings Modal */}
+      <AnimatePresence>
+        {showWinnerVisibilityModal && visibilityGroup && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[110]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              className="bg-white rounded-[2.5rem] w-full max-w-xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]"
+            >
+              {/* Modal Header */}
+              <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-gradient-to-r from-indigo-900 via-slate-900 to-slate-900 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-amber-400 shadow-lg border border-white/10">
+                    <Eye size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-widest leading-none">
+                      {language === 'am' ? 'የእጣ አሸናፊ እይታ ቅንብር' : 'Winner Visibility Settings'}
+                    </h3>
+                    <p className="text-indigo-200 text-[10px] mt-1 font-bold">
+                      {language === 'am' ? 'ምድብ' : 'Group'}: {visibilityGroup.name}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowWinnerVisibilityModal(false)}
+                  className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
+                <p className="text-xs font-bold text-slate-500 leading-relaxed">
+                  {language === 'am'
+                    ? 'በዚህ ምድብ ውስጥ እጣ ለደረሳቸው አባሎች የእጣው አሸናፊ ለማን እንዲታይ እና ለማን እንደሚሰወር ይምረጡ፡'
+                    : 'Choose who can see the winner details when a draw is completed in this group:'}
+                </p>
+
+                {/* Mode options */}
+                <div className="space-y-3">
+                  {/* 1. All */}
+                  <div
+                    onClick={() => setVisibilityMode('all')}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
+                      visibilityMode === 'all'
+                        ? 'border-emerald-500 bg-emerald-50/50 shadow-sm'
+                        : 'border-slate-100 hover:border-slate-200 bg-white'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                      visibilityMode === 'all' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      <Eye size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">
+                          {language === 'am' ? 'ለሁሉም የምድቡ አባላት ይታይ' : 'Show to All Group Members'}
+                        </h4>
+                        {visibilityMode === 'all' && (
+                          <span className="text-[9px] font-black uppercase text-emerald-600 bg-emerald-100/80 px-2.5 py-0.5 rounded-full">
+                            {language === 'am' ? 'ተመርጧል' : 'Selected'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-medium text-slate-500 mt-1 leading-relaxed">
+                        {language === 'am'
+                          ? 'በዚህ ምድብ ውስጥ ያሉ ሁሉም አባላት የእጣውን አሸናፊ ስም እና መረጃ በግልጽ ማየት ይችላሉ።'
+                          : 'All members in this group can see the winner name and details.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 2. None */}
+                  <div
+                    onClick={() => setVisibilityMode('none')}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
+                      visibilityMode === 'none'
+                        ? 'border-rose-500 bg-rose-50/50 shadow-sm'
+                        : 'border-slate-100 hover:border-slate-200 bg-white'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                      visibilityMode === 'none' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      <EyeOff size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">
+                          {language === 'am' ? 'ለማንም እንዳይታይ (ምስጢራዊ)' : 'Hide from Everyone (Confidential)'}
+                        </h4>
+                        {visibilityMode === 'none' && (
+                          <span className="text-[9px] font-black uppercase text-rose-600 bg-rose-100/80 px-2.5 py-0.5 rounded-full">
+                            {language === 'am' ? 'ተመርጧል' : 'Selected'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-medium text-slate-500 mt-1 leading-relaxed">
+                        {language === 'am'
+                          ? 'ለአድሚን ብቻ ይታያል። ለሁሉም የአቁብ አባላት አሸናፊው "ምስጢራዊ/ተሸፍኗል" ሆኖ ይታያል።'
+                          : 'Visible to admin only. Hidden/Confidential for all ekub members.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 3. Selected Members */}
+                  <div
+                    onClick={() => setVisibilityMode('selected')}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
+                      visibilityMode === 'selected'
+                        ? 'border-indigo-500 bg-indigo-50/50 shadow-sm'
+                        : 'border-slate-100 hover:border-slate-200 bg-white'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                      visibilityMode === 'selected' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      <Users size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">
+                          {language === 'am' ? 'ለተመረጡ አባላት ብቻ ይታይ' : 'Show Only to Selected Members'}
+                        </h4>
+                        {visibilityMode === 'selected' && (
+                          <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-100/80 px-2.5 py-0.5 rounded-full">
+                            {language === 'am' ? 'ተመርጧል' : 'Selected'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-medium text-slate-500 mt-1 leading-relaxed">
+                        {language === 'am'
+                          ? 'አድሚን ለመረጣቸው የተወሰኑ አባላት ብቻ የአሸናፊው መረጃ እንዲታይ ይደረጋል።'
+                          : 'Show winner details only to specific chosen members.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Member selector list when mode is 'selected' */}
+                {visibilityMode === 'selected' && (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3 animate-in fade-in duration-300">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                      <div>
+                        <h5 className="text-xs font-black text-slate-900 uppercase tracking-tight">
+                          {language === 'am' ? 'የሚፈቀድላቸው አባላት መረጣ' : 'Select Permitted Members'}
+                        </h5>
+                        <p className="text-[9px] font-bold text-indigo-600">
+                          {allowedViewerIds.length} {language === 'am' ? 'አባላት ተመርጠዋል' : 'members selected'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allIds = (visibilityGroup.members || []).map((m: any) => m.id || m.uid);
+                            setAllowedViewerIds(allIds);
+                          }}
+                          className="px-2.5 py-1 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all"
+                        >
+                          {language === 'am' ? 'ሁሉንም መረጥ' : 'Select All'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAllowedViewerIds([])}
+                          className="px-2.5 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all"
+                        >
+                          {language === 'am' ? 'ሁሉንም ሰርዝ' : 'Clear All'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Search filter */}
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={visibilitySearch}
+                        onChange={(e) => setVisibilitySearch(e.target.value)}
+                        placeholder={language === 'am' ? 'አባል በስም ይፈልጉ...' : 'Search member by name...'}
+                        className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    {/* Members list */}
+                    <div className="max-h-56 overflow-y-auto space-y-2 custom-scrollbar pr-1">
+                      {(!visibilityGroup.members || visibilityGroup.members.length === 0) ? (
+                        <p className="text-center py-4 text-xs font-bold text-slate-400">
+                          {language === 'am' ? 'ምንም አባል የለም' : 'No group members found'}
+                        </p>
+                      ) : (
+                        visibilityGroup.members
+                          .filter((m: any) => (m.fullName || '').toLowerCase().includes(visibilitySearch.toLowerCase()))
+                          .map((m: any) => {
+                            const memberId = m.id || m.uid;
+                            const isChecked = allowedViewerIds.includes(memberId);
+                            return (
+                              <div
+                                key={memberId}
+                                onClick={() => {
+                                  if (isChecked) {
+                                    setAllowedViewerIds(allowedViewerIds.filter(id => id !== memberId));
+                                  } else {
+                                    setAllowedViewerIds([...allowedViewerIds, memberId]);
+                                  }
+                                }}
+                                className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                                  isChecked
+                                    ? 'bg-indigo-50/80 border-indigo-200 text-indigo-950 font-black'
+                                    : 'bg-white border-slate-100 hover:border-slate-200 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {}}
+                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 shrink-0"
+                                  />
+                                  <div className="truncate">
+                                    <p className="text-xs font-black truncate">{m.fullName}</p>
+                                    <p className="text-[9px] font-bold text-slate-400 font-mono">{m.phone}</p>
+                                  </div>
+                                </div>
+                                {m.wonDraw && (
+                                  <span className="text-[8px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black shrink-0">
+                                    {language === 'am' ? 'አሸናፊ' : 'Winner'}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-5 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowWinnerVisibilityModal(false)}
+                  className="px-5 py-3 bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                >
+                  {language === 'am' ? 'ሰርዝ' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveWinnerVisibility}
+                  className="px-6 py-3 bg-slate-900 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center gap-2"
+                >
+                  <ShieldCheck size={16} className="text-amber-400" />
+                  {language === 'am' ? 'ቅንብሩን አስቀምጥ' : 'Save Visibility Settings'}
+                </button>
               </div>
             </motion.div>
           </div>
