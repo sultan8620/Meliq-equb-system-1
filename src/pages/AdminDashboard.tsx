@@ -1106,21 +1106,25 @@ export default function AdminDashboard() {
     setTimeout(async () => {
       try {
         let winner: any = null;
-        const eligible = selectedDrawGroup.members.filter(
-          (m: any) => !m.wonDraw && (includeIneligible || !ineligibleMembers.find((im: any) => im.id === m.id))
-        );
+        const groupMembers = selectedDrawGroup?.members || [];
+        const eligible = groupMembers.filter((m: any) => {
+          const mId = m.id || m.uid;
+          const isExcluded = ineligibleMembers.some((im: any) => (im.id || im.uid) === mId);
+          return !m.wonDraw && (includeIneligible || !isExcluded);
+        });
 
         if (winnerIdOrMode === 'auto') {
           if (eligible.length === 0) {
-            triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'ያልደረሳቸውና ብቁ የሆኑ አባላት የሉም! (No eligible members found)');
+            triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ያልደረሳቸውና ብቁ የሆኑ አባላት የሉም! (No eligible members found)' : 'No eligible members found!');
             setDrawStage('select');
             return;
           }
           const randomIndex = Math.floor(Math.random() * eligible.length);
           winner = eligible[randomIndex];
         } else {
-          winner = selectedDrawGroup.members.find((m: any) => m.id === winnerIdOrMode);
-          if (winner && ineligibleMembers.some((im: any) => im.id === winner.id) && !includeIneligible) {
+          winner = groupMembers.find((m: any) => (m.id || m.uid) === winnerIdOrMode);
+          const winnerId = winner ? (winner.id || winner.uid) : null;
+          if (winner && ineligibleMembers.some((im: any) => (im.id || im.uid) === winnerId) && !includeIneligible) {
             triggerSuccess(
               language === 'am' ? 'ማሳወቂያ' : 'Notice',
               language === 'am' ? 'ይህ አባል ጎዶሎ ቀን ወይም ያልተከፈለ ክፍያ ስላለበት በእጣው ውስጥ አይሳተፍም!' : 'This member has incomplete payments or penalties and is excluded from the draw!'
@@ -1131,79 +1135,120 @@ export default function AdminDashboard() {
         }
 
         if (!winner) {
-          triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'አሸናፊ ማግኘት አልተቻለም');
+          triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'አሸናፊ ማግኘት አልተቻለም' : 'Winner not found');
           setDrawStage('select');
           return;
         }
 
+        const winnerId = winner.id || winner.uid || '';
         const round = selectedDrawGroup.currentRound || 1;
         const groupRef = doc(db, 'groups', selectedDrawGroup.id);
         
-        const updatedMembers = selectedDrawGroup.members.map((m: any) => {
-          if (m.id === winner.id) {
-            return { ...m, wonDraw: true, wonRound: round, wonDate: new Date() };
+        // Clean members update
+        const updatedMembers = groupMembers.map((m: any) => {
+          const mId = m.id || m.uid;
+          if (mId === winnerId) {
+            return {
+              ...m,
+              wonDraw: true,
+              wonRound: round,
+              wonDate: new Date().toISOString()
+            };
           }
           return m;
         });
 
-        const nextRound = round + 1;
-        const isCompleted = nextRound > selectedDrawGroup.totalParticipants;
-
-        await updateDoc(groupRef, {
-          members: updatedMembers,
-          currentRound: isCompleted ? round : nextRound,
-          status: isCompleted ? 'completed' : 'active',
-          updatedAt: new Date()
+        // Sanitize members array for Firestore to eliminate undefined or non-serializable fields
+        const sanitizedMembers = updatedMembers.map((m: any) => {
+          const cleaned: any = {};
+          Object.keys(m).forEach(key => {
+            if (key !== 'allAccounts' && m[key] !== undefined && typeof m[key] !== 'function') {
+              cleaned[key] = m[key];
+            }
+          });
+          return cleaned;
         });
 
+        const nextRound = round + 1;
+        const totalCount = selectedDrawGroup.totalParticipants || selectedDrawGroup.memberCount || selectedDrawGroup.limit || groupMembers.length || 1;
+        const isCompleted = nextRound > totalCount;
+
+        // 1. Update group document
+        await updateDoc(groupRef, {
+          members: sanitizedMembers,
+          currentRound: isCompleted ? round : nextRound,
+          status: isCompleted ? 'completed' : 'active',
+          lastWinner: winner.fullName || winner.name || '',
+          updatedAt: new Date()
+        }).catch(err => {
+          console.error("Error updating group document during draw:", err);
+        });
+
+        // 2. Update user document(s) for the winner
         try {
-          await updateDoc(doc(db, 'users', winner.id), {
-            wonDraw: true,
-            wonRound: round,
-            wonDate: new Date()
-          });
+          const winnerAccountIds = (winner.allAccounts && winner.allAccounts.length > 0)
+            ? winner.allAccounts.map((a: any) => a.id || a.uid).filter(Boolean)
+            : [winnerId];
+
+          for (const wId of winnerAccountIds) {
+            if (wId) {
+              await updateDoc(doc(db, 'users', wId), {
+                wonDraw: true,
+                wonRound: round,
+                wonDate: new Date()
+              }).catch(err => console.error("Error updating user wonDraw status:", err));
+            }
+          }
         } catch (uErr) {
-          console.error("Error updating user wonDraw status:", uErr);
+          console.error("Error updating winner user records:", uErr);
         }
 
+        // 3. Store draw record in Firestore collections
+        const winnerNameStr = winner.fullName || winner.name || 'Anonymous';
+        const winnerPhoneStr = winner.phone || '';
         const drawPayload = {
-          groupId: selectedDrawGroup.id,
-          groupName: selectedDrawGroup.name,
-          winnerId: winner.id,
-          winnerName: winner.fullName,
-          winnerPhone: winner.phone,
+          groupId: selectedDrawGroup.id || '',
+          groupName: selectedDrawGroup.name || '',
+          winnerId: winnerId,
+          winnerName: winnerNameStr,
+          winnerPhone: winnerPhoneStr,
           round: round,
           week: round,
-          amount: selectedDrawGroup.payoutAmount || selectedDrawGroup.amount || 0,
+          amount: Number(selectedDrawGroup.payoutAmount || selectedDrawGroup.amount) || 0,
           winnerVisibilityMode: selectedDrawGroup.winnerVisibilityMode || 'all',
-          allowedWinnerViewerIds: selectedDrawGroup.allowedWinnerViewerIds || [],
+          allowedWinnerViewerIds: Array.isArray(selectedDrawGroup.allowedWinnerViewerIds) ? selectedDrawGroup.allowedWinnerViewerIds : [],
           date: serverTimestamp()
         };
 
-        await addDoc(collection(db, 'draws'), drawPayload);
-        await addDoc(collection(db, 'draw_history'), drawPayload);
+        await addDoc(collection(db, 'draws'), drawPayload).catch(e => console.error("Error writing to draws collection:", e));
+        await addDoc(collection(db, 'draw_history'), drawPayload).catch(e => console.error("Error writing to draw_history collection:", e));
 
+        // 4. Send notifications
         const titleAm = '🎉 የዕጣ አሸናፊ ማሳወቂያ';
         const titleEn = '🎉 Lucky Winner Notice';
         const msgAm = `እንኳን ደስ አሎት! በቡድን "${selectedDrawGroup.name}" የዙር ${round} እጣ ደርሶዎታል።`;
         const msgEn = `Congratulations! You have won the draw for round ${round} in group "${selectedDrawGroup.name}".`;
 
-        await notifyUserAdminChange(winner.id, titleAm, titleEn, msgAm, msgEn);
+        if (winnerId) {
+          await notifyUserAdminChange(winnerId, titleAm, titleEn, msgAm, msgEn).catch(e => console.warn(e));
+        }
 
-        const groupAm = `🎉 በዙር ${round} እጣ ለ ${winner.fullName} ደርሷል። እንኳን ደስ አሎት!`;
-        const groupEn = `🎉 Round ${round} winner is ${winner.fullName}. Congratulations!`;
-        const groupNotifyPromises = selectedDrawGroup.members.map(async (m: any) => {
-          if (m.id !== winner.id) {
-            await notifyUserAdminChange(m.id, '🎉 የዕጣ አሸናፊ', '🎉 Draw Winner', groupAm, groupEn);
+        const groupAm = `🎉 በዙር ${round} እጣ ለ ${winnerNameStr} ደርሷል። እንኳን ደስ አሎት!`;
+        const groupEn = `🎉 Round ${round} winner is ${winnerNameStr}. Congratulations!`;
+        
+        const groupNotifyPromises = groupMembers.map(async (m: any) => {
+          const mId = m.id || m.uid;
+          if (mId && mId !== winnerId) {
+            await notifyUserAdminChange(mId, '🎉 የዕጣ አሸናፊ', '🎉 Draw Winner', groupAm, groupEn).catch(e => console.warn("Failed user notification:", e));
           }
         });
-        await Promise.all(groupNotifyPromises);
+        await Promise.all(groupNotifyPromises).catch(e => console.warn("Error sending group notifications:", e));
 
         setDrawWinner(winner);
         setDrawStage('result');
       } catch (err) {
-        console.error(err);
-        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', 'እጣ ማውጣት አልተሳካም');
+        console.error("Critical error in startDrawAnimation:", err);
+        triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'እጣ ማውጣት አልተሳካም' : 'Failed to conduct draw');
         setDrawStage('select');
       }
     }, 3000);
@@ -4176,15 +4221,19 @@ export default function AdminDashboard() {
     const stepsPerRound = getStepsPerRound(group.type);
     const requiredDays = currentRound * stepsPerRound;
     const missingDaysIds = new Set();
-    group.members.forEach((m: any) => {
-       const userPayments = allPayments.filter(p => (p.userId === m.id || p.userId === m.uid) && p.groupId === group.id && ['verified', 'active', 'approved', 'completed'].includes(p.status));
+    (group.members || []).forEach((m: any) => {
+       const mId = m.id || m.uid;
+       const userPayments = allPayments.filter(p => (p.userId === mId) && p.groupId === group.id && ['verified', 'active', 'approved', 'completed'].includes(p.status));
        const paidDays = userPayments.reduce((acc, p) => acc + (p.paymentDays || 1), 0);
        if (paidDays < requiredDays) { // If they have missing days (even 1 day short of requiredDays for current round)
-         missingDaysIds.add(m.id);
+         if (mId) missingDaysIds.add(mId);
        }
     });
 
-    const excluded = group.members.filter((m: any) => (unpaidMemberIds.has(m.id) || missingDaysIds.has(m.id)) && !m.wonDraw);
+    const excluded = (group.members || []).filter((m: any) => {
+      const mId = m.id || m.uid;
+      return (unpaidMemberIds.has(mId) || missingDaysIds.has(mId)) && !m.wonDraw;
+    });
     setIneligibleMembers(excluded);
     setIncludeIneligible(false);
     setSelectedDrawGroup(group);
