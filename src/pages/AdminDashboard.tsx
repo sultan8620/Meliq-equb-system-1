@@ -9882,7 +9882,7 @@ export default function AdminDashboard() {
                 >
                   <div className="flex items-center justify-center gap-2">
                     <Clock size={14} />
-                    {language === 'am' ? 'የሚጠባበቁ' : 'Pending'}
+                    {language === 'am' ? 'ለእጣ አሸናፊው የሚከፈል (ለደረሰው ሰው ክፈል)' : 'Pay Winner (Pending)'}
                     {payouts.length > 0 && (
                       <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[8px] text-white">
                         {payouts.length}
@@ -9896,7 +9896,7 @@ export default function AdminDashboard() {
                 >
                   <div className="flex items-center justify-center gap-2">
                     <CheckCircle size={14} />
-                    {language === 'am' ? 'የክፍያ ታሪክ' : 'History'}
+                    {language === 'am' ? 'የተከፈሉ አሸናፊዎች (ታሪክ)' : 'Payout History'}
                   </div>
                 </button>
               </div>
@@ -10039,7 +10039,7 @@ export default function AdminDashboard() {
                                onClick={() => approvePayout(payout.id, payout.userId)}
                                className="flex-[2] px-6 py-5 bg-amber-500 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-amber-600 transition-all shadow-xl shadow-amber-500/20 active:scale-95 group/btn"
                              >
-                                <CheckCircle size={18} className="group-hover/btn:scale-110 transition-transform" /> {language === 'am' ? 'ክፍያ ፈጽም' : 'Approve'}
+                                <CheckCircle size={18} className="group-hover/btn:scale-110 transition-transform" /> {language === 'am' ? 'ለእጣ አሸናፊው ክፍያ ፈጽም (እጣውን ክፈል)' : 'Pay Winner'}
                              </button>
                              <button 
                                onClick={() => rejectPayout(payout.id, payout.userId)}
