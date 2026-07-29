@@ -753,8 +753,7 @@ export default function Dashboard() {
           p.uid !== m.uid && 
           !processedUids.has(p.uid) &&
           ((m.jointId && p.jointId && m.jointId === p.jointId) || 
-           (m.phone && p.phone && m.phone === p.phone) || 
-           (m.isSharedSlot && p.isSharedSlot))
+           (m.phone && p.phone && m.phone === p.phone))
         );
 
         if (partners.length > 0) {
@@ -765,7 +764,8 @@ export default function Dashboard() {
           
           let displayName = '';
           if (isAdmin) {
-            displayName = allPartners.map(p => p.fullName).filter(Boolean).join(' + ');
+            const names = allPartners.map(p => p.fullName).filter(Boolean).filter((v, i, self) => self.indexOf(v) === i);
+            displayName = names.join(' + ');
           } else if (isUserInGroup) {
             displayName = language === 'am' ? 'እርስዎ + የጋራ አባል' : 'You + Shared Member';
           } else {
@@ -804,7 +804,7 @@ export default function Dashboard() {
     });
 
     return result;
-  }, [members, isAdmin, user?.uid, language]);
+  }, [members, isAdmin, user?.uid, language, isUserDiscontinued, activeSlotId]);
 
   useEffect(() => {
     if (userData) {
@@ -844,6 +844,7 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [groupPayments, setGroupPayments] = useState<any[]>([]);
+  const [groupPayouts, setGroupPayouts] = useState<any[]>([]);
   const [selectedTrackerRound, setSelectedTrackerRound] = useState<number>(1);
 
   useEffect(() => {
@@ -1065,6 +1066,23 @@ export default function Dashboard() {
       return sum + (Number(p.amount) || 0);
     }, 0);
   }, [groupPayments, group?.lastPayoutAt, group?.currentRound]);
+
+  const groupDisbursedTotal = useMemo(() => {
+    if (!groupPayouts || groupPayouts.length === 0) return 0;
+    return groupPayouts
+      .filter((p: any) => p.status === 'active' || p.status === 'completed')
+      .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+  }, [groupPayouts]);
+
+  const activeGroupMembersCount = useMemo(() => {
+    if (groupedMembers && groupedMembers.length > 0) return groupedMembers.length;
+    return group?.memberCount || group?.limit || 10;
+  }, [groupedMembers, group?.memberCount, group?.limit]);
+
+  const totalPoolPayoutPerRound = useMemo(() => {
+    const baseAmt = Number(group?.amount) || 0;
+    return baseAmt * activeGroupMembersCount;
+  }, [group?.amount, activeGroupMembersCount]);
 
   const totalWinnersCount = useMemo(() => {
     return drawWinners.length;
@@ -1959,6 +1977,7 @@ export default function Dashboard() {
           let unsubMembers = () => {};
           let unsubMessages = () => {};
           let unsubGroupPayments = () => {};
+          let unsubGroupPayouts = () => {};
 
           const setupSubscriptions = async () => {
             const groupDoc = await getDoc(doc(db, 'groups', data.groupId));
@@ -2013,6 +2032,16 @@ export default function Dashboard() {
               setGroupPayments(payData);
             });
 
+            // Real-time group winner payouts
+            const qGroupPayouts = query(
+              collection(db, 'payouts'),
+              where('groupId', '==', data.groupId)
+            );
+            unsubGroupPayouts = onSnapshot(qGroupPayouts, (snapshot) => {
+              let pData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              setGroupPayouts(pData);
+            });
+
             // Real-time chat messages
             const qMessages = query(
               collection(db, 'messages'),
@@ -2045,6 +2074,7 @@ export default function Dashboard() {
             unsubMembers();
             unsubMessages();
             unsubGroupPayments();
+            unsubGroupPayouts();
           };
         }
       } else {
@@ -2936,12 +2966,12 @@ export default function Dashboard() {
                 <div className="h-px bg-slate-200" />
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{language === 'am' ? 'የሚጠበቅ ደራሽ' : 'Expected Payout'}</span>
-                  <span className="text-xl font-black text-emerald-600">{(userData?.totalPayout || (userData?.amount * multiplier * (group?.limit || 10))).toLocaleString()} {t('common.etb')}</span>
+                  <span className="text-xl font-black text-emerald-600">{(userData?.totalPayout || (userData?.amount * multiplier * activeGroupMembersCount)).toLocaleString()} {t('common.etb')}</span>
                 </div>
                 <p className="text-[9px] font-bold text-slate-400 italic text-right mt-2">
                    {language === 'am' 
-                     ? `${userData?.amount || 0} ብር * ${getDurationLabel()} * ${group?.limit || 10} አባላት` 
-                     : `${userData?.amount || 0} ETB * ${getDurationLabel()} * ${group?.limit || 10} members`}
+                     ? `${userData?.amount || 0} ብር * ${getDurationLabel()} * ${activeGroupMembersCount} አባላት` 
+                     : `${userData?.amount || 0} ETB * ${getDurationLabel()} * ${activeGroupMembersCount} members`}
                 </p>
               </div>
 
@@ -3669,26 +3699,31 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-2 bg-slate-50/50 rounded-[2rem] border border-slate-100/50">
-                     <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                   <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 p-2.5 bg-slate-50/50 rounded-[2rem] border border-slate-100/50">
+                     <div className="flex flex-col gap-2 p-4 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                         <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><DollarSign size={16} /></div>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'መክፈያ መጠን' : 'Base Amount'}</p>
-                        <p className="text-xl font-display font-black text-slate-900 leading-none">{group?.amount?.toLocaleString() || '0'} <span className="text-xs text-slate-400">ETB</span></p>
+                        <p className="text-lg font-display font-black text-slate-900 leading-none">{group?.amount?.toLocaleString() || '0'} <span className="text-[10px] text-slate-400">ETB</span></p>
                      </div>
-                     <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                     <div className="flex flex-col gap-2 p-4 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                         <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><Users size={16} /></div>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'አባላት' : 'Total Members'}</p>
-                        <p className="text-xl font-display font-black text-slate-900 leading-none">{group?.memberCount}</p>
+                        <p className="text-lg font-display font-black text-slate-900 leading-none">{activeGroupMembersCount}</p>
                      </div>
-                     <div className="flex flex-col gap-2 p-5 bg-emerald-50 rounded-[1.5rem] border border-emerald-100 shadow-sm hover:shadow-md transition-all group">
+                     <div className="flex flex-col gap-2 p-4 bg-amber-50 rounded-[1.5rem] border border-amber-100 shadow-sm hover:shadow-md transition-all group">
+                        <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center mb-1 group-hover:scale-110 transition-transform"><Trophy size={16} /></div>
+                        <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">{language === 'am' ? 'ለእጣ አሸናፊ የሚደርስ ብር' : 'Winner Total Payout'}</p>
+                        <p className="text-lg font-display font-black text-amber-950 leading-none">{totalPoolPayoutPerRound.toLocaleString()} <span className="text-[10px] text-amber-600">ETB</span></p>
+                     </div>
+                     <div className="flex flex-col gap-2 p-4 bg-emerald-50 rounded-[1.5rem] border border-emerald-100 shadow-sm hover:shadow-md transition-all group">
                         <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center mb-1 group-hover:scale-110 transition-transform"><CheckCircle size={16} /></div>
-                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{language === 'am' ? 'የቡድኑ የተሰበሰበ ብር (የአሁኑ ዙር)' : 'Group Pool (Current Round)'}</p>
-                        <p className="text-xl font-display font-black text-emerald-900 leading-none">{groupCollectedTotal.toLocaleString()} <span className="text-[10px] text-emerald-600">ETB</span></p>
+                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{language === 'am' ? 'የአሁኑ ዙር የተሰበሰበ ብር' : 'Current Round Pool'}</p>
+                        <p className="text-lg font-display font-black text-emerald-900 leading-none">{groupCollectedTotal.toLocaleString()} <span className="text-[10px] text-emerald-600">ETB</span></p>
                      </div>
-                     <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><CheckCircle size={16} className="text-indigo-600" /></div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'የእኔ የተረጋገጠ ክፍያ' : 'My Verified Payment'}</p>
-                        <p className="text-xl font-display font-black text-slate-900 leading-none">{verifiedPaymentsTotal.toLocaleString()} <span className="text-xs text-slate-400">ETB</span></p>
+                     <div className="flex flex-col gap-2 p-4 bg-blue-50 rounded-[1.5rem] border border-blue-100 shadow-sm hover:shadow-md transition-all col-span-2 lg:col-span-1">
+                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center mb-1"><DollarSign size={16} /></div>
+                        <p className="text-[9px] font-black text-blue-700 uppercase tracking-widest">{language === 'am' ? 'ለአሸናፊ የወጣ / የተከፈለ ብር' : 'Disbursed Winner Payout'}</p>
+                        <p className="text-lg font-display font-black text-blue-950 leading-none">{groupDisbursedTotal.toLocaleString()} <span className="text-[10px] text-blue-600">ETB</span></p>
                      </div>
                    </div>
                 </div>
@@ -4300,12 +4335,8 @@ export default function Dashboard() {
 
               {/* Members Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {members
-                  .filter(m => {
-                    if (!isAdmin && m.uid !== user?.uid && m.uid !== activeSlotId) {
-                      const isMemDiscontinued = ['discontinued', 'terminated', 'suspended', 'inactive'].includes(m.status) || m.isDiscontinued === true;
-                      if (isMemDiscontinued) return false;
-                    }
+                {groupedMembers
+                  .filter((m: any) => {
                     const matchesSearch = m.fullName?.toLowerCase().includes(memberSearchQuery.toLowerCase());
                     const matchesFilter = 
                       membersFilter === 'all' ? true :
@@ -4430,11 +4461,7 @@ export default function Dashboard() {
                   </motion.div>
                 ))}
                 
-                {members.filter(m => {
-                  if (!isAdmin && m.uid !== user?.uid && m.uid !== activeSlotId) {
-                    const isMemDiscontinued = ['discontinued', 'terminated', 'suspended', 'inactive'].includes(m.status) || m.isDiscontinued === true;
-                    if (isMemDiscontinued) return false;
-                  }
+                {groupedMembers.filter((m: any) => {
                   const matchesSearch = m.fullName?.toLowerCase().includes(memberSearchQuery.toLowerCase());
                   const matchesFilter = 
                     membersFilter === 'all' ? true :

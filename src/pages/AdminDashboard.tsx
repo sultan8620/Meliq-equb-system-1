@@ -643,7 +643,7 @@ export default function AdminDashboard() {
 
   const groupsWithMembers = useMemo(() => {
     let list = groups.map(group => {
-      const groupUsers = allUsers.filter(u => u.groupId === group.id);
+      const groupUsers = allUsers.filter(u => u.groupId === group.id || (u.groups && u.groups.includes(group.id)));
       
       // Group users by phone number or jointId to handle joint slots as one entry
       const groupedClusters: any[][] = [];
@@ -1174,31 +1174,6 @@ export default function AdminDashboard() {
         const winnerId = winner.id || winner.uid || '';
         const round = selectedDrawGroup.currentRound || 1;
         const groupRef = doc(db, 'groups', selectedDrawGroup.id);
-        
-        // Clean members update
-        const updatedMembers = groupMembers.map((m: any) => {
-          const mId = m.id || m.uid;
-          if (mId === winnerId) {
-            return {
-              ...m,
-              wonDraw: true,
-              wonRound: round,
-              wonDate: new Date().toISOString()
-            };
-          }
-          return m;
-        });
-
-        // Sanitize members array for Firestore to eliminate undefined or non-serializable fields
-        const sanitizedMembers = updatedMembers.map((m: any) => {
-          const cleaned: any = {};
-          Object.keys(m).forEach(key => {
-            if (key !== 'allAccounts' && m[key] !== undefined && typeof m[key] !== 'function') {
-              cleaned[key] = m[key];
-            }
-          });
-          return cleaned;
-        });
 
         const nextRound = round + 1;
         const totalCount = selectedDrawGroup.totalParticipants || selectedDrawGroup.memberCount || selectedDrawGroup.limit || groupMembers.length || 1;
@@ -1206,7 +1181,6 @@ export default function AdminDashboard() {
 
         // 1. Update group document
         await updateDoc(groupRef, {
-          members: sanitizedMembers,
           currentRound: isCompleted ? round : nextRound,
           status: isCompleted ? 'completed' : 'active',
           lastWinner: winner.fullName || winner.name || '',
@@ -1563,8 +1537,73 @@ export default function AdminDashboard() {
   
   const [adminChatTarget, setAdminChatTarget] = useState<{ type: 'private' | 'group' | 'all', id: string, name: string }>({ type: 'all', id: 'all', name: t('chat.all_members') });
 
+  const groupedAllowedUsers = useMemo(() => {
+    const groupedClusters: any[][] = [];
+    const processedIds = new Set<string>();
+
+    allowedUsers.forEach(u => {
+      const uId = u.id || u.uid;
+      if (processedIds.has(uId)) return;
+
+      const cluster = allowedUsers.filter(other => {
+        const oId = other.id || other.uid;
+        if (processedIds.has(oId)) return false;
+        if (oId === uId) return true;
+        
+        if (u.jointId && other.jointId === u.jointId) return true;
+        if (u.phone && other.phone && u.phone === other.phone) {
+           if (u.groupId === other.groupId) return true;
+        }
+        return false;
+      });
+
+      cluster.forEach(c => processedIds.add(c.id || c.uid));
+      groupedClusters.push(cluster);
+    });
+
+    return groupedClusters.map(accounts => {
+      if (accounts.length === 1) return accounts[0];
+
+      const sorted = [...accounts].sort((a, b) => {
+        const aShared = a.isSharedSlot === true || (a.slots && Number(a.slots) < 1);
+        const bShared = b.isSharedSlot === true || (b.slots && Number(b.slots) < 1);
+        if (!aShared && bShared) return -1;
+        if (aShared && !bShared) return 1;
+        return (Number(b.slots) || 0) - (Number(a.slots) || 0);
+      });
+
+      const primary = sorted[0];
+
+      const names = accounts.map(a => a.fullName).filter(Boolean).filter((v, i, self) => self.indexOf(v) === i);
+      const combinedName = names.join(' + ');
+
+      const totalSlots = accounts.reduce((sum, u) => {
+        let sVal = Number(u.slots) || 0;
+        if (u.isSharedSlot && u.splitFactor) {
+          sVal = 1 / Number(u.splitFactor);
+        }
+        return sum + sVal;
+      }, 0);
+
+      const combinedMemberCode = accounts
+        .map(u => u.memberCode)
+        .filter(Boolean)
+        .filter((v, i, self) => self.indexOf(v) === i)
+        .join(' / ');
+
+      return {
+        ...primary,
+        fullName: combinedName || primary.fullName,
+        slots: totalSlots >= 1 ? Math.round(totalSlots) : totalSlots,
+        isGrouped: true,
+        allAccounts: accounts,
+        memberCode: combinedMemberCode
+      };
+    });
+  }, [allowedUsers]);
+
   const filteredUsers = useMemo(() => {
-    return allowedUsers.filter(u => {
+    return groupedAllowedUsers.filter(u => {
       const matchesSearch = (u.fullName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (u.phone || '').includes(searchTerm);
       const matchesRegionFilter = selectedRegionFilter === 'All' || u.addressRegion === selectedRegionFilter;
       
@@ -1586,7 +1625,7 @@ export default function AdminDashboard() {
       if (userSortOrder === 'asc') return valA > valB ? 1 : -1;
       return valA < valB ? 1 : -1;
     });
-  }, [allowedUsers, searchTerm, selectedRegionFilter, insightFilter, userSortBy, userSortOrder]);
+  }, [groupedAllowedUsers, searchTerm, selectedRegionFilter, insightFilter, userSortBy, userSortOrder]);
 
   const filteredPending = useMemo(() => {
     return allowedPendingUsers.filter(u => {
@@ -4109,7 +4148,8 @@ export default function AdminDashboard() {
     try {
       const groupId = payoutGroup.id;
       const userId = payoutMember.id || payoutMember.uid;
-      const calcBase = payoutMember.totalPayout || (payoutGroup.amount ? payoutGroup.amount * (payoutGroup.limit || 10) : 0);
+      const groupMembersCount = allUsers.filter((u: any) => u.groupId === groupId || (u.groups && u.groups.includes(groupId))).length || payoutGroup.memberCount || payoutGroup.limit || 10;
+      const calcBase = payoutMember.totalPayout || (payoutGroup.amount ? payoutGroup.amount * groupMembersCount : 0);
       const finalAmount = payoutAmount > 0 ? payoutAmount : calcBase;
       const roundNum = payoutGroup.currentRound || 1;
 
