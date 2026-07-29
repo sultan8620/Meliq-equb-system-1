@@ -4024,6 +4024,12 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [showManualPaymentModal, setShowManualPaymentModal] = useState(false);
+  const [showManualWinnerPayoutModal, setShowManualWinnerPayoutModal] = useState(false);
+  const [payoutGroup, setPayoutGroup] = useState<any>(null);
+  const [payoutMember, setPayoutMember] = useState<any>(null);
+  const [payoutAmount, setPayoutAmount] = useState<number>(0);
+  const [payoutNote, setPayoutNote] = useState<string>('');
+  const [payoutSearchMember, setPayoutSearchMember] = useState<string>('');
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [downloadFormat, setDownloadFormat] = useState<'pdf' | 'jpg'>('pdf');
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
@@ -4089,6 +4095,103 @@ export default function AdminDashboard() {
       setPaymentCount(1);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'payments');
+    }
+  };
+
+  const handleManualWinnerPayout = async () => {
+    if (!payoutMember || !payoutGroup) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'እባክዎ ቡድን እና አባል ይምረጡ' : 'Please select a group and member'
+      );
+      return;
+    }
+    try {
+      const groupId = payoutGroup.id;
+      const userId = payoutMember.id || payoutMember.uid;
+      const calcBase = payoutMember.totalPayout || (payoutGroup.amount ? payoutGroup.amount * (payoutGroup.limit || 10) : 0);
+      const finalAmount = payoutAmount > 0 ? payoutAmount : calcBase;
+      const roundNum = payoutGroup.currentRound || 1;
+
+      // Check if existing pending payout doc exists
+      const existingPayout = payouts.find(p => (p.userId === userId || p.userId === payoutMember.id) && p.groupId === groupId && p.status === 'pending');
+
+      if (existingPayout) {
+        await updateDoc(doc(db, 'payouts', existingPayout.id), {
+          status: 'active',
+          paidAt: serverTimestamp(),
+          amount: finalAmount,
+          note: payoutNote || 'ለእጣ አሸናፊው በቀጥታ የተከፈለው ክፍያ'
+        });
+      } else {
+        await addDoc(collection(db, 'payouts'), {
+          userId: userId,
+          userName: payoutMember.fullName || 'Winner',
+          groupId: groupId,
+          groupName: payoutGroup.name || 'Ekub Group',
+          amount: finalAmount,
+          round: roundNum,
+          status: 'active',
+          paidAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          note: payoutNote || 'ለእጣ አሸናፊው በቀጥታ የተከፈለው ክፍያ'
+        });
+      }
+
+      // Update user payout status
+      if (userId) {
+        await updateDoc(doc(db, 'users', userId), {
+          payoutStatus: 'completed'
+        }).catch(e => console.warn(e));
+      }
+
+      // Reset / Advance group for next round
+      const totalCount = payoutGroup.totalParticipants || payoutGroup.memberCount || payoutGroup.limit || 10;
+      const nextRound = roundNum + 1;
+      const isCompleted = nextRound > totalCount;
+
+      await updateDoc(doc(db, 'groups', groupId), {
+        lastPayoutAt: serverTimestamp(),
+        lastPayoutRound: roundNum,
+        currentRound: isCompleted ? roundNum : nextRound,
+        updatedAt: serverTimestamp()
+      }).catch(e => console.warn(e));
+
+      // Audit log
+      await addDoc(collection(db, 'audit_logs'), {
+        type: 'payment',
+        action: `ለእጣ አሸናፊው ${payoutMember.fullName} ክፍያ ተፈጽሟል (ዙር ${roundNum})`,
+        userName: payoutMember.fullName || 'Winner',
+        amount: finalAmount,
+        groupId: groupId,
+        createdAt: serverTimestamp(),
+        status: 'success'
+      }).catch(e => console.warn(e));
+
+      // Notify user
+      await notifyUserAdminChange(
+        userId,
+        'የእጣ ክፍያ ተፈጽሟል',
+        'Payout Transferred',
+        `እንኳን ደስ አልዎት! የእጣ ክፍያዎ ${finalAmount.toLocaleString()} ብር ተፈጽሞ ወደ ሂሳብዎ ገብቷል።`,
+        `Congratulations! Your payout of ${finalAmount.toLocaleString()} ETB has been transferred.`
+      );
+
+      triggerSuccess(
+        language === 'am' ? 'ስኬት' : 'Success',
+        language === 'am'
+          ? `ለእጣ አሸናፊው (${payoutMember.fullName}) ${finalAmount.toLocaleString()} ብር ክፍያው በተሳካ ሁኔታ ተፈጽሟል! የቀጣይ ዙር ስብስብ በአዲስ መልክ ተጀምሯል።`
+          : `Payout of ${finalAmount.toLocaleString()} ETB to ${payoutMember.fullName} completed successfully! New round started.`
+      );
+
+      setShowManualWinnerPayoutModal(false);
+      setPayoutMember(null);
+      setPayoutGroup(null);
+      setPayoutAmount(0);
+      setPayoutNote('');
+      setPayoutSearchMember('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'payouts');
     }
   };
 
@@ -9901,15 +10004,31 @@ export default function AdminDashboard() {
                 </button>
               </div>
 
-              <div className="relative w-full md:w-64">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input 
-                  type="text" 
-                  placeholder={language === 'am' ? 'አሸናፊዎችን ፈልግ...' : 'Search winners...'}
-                  value={payoutSearch}
-                  className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none ring-offset-2 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-sm"
-                  onChange={(e) => setPayoutSearch(e.target.value)}
-                />
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                <button 
+                  onClick={() => {
+                    setPayoutGroup(groups[0] || null);
+                    setPayoutMember(null);
+                    setPayoutAmount(0);
+                    setPayoutNote('');
+                    setPayoutSearchMember('');
+                    setShowManualWinnerPayoutModal(true);
+                  }}
+                  className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+                >
+                  <DollarSign size={16} />
+                  {language === 'am' ? 'እጣ ለደረሰው ሰው ብር አውጣ / ክፈል' : 'Disburse Winner Cash Out'}
+                </button>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder={language === 'am' ? 'አሸናፊዎችን ፈልግ...' : 'Search winners...'}
+                    value={payoutSearch}
+                    className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none ring-offset-2 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-sm"
+                    onChange={(e) => setPayoutSearch(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -9919,20 +10038,34 @@ export default function AdminDashboard() {
                 p.userName?.toLowerCase().includes(payoutSearch.toLowerCase()) || 
                 p.groupName?.toLowerCase().includes(payoutSearch.toLowerCase())
               )).length === 0 ? (
-                <div className="text-center py-24 bg-white rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center">
-                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-                    <Trophy className="text-slate-200" size={40} />
+                <div className="text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center p-6">
+                  <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mb-6 text-amber-500 shadow-inner">
+                    <Trophy className="text-amber-500" size={40} />
                   </div>
                   <h4 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">
                     {payoutSearch ? (language === 'am' ? 'ምንም የተገኘ ውጤት የለም' : 'No matches found') : (payoutsView === 'pending' ? 'ምንም የሚጠባበቅ ክፍያ የለም' : 'ምንም የክፍያ ታሪክ የለም')}
                   </h4>
-                  <p className="text-sm text-slate-400 font-medium max-w-xs mx-auto">
+                  <p className="text-sm text-slate-400 font-medium max-w-xs mx-auto text-center">
                     {payoutSearch 
                       ? (language === 'am' ? 'ያስተዋሉት ስም ወይም ቡድን በትክክል መፃፉን ያረጋግጡ።' : 'Try searching for something else.')
                       : (payoutsView === 'pending' 
-                        ? 'እጣ የደረሳቸው አባላት ሲኖሩ ለክፍያ ዝግጁ ሆነው እዚህ ላይ ይመዘገባሉ።' 
+                        ? 'እጣ የደረሳቸው አባላት ሲኖሩ ለክፍያ ዝግጁ ሆነው እዚህ ላይ ይመዘገባሉ። ወይም እጣ የደረሰውን አባል መርጠው ብሩን አሁን መክፈል ይችላሉ።' 
                         : 'ገና ምንም አይነት የተረጋገጠ ክፍያ አልተመዘገበም።')}
                   </p>
+                  <button
+                    onClick={() => {
+                      setPayoutGroup(groups[0] || null);
+                      setPayoutMember(null);
+                      setPayoutAmount(0);
+                      setPayoutNote('');
+                      setPayoutSearchMember('');
+                      setShowManualWinnerPayoutModal(true);
+                    }}
+                    className="mt-6 px-7 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider flex items-center gap-2.5 shadow-xl shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <DollarSign size={18} />
+                    {language === 'am' ? 'እጣ ለደረሰው አባል ብር አውጣ (ክፈል)' : 'Send Winner Cash Out'}
+                  </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -14742,6 +14875,212 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Direct Winner Payout Modal (ለእጣ አሸናፊው ብር መክፈያ ሞዳል) */}
+      {showManualWinnerPayoutModal && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 p-6 md:p-8 relative"
+          >
+            <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 shadow-sm border border-amber-100">
+                  <Trophy size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
+                    {language === 'am' ? 'ለእጣ አሸናፊው ብር አውጣ / ክፈል' : 'Disburse Winner Cash Out'}
+                  </h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {language === 'am' ? 'እጣ የደረሰውን አባል መርጠው ክፍያ ይፈጽሙ' : 'Select winning member and disburse cash'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowManualWinnerPayoutModal(false)}
+                className="w-10 h-10 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              {/* Step 1: Select Group */}
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                  {language === 'am' ? '1. እቁብ ቡድን ይምረጡ' : '1. Select Ekub Group'}
+                </label>
+                <select
+                  value={payoutGroup?.id || ''}
+                  onChange={(e) => {
+                    const selectedG = groups.find((g: any) => g.id === e.target.value);
+                    setPayoutGroup(selectedG || null);
+                    setPayoutMember(null);
+                    setPayoutAmount(0);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                >
+                  <option value="">{language === 'am' ? '-- ቡድን ይምረጡ --' : '-- Select Group --'}</option>
+                  {groups.map((g: any) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.amount?.toLocaleString()} ETB - ዙር #{g.currentRound || 1})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 2: Select Winner Member */}
+              {payoutGroup && (
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      {language === 'am' ? '2. እጣ የደረሰውን አባል ይምረጡ' : '2. Select Winner Member'}
+                    </label>
+                    <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200/60">
+                      {language === 'am' ? `ዙር #${payoutGroup.currentRound || 1}` : `Round #${payoutGroup.currentRound || 1}`}
+                    </span>
+                  </div>
+
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                    <input
+                      type="text"
+                      placeholder={language === 'am' ? 'በስም ወይም በኮድ ፈልግ...' : 'Search member by name/code...'}
+                      value={payoutSearchMember}
+                      onChange={(e) => setPayoutSearchMember(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                    />
+                  </div>
+
+                  <div className="max-h-52 overflow-y-auto space-y-2 pr-1 border border-slate-100 rounded-2xl p-2 bg-slate-50/50">
+                    {allUsers
+                      .filter((u: any) => {
+                        const matchGroup = u.groupId === payoutGroup.id || (u.groups && u.groups.includes(payoutGroup.id));
+                        if (!matchGroup) return false;
+                        if (!payoutSearchMember) return true;
+                        const search = payoutSearchMember.toLowerCase();
+                        return (
+                          u.fullName?.toLowerCase().includes(search) ||
+                          u.memberCode?.toLowerCase().includes(search) ||
+                          u.phone?.includes(search)
+                        );
+                      })
+                      .map((m: any) => {
+                        const isSelected = payoutMember?.id === m.id || payoutMember?.uid === m.uid;
+                        const isPendingPayout = payouts.some((p: any) => p.userId === m.id && p.groupId === payoutGroup.id && p.status === 'pending');
+                        const calcAmount = m.totalPayout || (payoutGroup.amount ? payoutGroup.amount * (payoutGroup.limit || 10) * (m.slots || 1) : 0);
+
+                        return (
+                          <div
+                            key={m.id || m.uid}
+                            onClick={() => {
+                              setPayoutMember(m);
+                              setPayoutAmount(calcAmount);
+                            }}
+                            className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                              isSelected
+                                ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20 scale-[1.01]'
+                                : 'bg-white border-slate-100 hover:border-amber-200 hover:bg-slate-50 text-slate-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                {m.fullName ? m.fullName.charAt(0).toUpperCase() : 'U'}
+                              </div>
+                              <div>
+                                <p className="text-xs font-black flex items-center gap-2">
+                                  {m.fullName}
+                                  {isPendingPayout && (
+                                    <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full uppercase ${isSelected ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'}`}>
+                                      {language === 'am' ? 'እጣ ወጥቶለታል' : 'Won Draw'}
+                                    </span>
+                                  )}
+                                </p>
+                                <p className={`text-[9px] font-bold ${isSelected ? 'text-amber-100' : 'text-slate-400'}`}>
+                                  {m.memberCode || 'No Code'} • {m.phone || ''}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-xs font-black ${isSelected ? 'text-white' : 'text-emerald-600'}`}>
+                                {calcAmount > 0 ? `${calcAmount.toLocaleString()} ETB` : 'Standard'}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                    {allUsers.filter((u: any) => u.groupId === payoutGroup.id).length === 0 && (
+                      <p className="text-center py-6 text-xs font-bold text-slate-400">
+                        {language === 'am' ? 'በዚህ ቡድን ውስጥ ምንም አባላት አልተገኙም' : 'No members found in this group'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Amount & Note */}
+              {payoutMember && (
+                <div className="space-y-3 pt-2">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                      {language === 'am' ? '3. የሚከፈለው የብር መጠን (ETB)' : '3. Payout Amount (ETB)'}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={payoutAmount || ''}
+                        onChange={(e) => setPayoutAmount(Number(e.target.value))}
+                        className="w-full bg-amber-50/50 border border-amber-200 rounded-2xl px-4 py-3.5 text-base font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-amber-600 uppercase">
+                        ETB
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">
+                      {language === 'am' ? 'ማስታወሻ / የባንክ ማረጋገጫ ቁጥር (ምርጫ)' : 'Note / Reference (Optional)'}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={language === 'am' ? 'ምሳሌ: የባንክ ትራንስፈር ቁጥር...' : 'e.g. Bank Ref #...'}
+                      value={payoutNote}
+                      onChange={(e) => setPayoutNote(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500/20"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mt-8 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setShowManualWinnerPayoutModal(false)}
+                className="py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold text-xs transition-colors cursor-pointer"
+              >
+                {language === 'am' ? 'ሰርዝ' : 'Cancel'}
+              </button>
+              <button
+                onClick={handleManualWinnerPayout}
+                disabled={!payoutMember || !payoutGroup}
+                className={`py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-white transition-all shadow-xl flex items-center justify-center gap-2 ${
+                  payoutMember && payoutGroup
+                    ? 'bg-amber-500 hover:bg-amber-600 cursor-pointer shadow-amber-500/25 active:scale-95'
+                    : 'bg-slate-300 cursor-not-allowed opacity-60'
+                }`}
+              >
+                <CheckCircle size={16} />
+                {language === 'am' ? 'ብር አውጣ (ክፈል)' : 'Process Payout'}
+              </button>
             </div>
           </motion.div>
         </div>
