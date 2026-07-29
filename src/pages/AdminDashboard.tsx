@@ -29,20 +29,20 @@ const formatSlots = (s: number | undefined): string => {
 
 const getSinglePaymentAmount = (userData: any, group: any): number => {
   if (!userData) return 0;
+  const groupAmt = Number(group?.amount) || 0;
+  const userTotalPerSlot = Number(userData?.totalPerSlot) || 0;
+  const userAmt = Number(userData?.amount) || 0;
+  const baseAmount = groupAmt > 0 ? groupAmt : (userTotalPerSlot > 0 ? userTotalPerSlot : userAmt);
+
   if (userData.isSharedSlot) {
-    const split = Number(userData.splitFactor) || 2;
-    if (split === 2) return 225;
-    if (split === 3) return 183.33;
-    if (split === 4) return 137.5;
-    const baseAmount = Number(userData.totalPerSlot) || (group?.amount ? (group.amount * 1.1) : 0);
-    return baseAmount / split;
+    const split = Number(userData.splitFactor) || (userData.slots ? Math.round(1 / Number(userData.slots)) : 2);
+    return split > 0 ? baseAmount / split : baseAmount / 2;
   }
   const slots = Number(userData.slots);
   if (!isNaN(slots) && slots > 0) {
-    const baseAmount = Number(userData.totalPerSlot) || (group?.amount ? (group.amount * 1.1) : 0);
     return baseAmount * slots;
   }
-  return Number(userData.totalPerSlot) || (group?.amount ? (group.amount * 1.1) : 0);
+  return baseAmount;
 };
 
 const getPaymentCalculatedAmount = (payment: any, usersList: any[] = [], groupsList: any[] = []): number => {
