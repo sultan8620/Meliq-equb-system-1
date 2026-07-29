@@ -176,6 +176,7 @@ interface GroupMember {
   splitFactor?: number;
   jointId?: string;
   isOnline?: boolean;
+  isDiscontinued?: boolean;
 }
 
 const RULES_CONTENT = [
@@ -734,10 +735,15 @@ export default function Dashboard() {
     if (isUserDiscontinued) {
       return members.filter(m => m.uid === user?.uid || m.uid === activeSlotId);
     }
+    const filteredMembers = isAdmin ? members : members.filter(m => {
+      if (m.uid === user?.uid || m.uid === activeSlotId) return true;
+      return !(['discontinued', 'terminated', 'suspended', 'inactive'].includes(m.status) || m.isDiscontinued === true);
+    });
+
     const result: any[] = [];
     const processedUids = new Set<string>();
 
-    members.forEach(m => {
+    filteredMembers.forEach(m => {
       if (processedUids.has(m.uid)) return;
 
       // Check if this member is part of a joint slot or has partner(s)
@@ -1935,12 +1941,19 @@ export default function Dashboard() {
                 splitFactor: doc.data().splitFactor || 2,
                 phone: doc.data().phone || '',
                 memberCode: doc.data().memberCode || '',
-                jointId: doc.data().jointId || ''
+                jointId: doc.data().jointId || '',
+                isDiscontinued: doc.data().isDiscontinued || false
               }));
 
               const isUserStatusDiscontinued = ['discontinued', 'terminated', 'suspended', 'inactive'].includes(data.status) || data.isDiscontinued === true;
               if (isUserStatusDiscontinued) {
                 memberData = memberData.filter(m => m.uid === user.uid || m.uid === targetId);
+              } else if (data.role !== 'admin' && !data.isAdmin) {
+                memberData = memberData.filter(m => {
+                  if (m.uid === user.uid || m.uid === targetId) return true;
+                  const isMemDiscontinued = ['discontinued', 'terminated', 'suspended', 'inactive'].includes(m.status) || m.isDiscontinued === true;
+                  return !isMemDiscontinued;
+                });
               }
 
               setMembers(memberData);
@@ -4250,6 +4263,10 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {members
                   .filter(m => {
+                    if (!isAdmin && m.uid !== user?.uid && m.uid !== activeSlotId) {
+                      const isMemDiscontinued = ['discontinued', 'terminated', 'suspended', 'inactive'].includes(m.status) || m.isDiscontinued === true;
+                      if (isMemDiscontinued) return false;
+                    }
                     const matchesSearch = m.fullName?.toLowerCase().includes(memberSearchQuery.toLowerCase());
                     const matchesFilter = 
                       membersFilter === 'all' ? true :
@@ -4375,6 +4392,10 @@ export default function Dashboard() {
                 ))}
                 
                 {members.filter(m => {
+                  if (!isAdmin && m.uid !== user?.uid && m.uid !== activeSlotId) {
+                    const isMemDiscontinued = ['discontinued', 'terminated', 'suspended', 'inactive'].includes(m.status) || m.isDiscontinued === true;
+                    if (isMemDiscontinued) return false;
+                  }
                   const matchesSearch = m.fullName?.toLowerCase().includes(memberSearchQuery.toLowerCase());
                   const matchesFilter = 
                     membersFilter === 'all' ? true :

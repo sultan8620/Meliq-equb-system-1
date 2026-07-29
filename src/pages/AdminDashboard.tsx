@@ -64,6 +64,37 @@ const calculateTotalCollected = (paymentsList: any[] = [], usersList: any[] = []
     ['verified', 'active', 'approved', 'completed'].includes(p.status)
   );
   return validPayments.reduce((sum: number, p: any) => {
+    if (p.groupId) {
+      const group = groupsList.find((g: any) => g.id === p.groupId);
+      if (group) {
+        if (group.lastPayoutAt) {
+          let pTime: number | null = null;
+          if (p.createdAt?.toDate) {
+            pTime = p.createdAt.toDate().getTime();
+          } else if (p.createdAt?.seconds) {
+            pTime = p.createdAt.seconds * 1000;
+          } else if (p.createdAt) {
+            pTime = new Date(p.createdAt).getTime();
+          }
+
+          let payoutTime: number | null = null;
+          if (group.lastPayoutAt?.toDate) {
+            payoutTime = group.lastPayoutAt.toDate().getTime();
+          } else if (group.lastPayoutAt?.seconds) {
+            payoutTime = group.lastPayoutAt.seconds * 1000;
+          } else if (group.lastPayoutAt) {
+            payoutTime = new Date(group.lastPayoutAt).getTime();
+          }
+
+          if (pTime !== null && payoutTime !== null && pTime <= payoutTime) {
+            return sum;
+          }
+        }
+        if (p.round && group.currentRound && p.round < group.currentRound) {
+          return sum;
+        }
+      }
+    }
     return sum + getPaymentCalculatedAmount(p, usersList, groupsList);
   }, 0);
 };
@@ -1223,6 +1254,21 @@ export default function AdminDashboard() {
         await addDoc(collection(db, 'draws'), drawPayload).catch(e => console.error("Error writing to draws collection:", e));
         await addDoc(collection(db, 'draw_history'), drawPayload).catch(e => console.error("Error writing to draw_history collection:", e));
 
+        // Create pending payout for Payout Management & Cash Out
+        const payoutPayload = {
+          groupId: selectedDrawGroup.id || '',
+          groupName: selectedDrawGroup.name || '',
+          userId: winnerId,
+          userName: winnerNameStr,
+          userPhone: winnerPhoneStr,
+          amount: Number(selectedDrawGroup.payoutAmount || selectedDrawGroup.amount) || 0,
+          round: round,
+          status: 'pending',
+          createdAt: serverTimestamp(),
+          drawDate: new Date().toISOString()
+        };
+        await addDoc(collection(db, 'payouts'), payoutPayload).catch(e => console.error("Error writing to payouts collection:", e));
+
         // 4. Send notifications
         const titleAm = '🎉 የዕጣ አሸናፊ ማሳወቂያ';
         const titleEn = '🎉 Lucky Winner Notice';
@@ -2107,15 +2153,46 @@ export default function AdminDashboard() {
 
   const approvePayout = async (payoutId: string, userId: string) => {
     try {
+      const payoutObj = payouts.find(p => p.id === payoutId) || allPayouts.find(p => p.id === payoutId);
+      const groupId = payoutObj?.groupId;
+      const targetGroup = groups.find(g => g.id === groupId);
+
       await updateDoc(doc(db, 'payouts', payoutId), {
         status: 'active',
         paidAt: serverTimestamp()
       });
-      await updateDoc(doc(db, 'users', userId), {
-        payoutStatus: 'completed'
-      });
-      await notifyUserAdminChange(userId, 'የእጣ ክፍያ ተፈጽሟል', 'Payout Completed', 'የእጣ ክፍያዎ ወደ ሂሳብዎ ገብቷል::', 'Your ekub payout has been transferred to your account.');
-      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ክፍያው በተሳካ ሁኔታ ተፈጽሟል!' : 'Payout completed successfully!');
+      if (userId) {
+        await updateDoc(doc(db, 'users', userId), {
+          payoutStatus: 'completed'
+        });
+      }
+
+      if (groupId) {
+        const roundNum = payoutObj?.round || targetGroup?.currentRound || 1;
+        const totalCount = targetGroup?.totalParticipants || targetGroup?.memberCount || targetGroup?.limit || 10;
+        const nextRound = roundNum + 1;
+        const isCompleted = nextRound > totalCount;
+
+        await updateDoc(doc(db, 'groups', groupId), {
+          lastPayoutAt: serverTimestamp(),
+          lastPayoutRound: roundNum,
+          currentRound: isCompleted ? roundNum : nextRound,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      await addDoc(collection(db, 'audit_logs'), {
+        type: 'payment',
+        action: `የእጣ ክፍያ (Cash Out) ተፈጽሟል - ዙር ${payoutObj?.round || targetGroup?.currentRound || 1}`,
+        userName: payoutObj?.userName || 'Winner',
+        amount: payoutObj?.amount || 0,
+        groupId: groupId || '',
+        createdAt: serverTimestamp(),
+        status: 'success'
+      }).catch(e => console.warn(e));
+
+      await notifyUserAdminChange(userId, 'የእጣ ክፍያ ተፈጽሟል', 'Payout Completed', 'የእጣ ክፍያዎ (Cash Out) ተፈጽሞ ወደ ሂሳብዎ ገብቷል::', 'Your ekub payout has been transferred to your account.');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ካሽ አውት (የእጣ ክፍያ) በተሳካ ሁኔታ ተፈጽሟል! አዲሱ ዙር በአዲስ ሁኔታ ጀምሯል።' : 'Cash Out completed successfully! New round started fresh.');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `payouts/${payoutId}`);
     }
