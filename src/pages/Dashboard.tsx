@@ -151,6 +151,7 @@ interface Group {
   nextDrawDate?: any;
   createdAt?: any;
   currentRound?: number;
+  lastPayoutAt?: any;
   cbeAccount?: string;
   telebirrAccount?: string;
   boaAccount?: string;
@@ -1026,6 +1027,44 @@ export default function Dashboard() {
       .filter((p: any) => p.status === 'verified')
       .reduce((acc: number, curr: any) => acc + (parseInt(curr.amount) || 0), 0);
   }, [payments]);
+
+  const groupCollectedTotal = useMemo(() => {
+    if (!groupPayments || groupPayments.length === 0) return 0;
+    
+    const validPayments = groupPayments.filter((p: any) =>
+      ['verified', 'active', 'approved', 'completed'].includes(p.status)
+    );
+
+    return validPayments.reduce((sum: number, p: any) => {
+      if (group?.lastPayoutAt) {
+        let pTime: number | null = null;
+        if (p.createdAt?.toDate) {
+          pTime = p.createdAt.toDate().getTime();
+        } else if (p.createdAt?.seconds) {
+          pTime = p.createdAt.seconds * 1000;
+        } else if (p.createdAt) {
+          pTime = new Date(p.createdAt).getTime();
+        }
+
+        let payoutTime: number | null = null;
+        if (group.lastPayoutAt?.toDate) {
+          payoutTime = group.lastPayoutAt.toDate().getTime();
+        } else if (group.lastPayoutAt?.seconds) {
+          payoutTime = group.lastPayoutAt.seconds * 1000;
+        } else if (group.lastPayoutAt) {
+          payoutTime = new Date(group.lastPayoutAt).getTime();
+        }
+
+        if (pTime !== null && payoutTime !== null && pTime <= payoutTime) {
+          return sum;
+        }
+      }
+      if (p.round && group?.currentRound && p.round < group.currentRound) {
+        return sum;
+      }
+      return sum + (Number(p.amount) || 0);
+    }, 0);
+  }, [groupPayments, group?.lastPayoutAt, group?.currentRound]);
 
   const totalWinnersCount = useMemo(() => {
     return drawWinners.length;
@@ -3630,7 +3669,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                   <div className="grid grid-cols-3 lg:grid-cols-3 gap-4 p-2 bg-slate-50/50 rounded-[2rem] border border-slate-100/50">
+                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-2 bg-slate-50/50 rounded-[2rem] border border-slate-100/50">
                      <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                         <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><DollarSign size={16} /></div>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'መክፈያ መጠን' : 'Base Amount'}</p>
@@ -3641,15 +3680,15 @@ export default function Dashboard() {
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'አባላት' : 'Total Members'}</p>
                         <p className="text-xl font-display font-black text-slate-900 leading-none">{group?.memberCount}</p>
                      </div>
-                     <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><Trophy size={16} /></div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'አሸናፊዎች' : 'Winners'}</p>
-                        <p className="text-xl font-display font-black text-slate-900 leading-none">{totalWinnersCount}</p>
-                     </div>
-                     <div className="flex col-span-2 lg:col-span-1 flex-col gap-2 p-5 bg-emerald-50 rounded-[1.5rem] border border-emerald-100 shadow-sm hover:shadow-md transition-all group">
+                     <div className="flex flex-col gap-2 p-5 bg-emerald-50 rounded-[1.5rem] border border-emerald-100 shadow-sm hover:shadow-md transition-all group">
                         <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center mb-1 group-hover:scale-110 transition-transform"><CheckCircle size={16} /></div>
-                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{language === 'am' ? 'የተረጋገጠ ክፍያ' : 'Verified Payment'}</p>
-                        <p className="text-xl font-display font-black text-emerald-900 leading-none">{verifiedPaymentsTotal.toLocaleString()} <span className="text-[10px] text-emerald-600">ETB</span></p>
+                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{language === 'am' ? 'የቡድኑ የተሰበሰበ ብር (የአሁኑ ዙር)' : 'Group Pool (Current Round)'}</p>
+                        <p className="text-xl font-display font-black text-emerald-900 leading-none">{groupCollectedTotal.toLocaleString()} <span className="text-[10px] text-emerald-600">ETB</span></p>
+                     </div>
+                     <div className="flex flex-col gap-2 p-5 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><CheckCircle size={16} className="text-indigo-600" /></div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'የእኔ የተረጋገጠ ክፍያ' : 'My Verified Payment'}</p>
+                        <p className="text-xl font-display font-black text-slate-900 leading-none">{verifiedPaymentsTotal.toLocaleString()} <span className="text-xs text-slate-400">ETB</span></p>
                      </div>
                    </div>
                 </div>
