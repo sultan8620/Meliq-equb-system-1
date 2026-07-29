@@ -232,7 +232,7 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
     if (isSelf) return true;
 
     const targetGroup = (group && (group.id === w.groupId || group.id === w.group?.id)) ? group : (w.group || group);
-    const mode = targetGroup?.winnerVisibilityMode || w.winnerVisibilityMode || 'all';
+    const mode = targetGroup?.winnerVisibilityMode || w.winnerVisibilityMode || 'none';
     const allowedIds = targetGroup?.allowedWinnerViewerIds || w.allowedWinnerViewerIds || [];
 
     if (mode === 'all') return true;
@@ -240,7 +240,7 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
     if (mode === 'selected') {
       return Array.isArray(allowedIds) && allowedIds.includes(currentUserId);
     }
-    return true;
+    return false;
   };
 
   const getWinnerDisplayName = (w: any) => {
@@ -3065,9 +3065,29 @@ export default function Dashboard() {
                         <Trophy size={18} />
                      </div>
                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{language === 'am' ? 'የእጣ ሁኔታ' : 'Won Draw'}</span>
-                     <span className={`text-sm font-black ${selectedMemberModal.wonDraw ? 'text-amber-600' : 'text-slate-400'}`}>
-                        {selectedMemberModal.wonDraw ? (language === 'am' ? 'አሸናፊ' : 'Winner!') : (language === 'am' ? 'ገና ነው' : 'Pending')}
-                     </span>
+                     {(() => {
+                       const curUserId = user?.uid || userData?.id;
+                       const isWinVisible = (() => {
+                         if (userData?.role === 'admin' || userData?.isAdmin) return true;
+                         if (selectedMemberModal.uid === curUserId || (selectedMemberModal as any).id === curUserId) return true;
+                         const mode = group?.winnerVisibilityMode || 'none';
+                         const allowed = group?.allowedWinnerViewerIds || [];
+                         if (mode === 'all') return true;
+                         if (mode === 'none') return false;
+                         if (mode === 'selected') return Array.isArray(allowed) && allowed.includes(curUserId);
+                         return false;
+                       })();
+
+                       if (!selectedMemberModal.wonDraw) {
+                         return <span className="text-sm font-black text-slate-400">{language === 'am' ? 'ገና ነው' : 'Pending'}</span>;
+                       }
+
+                       return isWinVisible ? (
+                         <span className="text-sm font-black text-amber-600">{language === 'am' ? 'አሸናፊ' : 'Winner!'}</span>
+                       ) : (
+                         <span className="text-xs font-black text-slate-400">{language === 'am' ? '🔒 ምስጢራዊ' : '🔒 Confidential'}</span>
+                       );
+                     })()}
                   </div>
                 </div>
 
@@ -4319,12 +4339,12 @@ export default function Dashboard() {
                                    if (isAdmin) return true;
                                    const curId = user?.uid || userData?.id;
                                    if (member.uid === curId || member.id === curId) return true;
-                                   const mode = group?.winnerVisibilityMode || 'all';
+                                   const mode = group?.winnerVisibilityMode || 'none';
                                    const allowed = group?.allowedWinnerViewerIds || [];
                                    if (mode === 'all') return true;
                                    if (mode === 'none') return false;
                                    if (mode === 'selected') return Array.isArray(allowed) && allowed.includes(curId);
-                                   return true;
+                                   return false;
                                  })();
 
                                  return isWinVisible ? (

@@ -1010,7 +1010,7 @@ export default function AdminDashboard() {
 
   const openWinnerVisibilityModal = (group: any) => {
     setVisibilityGroup(group);
-    setVisibilityMode(group.winnerVisibilityMode || 'all');
+    setVisibilityMode(group.winnerVisibilityMode || 'none');
     setAllowedViewerIds(group.allowedWinnerViewerIds || []);
     setVisibilitySearch('');
     setShowWinnerVisibilityModal(true);
@@ -1215,7 +1215,7 @@ export default function AdminDashboard() {
           round: round,
           week: round,
           amount: Number(selectedDrawGroup.payoutAmount || selectedDrawGroup.amount) || 0,
-          winnerVisibilityMode: selectedDrawGroup.winnerVisibilityMode || 'all',
+          winnerVisibilityMode: selectedDrawGroup.winnerVisibilityMode || 'none',
           allowedWinnerViewerIds: Array.isArray(selectedDrawGroup.allowedWinnerViewerIds) ? selectedDrawGroup.allowedWinnerViewerIds : [],
           date: serverTimestamp()
         };
