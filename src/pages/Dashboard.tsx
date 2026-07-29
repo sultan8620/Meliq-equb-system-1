@@ -720,12 +720,20 @@ export default function Dashboard() {
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
   const [allGroups, setAllGroups] = useState<any[]>([]);
 
+  const isUserDiscontinued = useMemo(() => {
+    if (!userData) return false;
+    return ['discontinued', 'terminated', 'suspended', 'inactive'].includes(userData.status) || userData.isDiscontinued === true;
+  }, [userData]);
+
   const jointSlots = useMemo(() => {
-    if (!userData?.phone) return [];
+    if (!userData?.phone || isUserDiscontinued) return [];
     return associatedSlots.filter(s => (s.isSharedSlot === true || (s.slots && Number(s.slots) < 1)) && s.id !== user?.uid);
-  }, [associatedSlots, userData?.phone, user?.uid]);
+  }, [associatedSlots, userData?.phone, user?.uid, isUserDiscontinued]);
 
   const groupedMembers = useMemo(() => {
+    if (isUserDiscontinued) {
+      return members.filter(m => m.uid === user?.uid || m.uid === activeSlotId);
+    }
     const result: any[] = [];
     const processedUids = new Set<string>();
 
@@ -1916,7 +1924,7 @@ export default function Dashboard() {
             // Real-time group members
             const qMembers = query(collection(db, 'users'), where('groupId', '==', data.groupId));
             unsubMembers = onSnapshot(qMembers, (snapshot) => {
-              const memberData = snapshot.docs.map(doc => ({
+              let memberData = snapshot.docs.map(doc => ({
                 uid: doc.id,
                 fullName: doc.data().fullName,
                 slots: doc.data().slots || 1,
@@ -1929,6 +1937,12 @@ export default function Dashboard() {
                 memberCode: doc.data().memberCode || '',
                 jointId: doc.data().jointId || ''
               }));
+
+              const isUserStatusDiscontinued = ['discontinued', 'terminated', 'suspended', 'inactive'].includes(data.status) || data.isDiscontinued === true;
+              if (isUserStatusDiscontinued) {
+                memberData = memberData.filter(m => m.uid === user.uid || m.uid === targetId);
+              }
+
               setMembers(memberData);
             });
 
@@ -1939,7 +1953,12 @@ export default function Dashboard() {
               where('status', 'in', ['active', 'verified', 'completed', 'pending'])
             );
             unsubGroupPayments = onSnapshot(qGroupPayments, (snapshot) => {
-              setGroupPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+              let payData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              const isUserStatusDiscontinued = ['discontinued', 'terminated', 'suspended', 'inactive'].includes(data.status) || data.isDiscontinued === true;
+              if (isUserStatusDiscontinued) {
+                payData = payData.filter((p: any) => p.userId === user.uid || p.userId === targetId);
+              }
+              setGroupPayments(payData);
             });
 
             // Real-time chat messages
@@ -3269,6 +3288,34 @@ export default function Dashboard() {
 
       {activeTab === 'overview' && (
         <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} className="space-y-6 mb-2">
+           {/* Discontinued Warning Banner */}
+           {isUserDiscontinued && (
+             <motion.div 
+               initial={{ opacity: 0, scale: 0.95 }}
+               animate={{ opacity: 1, scale: 1 }}
+               className="bg-gradient-to-r from-rose-900 via-rose-950 to-red-950 border-2 border-rose-500/60 p-6 md:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center gap-6 shadow-2xl text-white mt-2"
+             >
+                <div className="w-16 h-16 bg-rose-500 text-white rounded-3xl flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/30 animate-pulse">
+                   <AlertTriangle size={32} />
+                </div>
+                <div className="flex-1 text-center md:text-left">
+                   <div className="flex items-center justify-center md:justify-start gap-2 mb-1">
+                      <span className="px-3 py-1 bg-rose-500/20 text-rose-300 rounded-full text-[9px] font-black uppercase tracking-widest border border-rose-500/40">
+                         {language === 'am' ? 'የተቋረጠ አካውንት' : 'Discontinued Account'}
+                      </span>
+                   </div>
+                   <h3 className="text-xl font-display font-black tracking-tight text-rose-100 uppercase">
+                      {language === 'am' ? 'አድሚን አካውንትዎን አቋርጧል (አቋርጦዎታል)' : 'Admin Has Discontinued Your Account'}
+                   </h3>
+                   <p className="text-xs font-bold text-rose-200/80 mt-1.5 leading-relaxed max-w-3xl">
+                      {language === 'am' 
+                        ? 'አድሚን አካውንትዎን (አባልነትዎን) ስላቋረጠው ከእርስዎ የግል መረጃ ውጪ የሌሎች አባላትን መረጃ ማየት አይችሉም። የእርስዎን የግል ክፍያዎችና ማህደር ብቻ ነው ማየት የሚችሉት።' 
+                        : 'The administrator has discontinued your account. You are restricted from viewing other members\' information and can only view your personal account and payment history.'}
+                   </p>
+                </div>
+             </motion.div>
+           )}
+
            {/* Eligibility Warning */}
            {userPenalties.filter(p => p.status === 'pending').length > 0 && (
              <motion.div 
@@ -3325,9 +3372,19 @@ export default function Dashboard() {
                     <div className="flex items-center justify-center md:justify-start gap-3">
                        <span className="text-[10px] font-black uppercase tracking-widest text-white/50 bg-white/5 px-3 py-1 rounded-full">{userData.phone}</span>
                        <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
-                       <div className={`px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-inner ${userData.status === 'pending' ? 'bg-amber-500/20 text-amber-100 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-100 border border-emerald-500/30'}`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${userData.status === 'pending' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
-                          {userData.status === 'pending' ? t('common.pending') : t('common.verified')}
+                       <div className={`px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-inner ${
+                         isUserDiscontinued 
+                           ? 'bg-rose-500/30 text-rose-200 border border-rose-500/50' 
+                           : userData.status === 'pending' 
+                           ? 'bg-amber-500/20 text-amber-100 border border-amber-500/30' 
+                           : 'bg-emerald-500/20 text-emerald-100 border border-emerald-500/30'
+                       }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${isUserDiscontinued ? 'bg-rose-400' : userData.status === 'pending' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
+                          {isUserDiscontinued 
+                            ? (language === 'am' ? 'የተቋረጠ (Discontinued)' : 'Discontinued') 
+                            : userData.status === 'pending' 
+                            ? t('common.pending') 
+                            : t('common.verified')}
                        </div>
                        <div className={`px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-inner ${userData.isDailyPaymentActive !== false ? 'bg-indigo-500/20 text-indigo-100 border border-indigo-500/30' : 'bg-rose-500/20 text-rose-100 border border-rose-500/30'}`}>
                           <div className={`w-1.5 h-1.5 rounded-full ${userData.isDailyPaymentActive !== false ? 'bg-indigo-400 animate-pulse' : 'bg-rose-400'}`} />

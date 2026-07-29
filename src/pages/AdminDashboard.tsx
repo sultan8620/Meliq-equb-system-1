@@ -2510,6 +2510,50 @@ export default function AdminDashboard() {
     }
   };
 
+  const discontinueUser = async (userId: string) => {
+    if (await confirmAction(language === 'am' ? 'ይህንን አባል ማቋረጥ ይፈልጋሉ? አባሉ ከራሱ ውጪ የሌሎች አባላትን መረጃ እንዳያይ ይደረጋል።' : 'Are you sure you want to discontinue this member? They will be restricted from viewing other members\' information.')) {
+      try {
+        await updateDoc(doc(db, 'users', userId), {
+          status: 'discontinued',
+          discontinuedAt: serverTimestamp()
+        });
+        await addDoc(collection(db, 'notifications'), {
+          recipientId: userId,
+          title: language === 'am' ? 'አካውንትዎ ተቋርጧል' : 'Account Discontinued',
+          message: language === 'am'
+            ? 'አድሚን አካውንትዎን (አባልነትዎን) አቋርጧል። ከእርስዎ ውጪ የሌሎች አባላት መረጃ ለእርስዎ አይታይም።'
+            : 'Admin has discontinued your account. You can no longer view other members\' details.',
+          createdAt: serverTimestamp(),
+          read: false,
+          type: 'status_change'
+        });
+        triggerSuccess(
+          language === 'am' ? 'ተከናወነ' : 'Success',
+          language === 'am' ? 'አባሉ በውጤታማነት ተቋርጧል (አድሚን አቋርጦታል)' : 'Member status updated to Discontinued'
+        );
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
+      }
+    }
+  };
+
+  const reactivateUser = async (userId: string) => {
+    if (await confirmAction(language === 'am' ? 'ይህንን አባል እንደገና Active ማድረግ ይፈልጋሉ?' : 'Reactivate this member to active status?')) {
+      try {
+        await updateDoc(doc(db, 'users', userId), {
+          status: 'active',
+          reactivatedAt: serverTimestamp()
+        });
+        triggerSuccess(
+          language === 'am' ? 'ተከናወነ' : 'Success',
+          language === 'am' ? 'አባሉ እንደገና Active ተደርጓል' : 'Member reactivated successfully'
+        );
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
+      }
+    }
+  };
+
   const toggleAdminPermission = async (adminId: string, permission: string, currentValue: boolean) => {
     try {
       // 1. Update directly client-side (logged-in Admin is fully permitted)
@@ -3781,7 +3825,7 @@ export default function AdminDashboard() {
         memberCode: editUserForm.memberCode || '',
         amount: parseFloat(editUserForm.amount) || 0,
         groupId: editUserForm.groupId || null,
-        status: 'active' // Immediately approved/activated as requested: "ወዲያው እንዲፀድቅ አድርግልኝ"
+        status: editUserForm.status || 'active'
       });
       setShowEditUserModal(false);
       
@@ -13954,12 +13998,35 @@ export default function AdminDashboard() {
                   </button>
                 </>
               ) : (
-                <button 
-                  onClick={() => setShowKYCModal(false)}
-                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
-                >
-                  <X size={18} /> ዝጋ (Close)
-                </button>
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
+                  {selectedUser.status === 'discontinued' ? (
+                    <button 
+                      onClick={async () => {
+                        await reactivateUser(selectedUser.id);
+                        setShowKYCModal(false);
+                      }}
+                      className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg"
+                    >
+                      <CheckCircle size={18} /> {language === 'am' ? 'አባልነቱን መልስ' : 'Reactivate Member'}
+                    </button>
+                  ) : selectedUser.status === 'active' ? (
+                    <button 
+                      onClick={async () => {
+                        await discontinueUser(selectedUser.id);
+                        setShowKYCModal(false);
+                      }}
+                      className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-rose-700 transition-all flex items-center justify-center gap-2 shadow-lg"
+                    >
+                      <Ban size={18} /> {language === 'am' ? 'አባል አቋርጥ (Discontinue)' : 'Discontinue Member'}
+                    </button>
+                  ) : null}
+                  <button 
+                    onClick={() => setShowKYCModal(false)}
+                    className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
+                  >
+                    <X size={18} /> ዝጋ (Close)
+                  </button>
+                </div>
               )}
             </div>
           </motion.div>
@@ -15078,6 +15145,8 @@ export default function AdminDashboard() {
                     <select value={editUserForm.status} onChange={e => setEditUserForm({...editUserForm, status: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700">
                       <option value="pending">Pending</option>
                       <option value="active">Active</option>
+                      <option value="discontinued">Discontinued (የቋረጠ)</option>
+                      <option value="suspended">Suspended (የታገደ)</option>
                       <option value="rejected">Rejected</option>
                     </select>
                  </div>
