@@ -1029,6 +1029,13 @@ export default function Dashboard() {
       .reduce((acc: number, curr: any) => acc + (parseInt(curr.amount) || 0), 0);
   }, [payments]);
 
+  const groupDisbursedTotal = useMemo(() => {
+    if (!groupPayouts || groupPayouts.length === 0) return 0;
+    return groupPayouts
+      .filter((p: any) => p.status === 'active' || p.status === 'completed')
+      .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+  }, [groupPayouts]);
+
   const groupCollectedTotal = useMemo(() => {
     if (!groupPayments || groupPayments.length === 0) return 0;
     
@@ -1036,43 +1043,9 @@ export default function Dashboard() {
       ['verified', 'active', 'approved', 'completed'].includes(p.status)
     );
 
-    return validPayments.reduce((sum: number, p: any) => {
-      if (group?.lastPayoutAt) {
-        let pTime: number | null = null;
-        if (p.createdAt?.toDate) {
-          pTime = p.createdAt.toDate().getTime();
-        } else if (p.createdAt?.seconds) {
-          pTime = p.createdAt.seconds * 1000;
-        } else if (p.createdAt) {
-          pTime = new Date(p.createdAt).getTime();
-        }
-
-        let payoutTime: number | null = null;
-        if (group.lastPayoutAt?.toDate) {
-          payoutTime = group.lastPayoutAt.toDate().getTime();
-        } else if (group.lastPayoutAt?.seconds) {
-          payoutTime = group.lastPayoutAt.seconds * 1000;
-        } else if (group.lastPayoutAt) {
-          payoutTime = new Date(group.lastPayoutAt).getTime();
-        }
-
-        if (pTime !== null && payoutTime !== null && pTime <= payoutTime) {
-          return sum;
-        }
-      }
-      if (p.round && group?.currentRound && p.round < group.currentRound) {
-        return sum;
-      }
-      return sum + (Number(p.amount) || 0);
-    }, 0);
-  }, [groupPayments, group?.lastPayoutAt, group?.currentRound]);
-
-  const groupDisbursedTotal = useMemo(() => {
-    if (!groupPayouts || groupPayouts.length === 0) return 0;
-    return groupPayouts
-      .filter((p: any) => p.status === 'active' || p.status === 'completed')
-      .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-  }, [groupPayouts]);
+    const totalEverCollected = validPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+    return Math.max(0, totalEverCollected - groupDisbursedTotal);
+  }, [groupPayments, groupDisbursedTotal]);
 
   const activeGroupMembersCount = useMemo(() => {
     if (groupedMembers && groupedMembers.length > 0) return groupedMembers.length;

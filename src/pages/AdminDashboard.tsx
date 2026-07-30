@@ -11,7 +11,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { useLanguage } from '../lib/LanguageContext';
 import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSnapshot, serverTimestamp, limit, setDoc, deleteDoc, orderBy, arrayUnion, or, increment } from 'firebase/firestore';
-import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ChevronDown, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff, UserMinus, Ban } from 'lucide-react';
+import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, RotateCcw, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ChevronDown, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff, UserMinus, Ban } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { sendSMS } from '../lib/smsHelper';
 
@@ -59,44 +59,18 @@ const getPaymentCalculatedAmount = (payment: any, usersList: any[] = [], groupsL
   return Number(payment.amount) || 0;
 };
 
-const calculateTotalCollected = (paymentsList: any[] = [], usersList: any[] = [], groupsList: any[] = []): number => {
+const calculateTotalCollected = (paymentsList: any[] = [], usersList: any[] = [], groupsList: any[] = [], payoutsList: any[] = []): number => {
   const validPayments = paymentsList.filter((p: any) => 
     ['verified', 'active', 'approved', 'completed'].includes(p.status)
   );
-  return validPayments.reduce((sum: number, p: any) => {
-    if (p.groupId) {
-      const group = groupsList.find((g: any) => g.id === p.groupId);
-      if (group) {
-        if (group.lastPayoutAt) {
-          let pTime: number | null = null;
-          if (p.createdAt?.toDate) {
-            pTime = p.createdAt.toDate().getTime();
-          } else if (p.createdAt?.seconds) {
-            pTime = p.createdAt.seconds * 1000;
-          } else if (p.createdAt) {
-            pTime = new Date(p.createdAt).getTime();
-          }
+  const totalEverCollected = validPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
-          let payoutTime: number | null = null;
-          if (group.lastPayoutAt?.toDate) {
-            payoutTime = group.lastPayoutAt.toDate().getTime();
-          } else if (group.lastPayoutAt?.seconds) {
-            payoutTime = group.lastPayoutAt.seconds * 1000;
-          } else if (group.lastPayoutAt) {
-            payoutTime = new Date(group.lastPayoutAt).getTime();
-          }
+  const validPayouts = payoutsList.filter((p: any) =>
+    ['active', 'completed'].includes(p.status)
+  );
+  const totalDisbursed = validPayouts.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
-          if (pTime !== null && payoutTime !== null && pTime <= payoutTime) {
-            return sum;
-          }
-        }
-        if (p.round && group.currentRound && p.round < group.currentRound) {
-          return sum;
-        }
-      }
-    }
-    return sum + getPaymentCalculatedAmount(p, usersList, groupsList);
-  }, 0);
+  return Math.max(0, totalEverCollected - totalDisbursed);
 };
 
 const getBankPrefix = (bankName: string) => {
@@ -2290,6 +2264,89 @@ export default function AdminDashboard() {
       // Revert if failed
       console.error("Payout deletion error:", error);
       handleFirestoreError(error, OperationType.DELETE, `payouts/${payoutId}`);
+    }
+  };
+
+  const revertPayout = async (payoutId: string, userId: string) => {
+    if (!await confirmAction(language === 'am' ? 'ይህንን ክፍያ ወደተጠባባቂ መመለስ እርግጠኛ ነዎት?' : 'Confirm revert this payout to pending?')) return;
+    try {
+      const payoutObj = payouts.find(p => p.id === payoutId) || allPayouts.find(p => p.id === payoutId);
+      const groupId = payoutObj?.groupId;
+      const targetGroup = groups.find(g => g.id === groupId);
+
+      // 1. Revert payout status
+      await updateDoc(doc(db, 'payouts', payoutId), {
+        status: 'pending',
+        revertedAt: serverTimestamp(),
+        paidAt: null
+      });
+
+      // 2. Revert user payoutStatus
+      if (userId) {
+        await updateDoc(doc(db, 'users', userId), {
+          payoutStatus: 'pending'
+        });
+      }
+
+      // 3. Revert group state
+      if (groupId) {
+        // Find previous active payout to restore lastPayoutAt and lastPayoutRound
+        const qPrev = query(
+          collection(db, 'payouts'), 
+          where('groupId', '==', groupId),
+          where('status', '==', 'active')
+        );
+        const prevSnap = await getDocs(qPrev);
+        const activePayouts = prevSnap.docs
+          .map(d => ({ id: d.id, ...d.data() } as any))
+          .filter(p => p.id !== payoutId)
+          .sort((a, b) => {
+            const timeA = (typeof a.paidAt?.toMillis === 'function') ? a.paidAt.toMillis() : 0;
+            const timeB = (typeof b.paidAt?.toMillis === 'function') ? b.paidAt.toMillis() : 0;
+            return timeB - timeA;
+          });
+
+        const prevPayout = activePayouts[0];
+        
+        const roundNum = payoutObj?.round || targetGroup?.currentRound || 1;
+        // If currentRound is greater than the round we are reverting, revert it back
+        let newRound = targetGroup?.currentRound || 1;
+        if (targetGroup && targetGroup.currentRound > roundNum) {
+          newRound = roundNum;
+        }
+
+        const updateData: any = {
+          status: 'active', // Restore group to active in case it was completed
+          currentRound: newRound,
+          updatedAt: serverTimestamp()
+        };
+
+        if (prevPayout) {
+          updateData.lastPayoutAt = prevPayout.paidAt || serverTimestamp();
+          updateData.lastPayoutRound = prevPayout.round || 1;
+        } else {
+          updateData.lastPayoutAt = null;
+          updateData.lastPayoutRound = null;
+        }
+
+        await updateDoc(doc(db, 'groups', groupId), updateData);
+      }
+
+      // 4. Audit Log
+      await addDoc(collection(db, 'audit_logs'), {
+        type: 'payment',
+        action: `የእጣ ክፍያ ተመልሷል (Reverted) - ዙር ${payoutObj?.round || targetGroup?.currentRound || 1}`,
+        userName: payoutObj?.userName || 'Winner',
+        amount: payoutObj?.amount || 0,
+        groupId: groupId || '',
+        createdAt: serverTimestamp(),
+        status: 'success'
+      }).catch(e => console.warn(e));
+
+      await notifyUserAdminChange(userId, 'የእጣ ክፍያ ተመልሷል', 'Payout Reverted', 'የእጣ ክፍያዎ (Cash Out) ወደ ተጠባባቂ ተመልሷል::', 'Your ekub payout has been reverted to pending.');
+      triggerSuccess(language === 'am' ? 'ማሳወቂያ' : 'Notice', language === 'am' ? 'ካሽ አውት ወደ ተጠባባቂ ተመልሷል::' : 'Payout reverted successfully.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `payouts/${payoutId}`);
     }
   };
 
@@ -6019,7 +6076,7 @@ export default function AdminDashboard() {
                       { label: 'ምዝገባ ላይ', value: groups.filter(g => g.status !== 'active').length, icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10 border-amber-400/20' },
                       { label: 'አሸናፊዎች', value: groups.filter(g => g.lastWinner).length, icon: Trophy, color: 'text-indigo-400', bg: 'bg-indigo-400/10 border-indigo-400/20' },
                       { label: 'የተሰበሰበ ብር', value: (() => {
-                        const total = calculateTotalCollected(allPayments, allUsers, groupsWithMembers);
+                        const total = calculateTotalCollected(allPayments, allUsers, groupsWithMembers, allPayouts);
                         return total >= 1000000 ? (total / 1000000).toFixed(1) + 'M' : total >= 1000 ? (total / 1000).toFixed(1) + 'k' : total.toLocaleString();
                       })(), icon: DollarSign, color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/20' }
                     ].map((m, i) => (
@@ -6052,7 +6109,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${vGroup.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                           <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                             {vGroup.status === 'active' ? 'ንቁ ቡድን' : 'ምዝገባ ላይ'} • {vGroup.type} • የተሰበሰበ: <span className="text-emerald-600 font-black">{calculateTotalCollected(allPayments.filter(p => p.groupId === vGroup.id), allUsers, groupsWithMembers).toLocaleString()} ብር</span>
+                             {vGroup.status === 'active' ? 'ንቁ ቡድን' : 'ምዝገባ ላይ'} • {vGroup.type} • የተሰበሰበ: <span className="text-emerald-600 font-black">{calculateTotalCollected(allPayments.filter(p => p.groupId === vGroup.id), allUsers, groupsWithMembers, allPayouts.filter(p => p.groupId === vGroup.id)).toLocaleString()} ብር</span>
                           </span>
                         </div>
                       </div>
@@ -6699,7 +6756,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="text-right mt-1">
                           <p className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mb-1">የተሰበሰበ ብር</p>
-                          <p className="text-xs font-black text-emerald-600 leading-none">{calculateTotalCollected(allPayments.filter(p => p.groupId === group.id), allUsers, groupsWithMembers).toLocaleString()} <span className="text-[8px] text-slate-500">ብር</span></p>
+                          <p className="text-xs font-black text-emerald-600 leading-none">{calculateTotalCollected(allPayments.filter(p => p.groupId === group.id), allUsers, groupsWithMembers, allPayouts.filter(p => p.groupId === group.id)).toLocaleString()} <span className="text-[8px] text-slate-500">ብር</span></p>
                         </div>
                       </div>
                     </div>
@@ -8156,7 +8213,7 @@ export default function AdminDashboard() {
           >
             {(() => {
               const totalCapital = groups.reduce((acc, g) => acc + ((parseInt(g.amount) || 0) * (g.memberCount || 10)), 0);
-              const totalPayoutAmount = allPayouts.reduce((acc, p) => acc + (p.amount || 0), 0);
+              const totalPayoutAmount = allPayouts.filter(p => p.status === 'active' || p.status === 'completed').reduce((acc, p) => acc + (p.amount || 0), 0);
               const activeMembers = allUsers.filter(u => u.status === 'active').length;
               const regionDistribution = allUsers.reduce((acc, user) => {
                 const region = user.addressRegion || 'Addis Ababa';
@@ -10211,6 +10268,13 @@ export default function AdminDashboard() {
                            >
                              <FileText size={16} /> ደረሰኝ (Voucher)
                            </button>
+                           <button 
+                              onClick={() => revertPayout(payout.id, payout.userId)} 
+                              className="w-12 h-12 flex items-center justify-center bg-amber-50 text-amber-500 rounded-xl hover:bg-amber-500 hover:text-white transition-all shrink-0 group/rev"
+                              title={language === 'am' ? 'ክፍያን መልስ (Revert)' : 'Revert Payout'}
+                           >
+                             <RotateCcw size={16} className="group-hover/rev:-rotate-180 transition-transform duration-500" />
+                           </button>
                            <button onClick={() => deletePayout(payout.id)} className="w-12 h-12 flex items-center justify-center bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shrink-0">
                              <Trash2 size={16} />
                            </button>
@@ -10692,7 +10756,7 @@ export default function AdminDashboard() {
                   </div>
                   <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1">የተሰበሰበ መዋጮ (Collected)</p>
                   <p className="text-4xl font-black text-white tracking-tighter">
-                    {calculateTotalCollected(allPayments, allUsers, groupsWithMembers).toLocaleString()} <span className="text-xs">ETB</span>
+                    {calculateTotalCollected(allPayments, allUsers, groupsWithMembers, allPayouts).toLocaleString()} <span className="text-xs">ETB</span>
                   </p>
                   <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2 text-[10px] font-bold text-emerald-100">
                      <CheckCircle size={14} /> Safe & Verified
@@ -10879,7 +10943,7 @@ export default function AdminDashboard() {
                      <tbody className="divide-y divide-slate-100">
                         {groups.filter(g => g.name.toLowerCase().includes(reportSearch.toLowerCase())).map((group, idx) => {
                            const groupMembers = allUsers.filter(u => u.groupId === group.id);
-                           const groupIncome = calculateTotalCollected(allPayments.filter(p => p.groupId === group.id), allUsers, groupsWithMembers);
+                           const groupIncome = calculateTotalCollected(allPayments.filter(p => p.groupId === group.id), allUsers, groupsWithMembers, allPayouts.filter(p => p.groupId === group.id));
                            
                            return (
                               <motion.tr 
@@ -11198,7 +11262,7 @@ export default function AdminDashboard() {
                      <div>
                         <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">የተሰበሰበ ብር</p>
                         <div className="flex items-baseline gap-1">
-                          <p className="text-xl font-black text-slate-900">{calculateTotalCollected(allPayments, allUsers, groupsWithMembers).toLocaleString()}</p>
+                          <p className="text-xl font-black text-slate-900">{calculateTotalCollected(allPayments, allUsers, groupsWithMembers, allPayouts).toLocaleString()}</p>
                           <span className="text-[10px] font-bold text-slate-400">ብር</span>
                         </div>
                      </div>
