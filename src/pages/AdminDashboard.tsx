@@ -1259,7 +1259,25 @@ export default function AdminDashboard() {
         const groupNotifyPromises = groupMembers.map(async (m: any) => {
           const mId = m.id || m.uid;
           if (mId && mId !== winnerId) {
-            await notifyUserAdminChange(mId, '🎉 የዕጣ አሸናፊ', '🎉 Draw Winner', groupAm, groupEn).catch(e => console.warn("Failed user notification:", e));
+            let canView = true;
+            const mode = selectedDrawGroup.winnerVisibilityMode || 'none';
+            if (mode === 'none') canView = false;
+            else if (mode === 'selected') {
+              const allowedIds = Array.isArray(selectedDrawGroup.allowedWinnerViewerIds) ? selectedDrawGroup.allowedWinnerViewerIds : [];
+              if (!allowedIds.includes(mId)) canView = false;
+            }
+
+            const titleAmGrp = '🎉 የዕጣ መረጃ';
+            const titleEnGrp = '🎉 Draw Info';
+            const genericMsgAm = `🎉 የዙር ${round} እጣ ተካሂዷል።`;
+            const genericMsgEn = `🎉 Round ${round} draw has been completed.`;
+
+            const finalTitleAm = canView ? '🎉 የዕጣ አሸናፊ' : titleAmGrp;
+            const finalTitleEn = canView ? '🎉 Draw Winner' : titleEnGrp;
+            const finalMsgAm = canView ? groupAm : genericMsgAm;
+            const finalMsgEn = canView ? groupEn : genericMsgEn;
+
+            await notifyUserAdminChange(mId, finalTitleAm, finalTitleEn, finalMsgAm, finalMsgEn).catch(e => console.warn("Failed user notification:", e));
           }
         });
         await Promise.all(groupNotifyPromises).catch(e => console.warn("Error sending group notifications:", e));

@@ -1088,6 +1088,26 @@ export default function Dashboard() {
     return drawWinners.length;
   }, [drawWinners]);
 
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter(n => {
+      const isWinnerInfo = n.message?.includes('እጣ ለ') || n.message?.includes('winner is');
+      if (isWinnerInfo) {
+        const isAdminUser = userData?.role === 'admin' || userData?.role === 'super_admin' || userData?.isAdmin === true;
+        if (isAdminUser) return true;
+        const curId = userData?.id || user?.uid;
+        const mode = group?.winnerVisibilityMode || 'none';
+        if (mode === 'all') return true;
+        if (mode === 'none') return false;
+        if (mode === 'selected') {
+          const allowedIds = Array.isArray(group?.allowedWinnerViewerIds) ? group.allowedWinnerViewerIds : [];
+          return allowedIds.includes(curId);
+        }
+        return false;
+      }
+      return true;
+    });
+  }, [notifications, group?.winnerVisibilityMode, group?.allowedWinnerViewerIds, userData?.role, userData?.isAdmin, userData?.id, user?.uid]);
+
   const activeMessages = useMemo(() => {
     if (false) {
       return messages.filter(m => m.groupId === userData?.groupId || m.targetType === 'all');
@@ -4280,7 +4300,17 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                  {[
                    { icon: ShieldCheck, label: language === 'am' ? 'የተረጋገጡ' : 'Verified', val: members.filter(m => m.status === 'active').length, color: 'emerald' },
-                   { icon: Trophy, label: language === 'am' ? 'አሸናፊዎች' : 'Winners', val: members.filter(m => m.wonDraw).length, color: 'amber' },
+                   { icon: Trophy, label: language === 'am' ? 'አሸናፊዎች' : 'Winners', val: members.filter(m => m.wonDraw && (() => {
+                     if (isAdmin) return true;
+                     const curId = user?.uid || userData?.id;
+                     if (m.uid === curId || (m as any).id === curId) return true;
+                     const mode = group?.winnerVisibilityMode || 'none';
+                     const allowed = group?.allowedWinnerViewerIds || [];
+                     if (mode === 'all') return true;
+                     if (mode === 'none') return false;
+                     if (mode === 'selected') return Array.isArray(allowed) && allowed.includes(curId);
+                     return false;
+                   })()).length, color: 'amber' },
                    { icon: Layers, label: language === 'am' ? 'ባለብዙ እጣ' : 'Multi-Slots', val: members.filter(m => (m.slots || 1) > 1).length, color: 'indigo' }
                  ].map((stat, i) => (
                    <div key={i} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center gap-6 group hover:shadow-xl hover:shadow-slate-500/5 transition-all">
@@ -4338,9 +4368,20 @@ export default function Dashboard() {
                 {groupedMembers
                   .filter((m: any) => {
                     const matchesSearch = m.fullName?.toLowerCase().includes(memberSearchQuery.toLowerCase());
+                    const isWinVisible = (() => {
+                      if (isAdmin) return true;
+                      const curId = user?.uid || userData?.id;
+                      if (m.uid === curId || (m as any).id === curId) return true;
+                      const mode = group?.winnerVisibilityMode || 'none';
+                      const allowed = group?.allowedWinnerViewerIds || [];
+                      if (mode === 'all') return true;
+                      if (mode === 'none') return false;
+                      if (mode === 'selected') return Array.isArray(allowed) && allowed.includes(curId);
+                      return false;
+                    })();
                     const matchesFilter = 
                       membersFilter === 'all' ? true :
-                      membersFilter === 'winners' ? m.wonDraw === true :
+                      membersFilter === 'winners' ? (m.wonDraw === true && isWinVisible) :
                       membersFilter === 'active' ? m.status === 'active' : true;
                     return matchesSearch && matchesFilter;
                   })
@@ -4442,9 +4483,9 @@ export default function Dashboard() {
                                    </>
                                  ) : (
                                    <>
-                                     <EyeOff size={14} className="text-slate-400 mb-1" />
+                                     <Trophy size={14} className="text-slate-300 mb-1" />
                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'አሸናፊ' : 'Winner'}</span>
-                                     <span className="text-xs font-black text-slate-400">{language === 'am' ? 'ምስጢራዊ' : 'Hidden'}</span>
+                                     <span className="text-sm font-black text-slate-900">{language === 'am' ? 'አይ' : 'No'}</span>
                                    </>
                                  );
                                })()
@@ -4463,9 +4504,20 @@ export default function Dashboard() {
                 
                 {groupedMembers.filter((m: any) => {
                   const matchesSearch = m.fullName?.toLowerCase().includes(memberSearchQuery.toLowerCase());
+                  const isWinVisible = (() => {
+                    if (isAdmin) return true;
+                    const curId = user?.uid || userData?.id;
+                    if (m.uid === curId || (m as any).id === curId) return true;
+                    const mode = group?.winnerVisibilityMode || 'none';
+                    const allowed = group?.allowedWinnerViewerIds || [];
+                    if (mode === 'all') return true;
+                    if (mode === 'none') return false;
+                    if (mode === 'selected') return Array.isArray(allowed) && allowed.includes(curId);
+                    return false;
+                  })();
                   const matchesFilter = 
                     membersFilter === 'all' ? true :
-                    membersFilter === 'winners' ? m.wonDraw === true :
+                    membersFilter === 'winners' ? (m.wonDraw === true && isWinVisible) :
                     membersFilter === 'active' ? m.status === 'active' : true;
                   return matchesSearch && matchesFilter;
                 }).length === 0 && (
@@ -5412,7 +5464,7 @@ export default function Dashboard() {
                  </div>
 
                  <div className="divide-y divide-slate-100">
-                   {notifications.length === 0 ? (
+                   {filteredNotifications.length === 0 ? (
                       <div className="text-center py-20 flex flex-col items-center opacity-60">
                          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
                            <Bell size={32} className="text-slate-300" />
@@ -5425,7 +5477,7 @@ export default function Dashboard() {
                          </p>
                       </div>
                    ) : (
-                      notifications.map(n => (
+                      filteredNotifications.map(n => (
                          <div key={n.id} className={`p-6 md:p-8 flex flex-col md:flex-row gap-4 md:gap-6 transition-colors relative group ${!n.read ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}>
                             {/* Blue dot absolute for unread */}
                             {!n.read && (
@@ -6755,13 +6807,13 @@ export default function Dashboard() {
                 </div>
 
                 <div className="space-y-4">
-                   {notifications.length === 0 ? (
+                   {filteredNotifications.length === 0 ? (
                      <div className="py-20 text-center opacity-40">
                         <Bell size={48} className="mx-auto mb-4 text-slate-300" />
                         <p className="text-sm font-black uppercase tracking-widest text-slate-400">{language === 'am' ? 'ምንም ማሳወቂያ የለም' : 'All caught up!'}</p>
                      </div>
                    ) : (
-                     notifications.map((n) => (
+                     filteredNotifications.map((n) => (
                        <div key={n.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-gold-500/20 transition-all group flex items-start gap-4">
                           <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center shrink-0 shadow-sm group-hover:bg-gold-50 group-hover:text-gold-500 transition-colors">
                              <Bell size={18} />
@@ -6800,7 +6852,7 @@ export default function Dashboard() {
             </div>
             
             <div className="space-y-4">
-              {notifications.length === 0 ? (
+              {filteredNotifications.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50/50 rounded-[1.5rem] border border-dashed border-slate-200">
                   <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center mx-auto mb-3 border border-slate-100">
                     <Clock size={16} className="text-slate-300" />
@@ -6808,7 +6860,7 @@ export default function Dashboard() {
                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">{t('dashboard.no_notifications')}</p>
                 </div>
               ) : (
-                notifications.map((notif, idx) => (
+                filteredNotifications.map((notif, idx) => (
                   <motion.div 
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
