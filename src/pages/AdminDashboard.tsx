@@ -1203,13 +1203,19 @@ export default function AdminDashboard() {
         await addDoc(collection(db, 'draw_history'), drawPayload).catch(e => console.error("Error writing to draw_history collection:", e));
 
         // Create pending payout for Payout Management & Cash Out
+        const groupPayments = allPayments.filter((p: any) => p.groupId === selectedDrawGroup.id && ['verified', 'active', 'approved', 'completed'].includes(p.status));
+        const totalEverCollected = groupPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+        const groupPayouts = allPayouts.filter((p: any) => p.groupId === selectedDrawGroup.id && ['active', 'completed'].includes(p.status));
+        const totalDisbursed = groupPayouts.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+        const availableBalance = Math.max(0, totalEverCollected - totalDisbursed);
+        
         const payoutPayload = {
           groupId: selectedDrawGroup.id || '',
           groupName: selectedDrawGroup.name || '',
           userId: winnerId,
           userName: winnerNameStr,
           userPhone: winnerPhoneStr,
-          amount: Number(selectedDrawGroup.payoutAmount || selectedDrawGroup.amount) || 0,
+          amount: availableBalance, // Set to the available collected amount
           round: round,
           status: 'pending',
           createdAt: serverTimestamp(),
@@ -4224,7 +4230,14 @@ export default function AdminDashboard() {
       const groupId = payoutGroup.id;
       const userId = payoutMember.id || payoutMember.uid;
       const groupMembersCount = allUsers.filter((u: any) => u.groupId === groupId || (u.groups && u.groups.includes(groupId))).length || payoutGroup.memberCount || payoutGroup.limit || 10;
-      const calcBase = payoutMember.totalPayout || (payoutGroup.amount ? payoutGroup.amount * groupMembersCount : 0);
+      const groupPayments = allPayments.filter((p: any) => p.groupId === groupId && ['verified', 'active', 'approved', 'completed'].includes(p.status));
+      const totalEverCollected = groupPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+      const groupPayouts = allPayouts.filter((p: any) => p.groupId === groupId && ['active', 'completed'].includes(p.status));
+      const totalDisbursed = groupPayouts.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+      const availableBalance = Math.max(0, totalEverCollected - totalDisbursed);
+      
+      const calcBase = availableBalance; // Pay out only what is actually collected and available
+      // Force the payout to be the available balance if it's a draw payout, but we allow admin override if they explicitly typed an amount. But let's just restrict it to not exceed availableBalance or default to it.
       const finalAmount = payoutAmount > 0 ? payoutAmount : calcBase;
       const roundNum = payoutGroup.currentRound || 1;
 
