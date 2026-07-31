@@ -1052,10 +1052,24 @@ export default function Dashboard() {
     return group?.memberCount || group?.limit || 10;
   }, [groupedMembers, group?.memberCount, group?.limit]);
 
+  const roundDurationDays = useMemo(() => {
+    if (group?.roundDuration && typeof group.roundDuration === 'number') return group.roundDuration;
+    if (group?.intervalDays && typeof group.intervalDays === 'number') return group.intervalDays;
+
+    const t = (group?.type || userData?.frequency || '').toLowerCase();
+    if (t.includes('fiveday') || t.includes('5')) return 5;
+    if (t.includes('tenday') || t.includes('10')) return 10;
+    if (t.includes('daily')) return 10;
+    if (t.includes('weekly')) return 7;
+    if (t.includes('monthly')) return 30;
+    return 10;
+  }, [group?.type, group?.roundDuration, group?.intervalDays, userData?.frequency]);
+
   const totalPoolPayoutPerRound = useMemo(() => {
-    const baseAmt = Number(group?.amount) || 0;
-    return baseAmt * activeGroupMembersCount;
-  }, [group?.amount, activeGroupMembersCount]);
+    const baseAmt = Number(group?.amount) || Number(userData?.amount) || 0;
+    const members = activeGroupMembersCount || 10;
+    return baseAmt * members * roundDurationDays;
+  }, [group?.amount, userData?.amount, activeGroupMembersCount, roundDurationDays]);
 
   const totalWinnersCount = useMemo(() => {
     return drawWinners.length;
