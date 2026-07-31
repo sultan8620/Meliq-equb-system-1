@@ -3751,14 +3751,6 @@ export default function Dashboard() {
                             <p className="text-3xl font-display font-black text-white leading-none tracking-tight">
                                {totalPoolPayoutPerRound.toLocaleString()} <span className="text-xs font-bold text-amber-200">ETB</span>
                             </p>
-                            <p className="text-[10px] font-bold text-amber-100/90 mt-2.5 pt-2 border-t border-white/15 flex items-center gap-1.5">
-                               <Sparkles size={13} className="text-amber-200 shrink-0" />
-                               <span>
-                                 {language === 'am' 
-                                   ? `${activeGroupMembersCount} አባላት × ${Number(group?.amount || 0).toLocaleString()} ETB (በአባላት ብዛት እና መክፈያ ተባዝቶ)` 
-                                   : `${activeGroupMembersCount} members × ${Number(group?.amount || 0).toLocaleString()} ETB`}
-                               </span>
-                            </p>
                          </div>
                       </div>
                    </div>
