@@ -78,7 +78,7 @@ const Magnetic = ({ children, className }: { children: React.ReactNode, classNam
     </motion.div>
   );
 };
-import { Users, Image as ImageIcon, Paperclip, PhoneCall, Video as VideoCall, FileDown, DollarSign, Calendar, LogOut, ShieldCheck, User as UserIcon, Clock, CheckCircle, Info, CreditCard, History, Trophy, ArrowUpRight, Wallet, MessageCircle, Send, Video, Mic, Square, FileText, Camera, MapPin, Phone as PhoneIcon, Play, ChevronRight, Bell, Edit, Trash2, Upload, XCircle, Gift, HelpCircle, Settings, AlertOctagon, LayoutDashboard, ShoppingBag, Layers, Search, Hash, Copy, UserCheck, FileSignature, Download, Printer, AlertTriangle, X, Shield, Zap, Share2, Lightbulb, Home, MessageSquare, Menu, Eye, EyeOff, Lock } from 'lucide-react';
+import { Users, Image as ImageIcon, Paperclip, PhoneCall, Video as VideoCall, FileDown, DollarSign, Calendar, LogOut, ShieldCheck, User as UserIcon, Clock, CheckCircle, Info, CreditCard, History, Trophy, ArrowUpRight, Wallet, MessageCircle, Send, Video, Mic, Square, FileText, Camera, MapPin, Phone as PhoneIcon, Play, ChevronRight, Bell, Edit, Trash2, Upload, XCircle, Gift, HelpCircle, Settings, AlertOctagon, LayoutDashboard, ShoppingBag, Layers, Search, Hash, Copy, UserCheck, FileSignature, Download, Printer, AlertTriangle, X, Shield, Zap, Share2, Lightbulb, Home, MessageSquare, Menu, Eye, EyeOff, Lock, Sparkles } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { addDoc } from 'firebase/firestore';
 import { ProfileEditFields } from '../components/MemberProfileEdit';
@@ -3692,32 +3692,75 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                   <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 p-2.5 bg-slate-50/50 rounded-[2rem] border border-slate-100/50">
-                     <div className="flex flex-col gap-2 p-4 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><DollarSign size={16} /></div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'መክፈያ መጠን' : 'Base Amount'}</p>
-                        <p className="text-lg font-display font-black text-slate-900 leading-none">{group?.amount?.toLocaleString() || '0'} <span className="text-[10px] text-slate-400">ETB</span></p>
-                     </div>
-                     <div className="flex flex-col gap-2 p-4 bg-white rounded-[1.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="w-8 h-8 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center mb-1"><Users size={16} /></div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'አባላት' : 'Total Members'}</p>
-                        <p className="text-lg font-display font-black text-slate-900 leading-none">{activeGroupMembersCount}</p>
-                     </div>
-                     <div className="flex flex-col gap-2 p-4 bg-amber-50 rounded-[1.5rem] border border-amber-100 shadow-sm hover:shadow-md transition-all group">
-                        <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center mb-1 group-hover:scale-110 transition-transform"><Trophy size={16} /></div>
-                        <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">{language === 'am' ? 'ለእጣ አሸናፊ የሚደርስ ብር' : 'Winner Total Payout'}</p>
-                        <p className="text-lg font-display font-black text-amber-950 leading-none">{totalPoolPayoutPerRound.toLocaleString()} <span className="text-[10px] text-amber-600">ETB</span></p>
-                     </div>
-                     <div className="flex flex-col gap-2 p-4 bg-emerald-50 rounded-[1.5rem] border border-emerald-100 shadow-sm hover:shadow-md transition-all group">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center mb-1 group-hover:scale-110 transition-transform"><CheckCircle size={16} /></div>
-                        <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">{language === 'am' ? 'የአሁኑ ዙር የተሰበሰበ ብር' : 'Current Round Pool'}</p>
-                        <p className="text-lg font-display font-black text-emerald-900 leading-none">{groupCollectedTotal.toLocaleString()} <span className="text-[10px] text-emerald-600">ETB</span></p>
-                     </div>
-                     <div className="flex flex-col gap-2 p-4 bg-blue-50 rounded-[1.5rem] border border-blue-100 shadow-sm hover:shadow-md transition-all col-span-2 lg:col-span-1">
-                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center mb-1"><DollarSign size={16} /></div>
-                        <p className="text-[9px] font-black text-blue-700 uppercase tracking-widest">{language === 'am' ? 'ለአሸናፊ የወጣ / የተከፈለ ብር' : 'Disbursed Winner Payout'}</p>
-                        <p className="text-lg font-display font-black text-blue-950 leading-none">{groupDisbursedTotal.toLocaleString()} <span className="text-[10px] text-blue-600">ETB</span></p>
-                     </div>
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 bg-slate-50/70 rounded-[2.5rem] border border-slate-100">
+                      {/* Card 1: Per-member Contribution */}
+                      <div className="flex flex-col justify-between p-5 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                         <div className="flex items-center justify-between mb-3">
+                           <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-black">
+                             <DollarSign size={20} />
+                           </div>
+                           <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase tracking-wider">
+                              {language === 'am' ? 'በየዙሩ' : 'Per Round'}
+                           </span>
+                         </div>
+                         <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                               {language === 'am' ? 'የአንድ አባል መክፈያ መጠን' : 'Base Amount per Member'}
+                            </p>
+                            <p className="text-2xl font-display font-black text-slate-900 leading-none">
+                               {group?.amount?.toLocaleString() || '0'} <span className="text-xs font-bold text-slate-400">ETB</span>
+                            </p>
+                         </div>
+                      </div>
+
+                      {/* Card 2: Total Active Group Members */}
+                      <div className="flex flex-col justify-between p-5 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                         <div className="flex items-center justify-between mb-3">
+                           <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
+                             <Users size={20} />
+                           </div>
+                           <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-[9px] font-black uppercase tracking-wider">
+                              {language === 'am' ? 'ተሳታፊዎች' : 'Members'}
+                           </span>
+                         </div>
+                         <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                               {language === 'am' ? 'የምድቡ አባላት ብዛት' : 'Total Group Members'}
+                            </p>
+                            <p className="text-2xl font-display font-black text-slate-900 leading-none">
+                               {activeGroupMembersCount} <span className="text-xs font-bold text-slate-400">{language === 'am' ? 'አባላት' : 'Members'}</span>
+                            </p>
+                         </div>
+                      </div>
+
+                      {/* Card 3: Prominent Winner Payout Card */}
+                      <div className="flex flex-col justify-between p-5 bg-gradient-to-br from-amber-500 via-amber-600 to-amber-700 rounded-[2rem] text-white shadow-xl shadow-amber-500/20 relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
+                         <div className="flex items-center justify-between mb-3 relative z-10">
+                           <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center font-black">
+                             <Trophy size={20} className="text-amber-200" />
+                           </div>
+                           <span className="px-3 py-1 bg-white/20 backdrop-blur-md text-amber-100 border border-white/20 rounded-full text-[9px] font-black uppercase tracking-wider">
+                              {language === 'am' ? 'የእጣ ደራሽ' : 'Winner Payout'}
+                           </span>
+                         </div>
+                         <div className="relative z-10">
+                            <p className="text-[10px] font-black text-amber-100 uppercase tracking-widest mb-1">
+                               {language === 'am' ? 'ለእርስዎ/ለእጣ አሸናፊው የሚደርስ አጠቃላይ ብር' : 'Total Winner Payout Amount'}
+                            </p>
+                            <p className="text-3xl font-display font-black text-white leading-none tracking-tight">
+                               {totalPoolPayoutPerRound.toLocaleString()} <span className="text-xs font-bold text-amber-200">ETB</span>
+                            </p>
+                            <p className="text-[10px] font-bold text-amber-100/90 mt-2.5 pt-2 border-t border-white/15 flex items-center gap-1.5">
+                               <Sparkles size={13} className="text-amber-200 shrink-0" />
+                               <span>
+                                 {language === 'am' 
+                                   ? `${activeGroupMembersCount} አባላት × ${Number(group?.amount || 0).toLocaleString()} ETB (በአባላት ብዛት እና መክፈያ ተባዝቶ)` 
+                                   : `${activeGroupMembersCount} members × ${Number(group?.amount || 0).toLocaleString()} ETB`}
+                               </span>
+                            </p>
+                         </div>
+                      </div>
                    </div>
                 </div>
               </div>
