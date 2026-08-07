@@ -229,6 +229,10 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
   const totalDistributed = winners.reduce((acc, curr) => acc + (parseInt(curr.amount) || 0), 0);
   const isAdminUser = userData?.role === 'admin' || userData?.role === 'super_admin' || userData?.isAdmin === true;
 
+  const drawMembersCount = group?.members?.length || group?.memberCount || group?.limit || 10;
+  const drawDays = (group?.roundDuration || group?.intervalDays || (group?.type?.toLowerCase().includes('fiveday') ? 5 : (group?.type?.toLowerCase().includes('tenday') || group?.type?.toLowerCase().includes('daily')) ? 10 : 1));
+  const totalDrawPot = (Number(group?.amount) || Number(userData?.amount) || 0) * drawMembersCount * drawDays;
+
   const canUserSeeWinner = (w: any) => {
     if (!w) return true;
     if (isAdminUser) return true;
@@ -358,8 +362,8 @@ const DrawsView = ({ upcomingDraws, winners, group, userData, payments }: { upco
                     <span className="text-xl font-bold uppercase tracking-tight text-white">{group?.type || 'Vanguard'}</span>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">{language === 'am' ? 'ባለእጣ' : 'Total Potential'}</span>
-                    <span className="text-xl font-bold uppercase tracking-tight text-white">{group?.amount?.toLocaleString()} ETB</span>
+                    <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">{language === 'am' ? 'የደራሽ ብር መጠን' : 'Total Payout Pot'}</span>
+                    <span className="text-xl font-bold uppercase tracking-tight text-emerald-400">{totalDrawPot > 0 ? totalDrawPot.toLocaleString() : (group?.amount || 0).toLocaleString()} ETB</span>
                   </div>
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] text-white/50 font-black uppercase tracking-widest">{language === 'am' ? 'ሳምንት' : 'Week'}</span>
@@ -2978,12 +2982,12 @@ export default function Dashboard() {
                 <div className="h-px bg-slate-200" />
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{language === 'am' ? 'የሚጠበቅ ደራሽ' : 'Expected Payout'}</span>
-                  <span className="text-xl font-black text-emerald-600">{(userData?.totalPayout || (userData?.amount * multiplier * activeGroupMembersCount)).toLocaleString()} {t('common.etb')}</span>
+                  <span className="text-xl font-black text-emerald-600">{((userData?.amount || group?.amount || 0) * roundDurationDays * activeGroupMembersCount * (userData?.slots || 1)).toLocaleString()} {t('common.etb')}</span>
                 </div>
                 <p className="text-[9px] font-bold text-slate-400 italic text-right mt-2">
                    {language === 'am' 
-                     ? `${userData?.amount || 0} ብር * ${getDurationLabel()} * ${activeGroupMembersCount} አባላት` 
-                     : `${userData?.amount || 0} ETB * ${getDurationLabel()} * ${activeGroupMembersCount} members`}
+                     ? `${userData?.amount || group?.amount || 0} ብር × ${getDurationLabel()} × ${activeGroupMembersCount} አባላት ${userData?.slots && userData.slots !== 1 ? `× ${userData.slots} እጣ` : ''}` 
+                     : `${userData?.amount || group?.amount || 0} ETB × ${getDurationLabel()} × ${activeGroupMembersCount} members ${userData?.slots && userData.slots !== 1 ? `× ${userData.slots} slots` : ''}`}
                 </p>
               </div>
 
@@ -3531,7 +3535,7 @@ export default function Dashboard() {
            </div>
 
            {/* Financial Stats Bento Grid */}
-           <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-4">
+           <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="relative overflow-hidden bg-white/90 p-6 rounded-[2rem] flex flex-col justify-between hover:-translate-y-1.5 transition-all duration-300 cursor-pointer border border-slate-100 hover:border-indigo-500/30 shadow-md shadow-slate-200/15 hover:shadow-lg hover:shadow-indigo-500/5">
                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-indigo-600" />
                  <div className="flex justify-between items-start mb-6">
@@ -3556,6 +3560,24 @@ export default function Dashboard() {
                        <span className="text-sm text-slate-300 ml-1">ETB</span>
                     </h3>
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{language === 'am' ? 'ጠቅላላ ክፍያ' : 'Total Contributed'}</p>
+                 </div>
+              </div>
+
+              {/* Payout Pot Card based on active members in joined group */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 text-white p-6 rounded-[2rem] flex flex-col justify-between hover:-translate-y-1.5 transition-all duration-300 cursor-pointer shadow-md shadow-amber-500/20 hover:shadow-lg hover:shadow-amber-500/30">
+                 <div className="absolute top-0 left-0 right-0 h-1 bg-amber-200" />
+                 <div className="flex justify-between items-start mb-6">
+                    <div className="w-12 h-12 bg-white/20 text-white rounded-2xl flex items-center justify-center border border-white/20 shadow-sm"><Trophy size={20} /></div>
+                    <span className="text-[10px] font-black uppercase text-amber-100 bg-white/20 px-2 py-1 rounded-lg border border-white/20">Payout</span>
+                 </div>
+                 <div>
+                    <h3 className="text-3xl font-display font-black text-white leading-none mb-1 truncate">
+                       {(totalPoolPayoutPerRound * (userData.slots || 1)).toLocaleString()} 
+                       <span className="text-sm text-amber-200 ml-1">ETB</span>
+                    </h3>
+                    <p className="text-[9px] font-black text-amber-100 uppercase tracking-widest">
+                       {language === 'am' ? `ምድቡ ባለው ${activeGroupMembersCount} አባል ልክ ደራሽ` : `Pot Payout (${activeGroupMembersCount} Members)`}
+                    </p>
                  </div>
               </div>
 
@@ -3765,10 +3787,15 @@ export default function Dashboard() {
                          </div>
                          <div className="relative z-10">
                             <p className="text-[10px] font-black text-amber-100 uppercase tracking-widest mb-1">
-                               {language === 'am' ? 'ለእርስዎ/ለእጣ አሸናፊው የሚደርስ አጠቃላይ ብር' : 'Total Winner Payout Amount'}
+                               {language === 'am' ? `ምድቡ ባለው ${activeGroupMembersCount} አባላት ልክ የሚደርስ ደራሽ` : `Total Winner Payout (${activeGroupMembersCount} Members)`}
                             </p>
                             <p className="text-3xl font-display font-black text-white leading-none tracking-tight">
                                {totalPoolPayoutPerRound.toLocaleString()} <span className="text-xs font-bold text-amber-200">ETB</span>
+                            </p>
+                            <p className="text-[9px] font-bold text-amber-200/90 mt-2 bg-black/10 px-2.5 py-1 rounded-lg border border-white/10 inline-block">
+                               {language === 'am'
+                                 ? `ስሌት፦ ${(group?.amount || userData?.amount || 0).toLocaleString()} ብር × ${roundDurationDays} ቀን × ${activeGroupMembersCount} አባላት`
+                                 : `Calc: ${(group?.amount || userData?.amount || 0).toLocaleString()} ETB × ${roundDurationDays} days × ${activeGroupMembersCount} members`}
                             </p>
                          </div>
                       </div>
@@ -4480,7 +4507,7 @@ export default function Dashboard() {
                             <Layers size={14} className="text-slate-400 mb-1" />
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{language === 'am' ? 'እጣ ብዛት' : 'Slots'}</span>
                             <span className="text-base font-black text-slate-900">{formatSlots(member.slots)}</span>
-                             {(member.isSharedSlot === true || (member.slots && Number(member.slots) < 1)) && (
+                             {(member.isSharedSlot === true || (member.slots && Number(member.slots) < 1) || member.isJointGroup) && (
                                <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-full mt-1">
                                  {language === 'am' ? 'የጋራ እጣ (1 እጣ)' : 'Joint (1 Slot)'}
                                </span>

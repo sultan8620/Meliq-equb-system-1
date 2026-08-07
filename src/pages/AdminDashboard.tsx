@@ -2420,6 +2420,133 @@ export default function AdminDashboard() {
     }
   };
 
+  const revertMemberDraw = async (memberId: string, memberName: string, groupId: string, round?: number) => {
+    if (!await confirmAction(
+      language === 'am'
+        ? `የአባል "${memberName}" እጣ ማሸነፍ መሰረዝ እና እጣው እንደገና እንዲሞከር ማድረግ እርግጠኛ ነዎት?`
+        : `Are you sure you want to reset "${memberName}" draw win so the draw can be retried?`
+    )) {
+      return;
+    }
+
+    try {
+      const targetUser = allUsers.find((u: any) => u.id === memberId || u.uid === memberId);
+      let uidsToReset: string[] = [memberId];
+      if (targetUser?.allAccounts && Array.isArray(targetUser.allAccounts)) {
+        uidsToReset = targetUser.allAccounts.map((a: any) => a.id || a.uid).filter(Boolean);
+      } else if (targetUser?.jointId) {
+        const partners = allUsers.filter((u: any) => u.jointId === targetUser.jointId);
+        uidsToReset = partners.map((p: any) => p.id || p.uid).filter(Boolean);
+      }
+
+      for (const uid of uidsToReset) {
+        if (uid) {
+          await updateDoc(doc(db, 'users', uid), {
+            wonDraw: false,
+            wonRound: null,
+            wonDate: null,
+            payoutStatus: null
+          }).catch(err => console.error("Error resetting user wonDraw:", err));
+        }
+      }
+
+      try {
+        const qDraws = query(collection(db, 'draws'), where('groupId', '==', groupId));
+        const drawsSnap = await getDocs(qDraws);
+        for (const dDoc of drawsSnap.docs) {
+          const data = dDoc.data();
+          if (uidsToReset.includes(data.winnerId) || data.winnerId === memberId) {
+            await deleteDoc(doc(db, 'draws', dDoc.id)).catch(() => {});
+          }
+        }
+
+        const qHistory = query(collection(db, 'draw_history'), where('groupId', '==', groupId));
+        const histSnap = await getDocs(qHistory);
+        for (const dDoc of histSnap.docs) {
+          const data = dDoc.data();
+          if (uidsToReset.includes(data.winnerId) || data.winnerId === memberId) {
+            await deleteDoc(doc(db, 'draw_history', dDoc.id)).catch(() => {});
+          }
+        }
+      } catch (e) {
+        console.warn("Error deleting draw records:", e);
+      }
+
+      try {
+        const qPayouts = query(collection(db, 'payouts'), where('groupId', '==', groupId));
+        const payoutSnap = await getDocs(qPayouts);
+        for (const pDoc of payoutSnap.docs) {
+          const data = pDoc.data();
+          if (uidsToReset.includes(data.userId) || data.userId === memberId) {
+            await deleteDoc(doc(db, 'payouts', pDoc.id)).catch(() => {});
+          }
+        }
+      } catch (e) {
+        console.warn("Error deleting payout records:", e);
+      }
+
+      setAllUsers(prev => prev.map(u => (uidsToReset.includes(u.id) || uidsToReset.includes(u.uid)) ? { ...u, wonDraw: false, wonRound: null } : u));
+
+      if (selectedDrawGroup) {
+        setSelectedDrawGroup((prev: any) => {
+          if (!prev) return null;
+          const updatedMembers = (prev.members || []).map((m: any) => {
+            if (uidsToReset.includes(m.id) || uidsToReset.includes(m.uid)) {
+              return { ...m, wonDraw: false, wonRound: null };
+            }
+            return m;
+          });
+          return { ...prev, members: updatedMembers };
+        });
+      }
+
+      setGroups((prev: any[]) => prev.map(g => {
+        if (g.id === groupId && g.members) {
+          const updatedMembers = g.members.map((m: any) => {
+            if (uidsToReset.includes(m.id) || uidsToReset.includes(m.uid)) {
+              return { ...m, wonDraw: false, wonRound: null };
+            }
+            return m;
+          });
+          return { ...g, members: updatedMembers };
+        }
+        return g;
+      }));
+
+      setPayouts(prev => prev.filter(p => !(p.groupId === groupId && uidsToReset.includes(p.userId))));
+      setAllPayouts(prev => prev.filter(p => !(p.groupId === groupId && uidsToReset.includes(p.userId))));
+
+      await addDoc(collection(db, 'audit_logs'), {
+        type: 'draw',
+        action: `የእጣ አሸናፊ ተሰርዟል (Reset Draw Winner) - ${memberName}`,
+        userName: memberName,
+        groupId: groupId,
+        createdAt: serverTimestamp(),
+        status: 'success'
+      }).catch(e => console.warn(e));
+
+      for (const uid of uidsToReset) {
+        if (uid) {
+          notifyUserAdminChange(
+            uid,
+            '🔄 የእጣ ውጤት ማስተካከያ',
+            '🔄 Draw Result Reset',
+            `የነበረው የእጣ ውጤት ተሰርዟል፤ ድጋሚ እጣ ይወጣል።`,
+            `The draw result has been reset by the admin for a retry.`
+          ).catch(() => {});
+        }
+      }
+
+      triggerSuccess(
+        language === 'am' ? 'ተሳክቷል' : 'Success',
+        language === 'am' ? 'የአባሉ እጣ ተሰርዟል! አሁን ድጋሚ እጣ ማውጣት ይችላሉ።' : 'Member draw win reset! You can now retry the draw.'
+      );
+    } catch (err) {
+      console.error("Error in revertMemberDraw:", err);
+      triggerSuccess(language === 'am' ? 'ስህተት' : 'Error', language === 'am' ? 'እጣውን ለመሰረዝ አልተሳካም' : 'Failed to reset draw');
+    }
+  };
+
   const settlePenalty = async (penaltyId: string) => {
     try {
       await updateDoc(doc(db, 'penalties', penaltyId), {
@@ -6241,6 +6368,11 @@ export default function AdminDashboard() {
                                  <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
                                        <h4 className="text-sm font-black text-slate-900 truncate group-hover/member:text-indigo-600 transition-colors">{member.fullName}</h4>
+                                       {(member.isSharedSlot || member.isGrouped || (member.slots && Number(member.slots) < 1)) && (
+                                          <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border border-purple-200 shrink-0">
+                                             {language === 'am' ? 'የጋራ' : 'Shared'}
+                                          </span>
+                                       )}
                                        {member.status === 'approved' ? (
                                           <div className="bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-emerald-100 flex items-center gap-1">
                                              <CheckCircle size={8} /> ተረጋግጧል
@@ -6267,9 +6399,19 @@ export default function AdminDashboard() {
                                              Slots: {formatSlots(member.slots)}
                                           </span>
                                           {member.wonDraw && (
-                                            <span className="text-[9px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-amber-100 flex items-center gap-1">
-                                               <Trophy size={8} /> Winner
-                                            </span>
+                                            <div className="flex items-center gap-1">
+                                              <span className="text-[9px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-amber-100 flex items-center gap-1">
+                                                 <Trophy size={8} /> Winner
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => revertMemberDraw(member.id, member.fullName, vGroup?.id || '', member.wonRound)}
+                                                className="text-[8px] bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-rose-200 flex items-center gap-1 transition-colors cursor-pointer"
+                                                title={language === 'am' ? 'የእጣ አሸናፊነትን ሰርዝ እና ድጋሚ ለመሞከር ዝግጁ አድርግ' : 'Reset draw winner'}
+                                              >
+                                                <RotateCcw size={8} /> {language === 'am' ? 'ሰርዝ' : 'Reset'}
+                                              </button>
+                                            </div>
                                           )}
                                           <button
                                             onClick={async () => {
@@ -13761,7 +13903,14 @@ export default function AdminDashboard() {
                                                )}
                                             </div>
                                             <div>
-                                               <p className="text-[10px] font-black text-slate-800 uppercase">{m.fullName}</p>
+                                               <div className="flex items-center gap-1.5">
+                                                  <p className="text-[10px] font-black text-slate-800 uppercase">{m.fullName}</p>
+                                                  {(m.isSharedSlot || m.isGrouped || (m.slots && Number(m.slots) < 1)) && (
+                                                     <span className="text-[7.5px] font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 uppercase tracking-wider shrink-0">
+                                                        {language === 'am' ? 'የጋራ' : 'Shared'}
+                                                     </span>
+                                                  )}
+                                               </div>
                                                <p className="text-[8px] font-bold text-indigo-500 uppercase mt-0.5">ታማኝነት: {integrity}%</p>
                                             </div>
                                          </div>
@@ -13823,7 +13972,14 @@ export default function AdminDashboard() {
                                                )}
                                             </div>
                                             <div>
-                                               <p className="text-[10px] font-black text-rose-700 uppercase">{m.fullName}</p>
+                                               <div className="flex items-center gap-1.5">
+                                                  <p className="text-[10px] font-black text-rose-700 uppercase">{m.fullName}</p>
+                                                  {(m.isSharedSlot || m.isGrouped || (m.slots && Number(m.slots) < 1)) && (
+                                                     <span className="text-[7.5px] font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 uppercase tracking-wider shrink-0">
+                                                        {language === 'am' ? 'የጋራ' : 'Shared'}
+                                                     </span>
+                                                  )}
+                                               </div>
                                                <p className="text-[8px] font-bold text-slate-400 mt-0.5">{m.phone}</p>
                                             </div>
                                          </div>
@@ -13862,14 +14018,30 @@ export default function AdminDashboard() {
                                                )}
                                             </div>
                                             <div>
-                                               <p className="text-[10px] font-black text-slate-800 uppercase">{m.fullName}</p>
+                                               <div className="flex items-center gap-1.5">
+                                                  <p className="text-[10px] font-black text-slate-800 uppercase">{m.fullName}</p>
+                                                  {(m.isSharedSlot || m.isGrouped || (m.slots && Number(m.slots) < 1)) && (
+                                                     <span className="text-[7.5px] font-black text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 uppercase tracking-wider shrink-0">
+                                                        {language === 'am' ? 'የጋራ' : 'Shared'}
+                                                     </span>
+                                                  )}
+                                               </div>
                                                <p className="text-[8px] font-bold text-slate-400 mt-0.5">ታማኝነት: {integrity}%</p>
                                             </div>
                                          </div>
-                                         <div className="text-right flex flex-col items-end">
+                                         <div className="flex items-center gap-2">
                                             <span className="text-[7px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 uppercase tracking-wider">
                                                ዙር {m.wonRound || 'N/A'}
                                             </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => revertMemberDraw(m.id, m.fullName, selectedDrawGroup.id, m.wonRound)}
+                                              className="px-2 py-1 bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-600 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 border border-rose-100 shadow-sm shrink-0 active:scale-95 cursor-pointer"
+                                              title={language === 'am' ? 'የአባሉን እጣ ሰርዝ እና ድጋሚ እንዲሞከር አድርግ' : 'Reset member draw to retry'}
+                                            >
+                                              <RotateCcw size={10} />
+                                              <span>{language === 'am' ? 'እጣውን ሰርዝ/መልስ' : 'Reset Win'}</span>
+                                            </button>
                                          </div>
                                       </div>
                                     );
@@ -14015,12 +14187,26 @@ export default function AdminDashboard() {
                         </div>
                      </div>
 
-                     <button 
-                       onClick={() => setShowDrawModal(false)}
-                       className="mt-10 px-10 py-4 bg-slate-900 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
-                     >
-                       <CheckCircle size={16} /> ጨርስ (Done)
-                     </button>
+                     <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+                        <button 
+                          onClick={() => setShowDrawModal(false)}
+                          className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+                        >
+                          <CheckCircle size={16} /> ጨርስ (Done)
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            if (drawWinner && selectedDrawGroup) {
+                              await revertMemberDraw(drawWinner.id, drawWinner.fullName, selectedDrawGroup.id, selectedDrawGroup.currentRound);
+                              setDrawStage('select');
+                            }
+                          }}
+                          className="px-8 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-amber-500/20 cursor-pointer"
+                          title={language === 'am' ? 'እጣውን ሰርዞ ድጋሚ ለመሞከር' : 'Reset draw and retry'}
+                        >
+                          <RotateCcw size={16} /> {language === 'am' ? 'እጣውን ሰርዝና ድጋሚ ሞክር' : 'Reset & Retry Draw'}
+                        </button>
+                     </div>
                   </div>
                 )}
               </div>
