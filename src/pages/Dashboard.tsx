@@ -157,6 +157,8 @@ interface Group {
   boaAccount?: string;
   winnerVisibilityMode?: 'all' | 'selected' | 'none';
   allowedWinnerViewerIds?: string[];
+  roundDuration?: number;
+  intervalDays?: number;
 }
 
 interface GroupMember {
@@ -176,6 +178,7 @@ interface GroupMember {
   isSharedSlot?: boolean;
   splitFactor?: number;
   jointId?: string;
+  groupId?: string;
   isOnline?: boolean;
   isDiscontinued?: boolean;
 }
@@ -753,7 +756,9 @@ export default function Dashboard() {
           p.uid !== m.uid && 
           !processedUids.has(p.uid) &&
           ((m.jointId && p.jointId && m.jointId === p.jointId) || 
-           (m.phone && p.phone && m.phone === p.phone))
+           (m.phone && p.phone && m.phone === p.phone) ||
+           (m.isSharedSlot && p.isSharedSlot && p.groupId === m.groupId) ||
+           (m.slots && Number(m.slots) < 1 && p.slots && Number(p.slots) < 1 && p.groupId === m.groupId))
         );
 
         if (partners.length > 0) {
@@ -772,14 +777,6 @@ export default function Dashboard() {
             displayName = language === 'am' ? 'የጋራ አባል (1 እጣ)' : 'Shared Member (1 Slot)';
           }
 
-          const totalJointSlots = allPartners.reduce((acc, p) => {
-            let sVal = Number(p.slots) || 0.5;
-            if (p.isSharedSlot && p.splitFactor) {
-              sVal = 1 / Number(p.splitFactor);
-            }
-            return acc + sVal;
-          }, 0);
-
           const hasWon = allPartners.some(p => p.wonDraw);
           const isOnline = allPartners.some(p => p.isOnline);
           const isActive = allPartners.every(p => p.status === 'active') ? 'active' : 'pending';
@@ -789,11 +786,19 @@ export default function Dashboard() {
             isJointGroup: true,
             partners: allPartners,
             fullName: displayName,
-            slots: totalJointSlots >= 1 ? 1 : totalJointSlots,
+            slots: 1, // Treat shared slot as ONE full member (1 እጣ)
             wonDraw: hasWon,
             isOnline: isOnline,
             status: isActive,
             faceScan: allPartners.find(p => p.faceScan)?.faceScan || m.faceScan
+          });
+          return;
+        } else {
+          // Single shared slot member
+          processedUids.add(m.uid);
+          result.push({
+            ...m,
+            slots: 1 // Treat as 1 full slot (1 እጣ) in the draw
           });
           return;
         }

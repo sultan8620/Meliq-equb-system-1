@@ -632,8 +632,15 @@ export default function AdminDashboard() {
           const oId = other.id || other.uid;
           if (processedIds.has(oId)) return false;
           if (oId === uId) return true;
-          if (u.jointId && other.jointId === u.jointId) return true;
+          if (u.jointId && other.jointId && u.jointId === other.jointId) return true;
           if (u.phone && other.phone && u.phone === other.phone) return true;
+
+          const uShared = u.isSharedSlot === true || (u.slots && Number(u.slots) < 1);
+          const oShared = other.isSharedSlot === true || (other.slots && Number(other.slots) < 1);
+          if (uShared && oShared) {
+            if (u.jointId && other.jointId && u.jointId !== other.jointId) return false;
+            return true;
+          }
           return false;
         });
 
@@ -642,7 +649,18 @@ export default function AdminDashboard() {
       });
 
       const mergedUsers = groupedClusters.map(accounts => {
-        if (accounts.length === 1) return accounts[0];
+        if (accounts.length === 1) {
+          const single = accounts[0];
+          const isShared = single.isSharedSlot === true || (single.slots && Number(single.slots) < 1);
+          if (isShared) {
+            return {
+              ...single,
+              slots: 1,
+              isSharedSlot: true
+            };
+          }
+          return single;
+        }
 
         // Find primary account (non-shared slots first, then the highest slot count)
         const sorted = [...accounts].sort((a, b) => {
@@ -659,15 +677,6 @@ export default function AdminDashboard() {
         const names = accounts.map(a => a.fullName).filter(Boolean).filter((v, i, self) => self.indexOf(v) === i);
         const combinedName = names.join(' + ');
 
-        // Calculate total slots sum
-        const totalSlots = accounts.reduce((sum, u) => {
-          let sVal = Number(u.slots) || 0;
-          if (u.isSharedSlot && u.splitFactor) {
-            sVal = 1 / Number(u.splitFactor);
-          }
-          return sum + sVal;
-        }, 0);
-
         // Combined member codes
         const combinedMemberCode = accounts
           .map(u => u.memberCode)
@@ -678,7 +687,7 @@ export default function AdminDashboard() {
         return {
           ...primary,
           fullName: combinedName || primary.fullName,
-          slots: totalSlots >= 1 ? Math.round(totalSlots) : totalSlots,
+          slots: 1, // Treat shared slot as ONE full member (1 እጣ)
           isGrouped: true,
           allAccounts: accounts,
           memberCode: combinedMemberCode
@@ -1549,10 +1558,18 @@ export default function AdminDashboard() {
         if (processedIds.has(oId)) return false;
         if (oId === uId) return true;
         
-        if (u.jointId && other.jointId === u.jointId) return true;
+        if (u.jointId && other.jointId && u.jointId === other.jointId) return true;
         if (u.phone && other.phone && u.phone === other.phone) {
            if (u.groupId === other.groupId) return true;
         }
+
+        const uShared = u.isSharedSlot === true || (u.slots && Number(u.slots) < 1);
+        const oShared = other.isSharedSlot === true || (other.slots && Number(other.slots) < 1);
+        if (uShared && oShared && u.groupId === other.groupId) {
+          if (u.jointId && other.jointId && u.jointId !== other.jointId) return false;
+          return true;
+        }
+
         return false;
       });
 
@@ -1561,7 +1578,18 @@ export default function AdminDashboard() {
     });
 
     return groupedClusters.map(accounts => {
-      if (accounts.length === 1) return accounts[0];
+      if (accounts.length === 1) {
+        const single = accounts[0];
+        const isShared = single.isSharedSlot === true || (single.slots && Number(single.slots) < 1);
+        if (isShared) {
+          return {
+            ...single,
+            slots: 1,
+            isSharedSlot: true
+          };
+        }
+        return single;
+      }
 
       const sorted = [...accounts].sort((a, b) => {
         const aShared = a.isSharedSlot === true || (a.slots && Number(a.slots) < 1);
@@ -1576,14 +1604,6 @@ export default function AdminDashboard() {
       const names = accounts.map(a => a.fullName).filter(Boolean).filter((v, i, self) => self.indexOf(v) === i);
       const combinedName = names.join(' + ');
 
-      const totalSlots = accounts.reduce((sum, u) => {
-        let sVal = Number(u.slots) || 0;
-        if (u.isSharedSlot && u.splitFactor) {
-          sVal = 1 / Number(u.splitFactor);
-        }
-        return sum + sVal;
-      }, 0);
-
       const combinedMemberCode = accounts
         .map(u => u.memberCode)
         .filter(Boolean)
@@ -1593,7 +1613,7 @@ export default function AdminDashboard() {
       return {
         ...primary,
         fullName: combinedName || primary.fullName,
-        slots: totalSlots >= 1 ? Math.round(totalSlots) : totalSlots,
+        slots: 1, // Treat shared slot as ONE full member (1 እጣ)
         isGrouped: true,
         allAccounts: accounts,
         memberCode: combinedMemberCode

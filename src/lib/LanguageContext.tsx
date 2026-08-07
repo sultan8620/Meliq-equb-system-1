@@ -1048,10 +1048,27 @@ const translations: Record<Language, Record<string, string>> = {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('am');
+  const [language, setLanguageState] = useState<Language>(() => {
+    try {
+      const saved = localStorage.getItem('app_language');
+      if (saved === 'en' || saved === 'am') return saved;
+    } catch (e) {
+      console.error('Error reading language preference', e);
+    }
+    return 'am';
+  });
+
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    try {
+      localStorage.setItem('app_language', lang);
+    } catch (e) {
+      console.error('Error saving language preference', e);
+    }
+  };
 
   const t = (key: string): string => {
-    return translations[language][key] || key;
+    return translations[language][key] || translations['am'][key] || key;
   };
 
   return (
