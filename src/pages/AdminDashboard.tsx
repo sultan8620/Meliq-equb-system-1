@@ -73,6 +73,80 @@ const calculateTotalCollected = (paymentsList: any[] = [], usersList: any[] = []
   return Math.max(0, totalEverCollected - totalDisbursed);
 };
 
+const getRoundFinancials = (group: any, allUsersList: any[] = [], allPaymentsList: any[] = [], roundNum?: number) => {
+  if (!group) {
+    return {
+      roundNum: 1,
+      totalExpected: 0,
+      collected: 0,
+      unpaid: 0,
+      unpaidMembers: [] as any[]
+    };
+  }
+
+  const currentR = roundNum || group.currentRound || 1;
+  const durationDays = group.roundDuration || group.intervalDays || (
+    (group.type || '').toLowerCase().includes('daily') ? 1 :
+    (group.type || '').toLowerCase().includes('fiveday') || (group.type || '').toLowerCase().includes('5day') ? 5 :
+    (group.type || '').toLowerCase().includes('tenday') || (group.type || '').toLowerCase().includes('10day') ? 10 :
+    (group.type || '').toLowerCase().includes('weekly') ? 7 :
+    (group.type || '').toLowerCase().includes('monthly') ? 30 : 1
+  );
+
+  const baseAmount = Number(group.amount) || 0;
+  const members = allUsersList.filter((u: any) => u.groupId === group.id || (u.groups && u.groups.includes(group.id)));
+
+  let totalExpected = 0;
+  let totalCollected = 0;
+  let totalUnpaid = 0;
+  const unpaidMembers: any[] = [];
+
+  members.forEach((m: any) => {
+    const slots = Number(m.slots) || 1;
+    const mId = m.id || m.uid;
+    const expectedPerRound = baseAmount * durationDays * slots;
+
+    const userPayments = allPaymentsList.filter((p: any) =>
+      (p.userId === mId || p.userId === m.id) &&
+      p.groupId === group.id &&
+      ['verified', 'active', 'approved', 'completed'].includes(p.status)
+    );
+
+    const mTotalPaid = userPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+
+    const cumulativeReqPrev = expectedPerRound * (currentR - 1);
+
+    const paidInRound = Math.max(0, Math.min(expectedPerRound, mTotalPaid - cumulativeReqPrev));
+    const unpaidInRound = Math.max(0, expectedPerRound - paidInRound);
+
+    totalExpected += expectedPerRound;
+    totalCollected += paidInRound;
+    totalUnpaid += unpaidInRound;
+
+    if (unpaidInRound > 0) {
+      unpaidMembers.push({
+        id: mId,
+        fullName: m.fullName || 'Member',
+        memberCode: m.memberCode || '',
+        phone: m.phone || '',
+        slots: slots,
+        expectedInRound: expectedPerRound,
+        paidInRound: paidInRound,
+        unpaidInRound: unpaidInRound,
+        isSharedSlot: Boolean(m.isSharedSlot || slots < 1 || m.jointId)
+      });
+    }
+  });
+
+  return {
+    roundNum: currentR,
+    totalExpected,
+    collected: totalCollected,
+    unpaid: totalUnpaid,
+    unpaidMembers: unpaidMembers.sort((a, b) => b.unpaidInRound - a.unpaidInRound)
+  };
+};
+
 const getBankPrefix = (bankName: string) => {
   if (!bankName) return 'REC';
   const name = bankName.toLowerCase();
@@ -4363,6 +4437,11 @@ export default function AdminDashboard() {
   const [selectedSubAccount, setSelectedSubAccount] = useState<any>(null);
   const [paymentCount, setPaymentCount] = useState(1);
   const [manualPaymentGroup, setManualPaymentGroup] = useState<any>(null);
+  const [expandedUnpaidPayoutIds, setExpandedUnpaidPayoutIds] = useState<string[]>([]);
+
+  const toggleExpandedUnpaid = (id: string) => {
+    setExpandedUnpaidPayoutIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
 
   useEffect(() => {
     if (selectedMember) {
@@ -14202,6 +14281,59 @@ export default function AdminDashboard() {
                         </div>
                      </div>
 
+                     {/* Financial Breakdown for this Round */}
+                     {selectedDrawGroup && (() => {
+                       const dRoundFin = getRoundFinancials(selectedDrawGroup, allUsers, allPayments, selectedDrawGroup.currentRound);
+                       return (
+                         <div className="w-full max-w-lg mt-4 bg-slate-900 text-white p-5 rounded-3xl border border-slate-800 space-y-3">
+                           <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-800 pb-2">
+                             <span>{language === 'am' ? `የዙር #${dRoundFin.roundNum} የክፍያ እና የቀሪ ብር ሁኔታ` : `Round #${dRoundFin.roundNum} Status`}</span>
+                             <span className="text-amber-400">{selectedDrawGroup.name}</span>
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-3 text-center">
+                             <div className="p-3 bg-emerald-950/70 border border-emerald-500/30 rounded-2xl">
+                               <p className="text-[9px] font-black text-emerald-400 uppercase tracking-wider mb-0.5">
+                                 {language === 'am' ? 'በዙሩ የተሰበሰበ ብር' : 'Collected in Round'}
+                               </p>
+                               <p className="text-lg font-black text-emerald-300">
+                                 {dRoundFin.collected.toLocaleString()} <span className="text-xs">ETB</span>
+                               </p>
+                             </div>
+
+                             <div className="p-3 bg-rose-950/70 border border-rose-500/30 rounded-2xl">
+                               <p className="text-[9px] font-black text-rose-400 uppercase tracking-wider mb-0.5">
+                                 {language === 'am' ? 'በዙሩ ያልተሰበሰበ ቀሪ ብር' : 'Remaining Unpaid'}
+                               </p>
+                               <p className="text-lg font-black text-rose-300">
+                                 {dRoundFin.unpaid.toLocaleString()} <span className="text-xs">ETB</span>
+                               </p>
+                             </div>
+                           </div>
+
+                           {dRoundFin.unpaidMembers.length > 0 && (
+                             <div className="pt-1">
+                               <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                                 <Users size={12} />
+                                 {language === 'am' ? `በዙሩ ያልከፈሉ አባላት እና ያለባቸው ቀሪ ብር (${dRoundFin.unpaidMembers.length})` : `Unpaid Members (${dRoundFin.unpaidMembers.length})`}
+                               </p>
+                               <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                                 {dRoundFin.unpaidMembers.map((um: any) => (
+                                   <div key={um.id} className="p-2 bg-slate-800/80 rounded-xl border border-slate-700/60 flex items-center justify-between text-[10px]">
+                                     <div>
+                                       <span className="font-black text-white">{um.fullName}</span>
+                                       <span className="text-[8px] text-slate-400 block">{um.memberCode || um.phone}</span>
+                                     </div>
+                                     <span className="font-black text-rose-400">ቀሪ፦ {um.unpaidInRound.toLocaleString()} ETB</span>
+                                   </div>
+                                 ))}
+                               </div>
+                             </div>
+                           )}
+                         </div>
+                       );
+                     })()}
+
                      <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
                         <button 
                           onClick={() => setShowDrawModal(false)}
@@ -15493,6 +15625,105 @@ export default function AdminDashboard() {
                   ))}
                 </select>
               </div>
+
+              {/* Financial Status Breakdown for this Round */}
+              {payoutGroup && (() => {
+                const roundFin = getRoundFinancials(payoutGroup, allUsers, allPayments);
+                return (
+                  <div className="bg-slate-900 text-white rounded-3xl p-5 border border-slate-800 space-y-4 my-2 shadow-xl">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-xs">
+                          #{roundFin.roundNum}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            {language === 'am' ? `የዙር #${roundFin.roundNum} የክፍያ እና የቀሪ ብር ሁኔታ` : `Round #${roundFin.roundNum} Payment & Remaining Status`}
+                          </p>
+                          <p className="text-xs font-bold text-slate-200">{payoutGroup.name}</p>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        {language === 'am' ? 'የዙሩ በጀት' : 'Round Budget'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Collected in Round */}
+                      <div className="p-3.5 bg-emerald-950/60 border border-emerald-500/30 rounded-2xl">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <CheckCircle size={14} className="text-emerald-400 shrink-0" />
+                          <span className="text-[9px] font-black uppercase tracking-wider text-emerald-300">
+                            {language === 'am' ? 'በዙሩ የተሰበሰበ ብር' : 'Collected in Round'}
+                          </span>
+                        </div>
+                        <p className="text-xl font-black text-emerald-400 tracking-tight">
+                          {roundFin.collected.toLocaleString()} <span className="text-xs text-emerald-300">ETB</span>
+                        </p>
+                      </div>
+
+                      {/* Unpaid / Remaining in Round */}
+                      <div className="p-3.5 bg-rose-950/60 border border-rose-500/30 rounded-2xl">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <AlertTriangle size={14} className="text-rose-400 shrink-0" />
+                          <span className="text-[9px] font-black uppercase tracking-wider text-rose-300">
+                            {language === 'am' ? 'በዙሩ ያልተሰበሰበ ቀሪ ብር' : 'Remaining Unpaid'}
+                          </span>
+                        </div>
+                        <p className="text-xl font-black text-rose-400 tracking-tight">
+                          {roundFin.unpaid.toLocaleString()} <span className="text-xs text-rose-300">ETB</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Unpaid Members List */}
+                    {roundFin.unpaidMembers.length > 0 ? (
+                      <div className="mt-3 pt-3 border-t border-slate-800/80">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <Users size={12} />
+                            {language === 'am' ? `በዙሩ ያልከፈሉ አባላት እና ያለባቸው ቀሪ ብር (${roundFin.unpaidMembers.length})` : `Unpaid Members & Owed Amounts (${roundFin.unpaidMembers.length})`}
+                          </p>
+                        </div>
+
+                        <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                          {roundFin.unpaidMembers.map((um: any) => (
+                            <div key={um.id} className="p-2.5 bg-slate-800/80 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                              <div>
+                                <p className="font-black text-white text-xs flex items-center gap-1.5">
+                                  {um.fullName}
+                                  {um.isSharedSlot && (
+                                    <span className="text-[8px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded font-bold">
+                                      {language === 'am' ? 'የጋራ' : 'Shared'}
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="text-[9px] font-bold text-slate-400">
+                                  {um.memberCode ? `${um.memberCode} • ` : ''}{um.phone || ''}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xs font-black text-rose-400">
+                                  {language === 'am' ? `ቀሪ፦ ${um.unpaidInRound.toLocaleString()} ETB` : `Owed: ${um.unpaidInRound.toLocaleString()} ETB`}
+                                </span>
+                                <p className="text-[8px] font-bold text-slate-400">
+                                  (ከ {um.expectedInRound.toLocaleString()} ETB)
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-center">
+                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                          {language === 'am' ? 'ሁሉም አባላት በዙሩ ሙሉ ክፍያ ፈጽመዋል!' : 'All members have fully paid for this round!'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Step 2: Select Winner Member */}
               {payoutGroup && (
