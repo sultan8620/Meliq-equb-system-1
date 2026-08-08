@@ -316,13 +316,25 @@ export default function AdminDashboard() {
   const handleHandleDeletion = async (request: any, approved: boolean) => {
     try {
       if (approved) {
-        // In a real app, you might disable the user or flag them.
-        // For now, we update request status and mark user for deletion.
         await updateDoc(doc(db, 'deletion_requests', request.id), { status: 'approved', processedAt: serverTimestamp() });
-        await updateDoc(doc(db, 'users', request.userId), { accountStatus: 'flagged_for_deletion', deletedAt: serverTimestamp() });
+        await updateDoc(doc(db, 'users', request.userId), { status: 'deleted', accountStatus: 'flagged_for_deletion', deletedAt: serverTimestamp() });
+        await notifyUserAdminChange(
+          request.userId,
+          'እቁብ መዝጋት ተፈቅዷል',
+          'Ekub Closure Approved',
+          'የእቁብ መዝጊያ/አካውንት ማጥፊያ ጥያቄዎ በአድሚን ተፈቅዷል።',
+          'Your request to close ekub/delete account has been approved by the admin.'
+        ).catch(() => {});
         triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የመዝጊያ ጥያቄው ጸድቋል' : 'Deletion request approved');
       } else {
         await updateDoc(doc(db, 'deletion_requests', request.id), { status: 'rejected', processedAt: serverTimestamp() });
+        await notifyUserAdminChange(
+          request.userId,
+          'እቁብ መዝጋት ውድቅ ተደርጓል',
+          'Ekub Closure Rejected',
+          'የእቁብ መዝጊያ ጥያቄዎ በአድሚን ውድቅ ተደርጓል።',
+          'Your request to close ekub has been rejected by the admin.'
+        ).catch(() => {});
         triggerSuccess(language === 'am' ? 'ተሳክቷል' : 'Success', language === 'am' ? 'የመዝጊያ ጥያቄው ውድቅ ተደርጓል' : 'Deletion request rejected');
       }
     } catch (error) {
@@ -620,9 +632,11 @@ export default function AdminDashboard() {
     let list = groups.map(group => {
       const groupUsers = allUsers.filter(u => u.groupId === group.id || (u.groups && u.groups.includes(group.id)));
       
-      // Group users by phone number or jointId to handle joint slots as one entry
+      // Group users by jointId or phone for shared slots to handle joint slots as one entry
       const groupedClusters: any[][] = [];
       const processedIds = new Set<string>();
+
+      const isJoint = (x: any) => Boolean(x.isSharedSlot === true || x.jointId || (x.slots && Number(x.slots) < 1));
 
       groupUsers.forEach(u => {
         const uId = u.id || u.uid;
@@ -632,15 +646,21 @@ export default function AdminDashboard() {
           const oId = other.id || other.uid;
           if (processedIds.has(oId)) return false;
           if (oId === uId) return true;
-          if (u.jointId && other.jointId && u.jointId === other.jointId) return true;
-          if (u.phone && other.phone && u.phone === other.phone) return true;
 
-          const uShared = u.isSharedSlot === true || (u.slots && Number(u.slots) < 1);
-          const oShared = other.isSharedSlot === true || (other.slots && Number(other.slots) < 1);
-          if (uShared && oShared) {
-            if (u.jointId && other.jointId && u.jointId !== other.jointId) return false;
-            return true;
-          }
+          const uShared = isJoint(u);
+          const oShared = isJoint(other);
+
+          // Full slots and Joint slots should never cluster together!
+          if (uShared !== oShared) return false;
+
+          // Two separate full slots should never cluster together!
+          if (!uShared && !oShared) return false;
+
+          // Both are joint/shared slots: group them if they match jointId or phone/groupId
+          if (u.jointId && other.jointId && u.jointId === other.jointId) return true;
+          if (u.phone && other.phone && u.phone === other.phone && u.groupId === other.groupId) return true;
+          if (u.isSharedSlot && other.isSharedSlot && u.groupId === other.groupId) return true;
+
           return false;
         });
 
@@ -1549,6 +1569,8 @@ export default function AdminDashboard() {
     const groupedClusters: any[][] = [];
     const processedIds = new Set<string>();
 
+    const isJoint = (x: any) => Boolean(x.isSharedSlot === true || x.jointId || (x.slots && Number(x.slots) < 1));
+
     allowedUsers.forEach(u => {
       const uId = u.id || u.uid;
       if (processedIds.has(uId)) return;
@@ -1557,18 +1579,20 @@ export default function AdminDashboard() {
         const oId = other.id || other.uid;
         if (processedIds.has(oId)) return false;
         if (oId === uId) return true;
-        
-        if (u.jointId && other.jointId && u.jointId === other.jointId) return true;
-        if (u.phone && other.phone && u.phone === other.phone) {
-           if (u.groupId === other.groupId) return true;
-        }
 
-        const uShared = u.isSharedSlot === true || (u.slots && Number(u.slots) < 1);
-        const oShared = other.isSharedSlot === true || (other.slots && Number(other.slots) < 1);
-        if (uShared && oShared && u.groupId === other.groupId) {
-          if (u.jointId && other.jointId && u.jointId !== other.jointId) return false;
-          return true;
-        }
+        const uShared = isJoint(u);
+        const oShared = isJoint(other);
+
+        // Full slots and Joint slots should never cluster together!
+        if (uShared !== oShared) return false;
+
+        // Two separate full slots should never cluster together!
+        if (!uShared && !oShared) return false;
+
+        // Both are joint/shared slots: group them if they match jointId or phone/groupId
+        if (u.jointId && other.jointId && u.jointId === other.jointId) return true;
+        if (u.phone && other.phone && u.phone === other.phone && u.groupId === other.groupId) return true;
+        if (u.isSharedSlot && other.isSharedSlot && u.groupId === other.groupId) return true;
 
         return false;
       });

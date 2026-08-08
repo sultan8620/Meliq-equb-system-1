@@ -751,18 +751,23 @@ export default function Dashboard() {
     const result: any[] = [];
     const processedUids = new Set<string>();
 
+    const isJointSlot = (x: any) => Boolean(x.isSharedSlot === true || x.jointId || (x.slots && Number(x.slots) < 1));
+
     filteredMembers.forEach(m => {
       if (processedUids.has(m.uid)) return;
 
-      // Check if this member is part of a joint slot or has partner(s)
-      if (m.isSharedSlot || m.jointId || (m.slots && Number(m.slots) < 1)) {
+      // Check if this member is part of a joint/shared slot
+      if (isJointSlot(m)) {
         const partners = members.filter(p => 
           p.uid !== m.uid && 
           !processedUids.has(p.uid) &&
-          ((m.jointId && p.jointId && m.jointId === p.jointId) || 
-           (m.phone && p.phone && m.phone === p.phone) ||
-           (m.isSharedSlot && p.isSharedSlot && p.groupId === m.groupId) ||
-           (m.slots && Number(m.slots) < 1 && p.slots && Number(p.slots) < 1 && p.groupId === m.groupId))
+          isJointSlot(p) && // Partner MUST also be a joint/shared slot
+          (
+            (m.jointId && p.jointId && m.jointId === p.jointId) || 
+            (m.isSharedSlot && p.isSharedSlot && p.groupId === m.groupId) ||
+            (m.phone && p.phone && m.phone === p.phone && p.groupId === m.groupId) ||
+            (m.slots && Number(m.slots) < 1 && p.slots && Number(p.slots) < 1 && p.groupId === m.groupId)
+          )
         );
 
         if (partners.length > 0) {
@@ -788,9 +793,10 @@ export default function Dashboard() {
           result.push({
             ...m,
             isJointGroup: true,
+            isSharedSlot: true,
             partners: allPartners,
             fullName: displayName,
-            slots: 1, // Treat shared slot as ONE full member (1 እጣ)
+            slots: 1, // Treat shared slot group as ONE slot entry (1 እጣ)
             wonDraw: hasWon,
             isOnline: isOnline,
             status: isActive,
@@ -802,7 +808,8 @@ export default function Dashboard() {
           processedUids.add(m.uid);
           result.push({
             ...m,
-            slots: 1 // Treat as 1 full slot (1 እጣ) in the draw
+            isSharedSlot: true,
+            slots: 1 // Treat as 1 slot entry (1 እጣ) in the draw
           });
           return;
         }
@@ -2881,7 +2888,7 @@ export default function Dashboard() {
                     <AlertTriangle size={24} />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-black text-slate-900">{language === 'am' ? 'አካውንት ሰርዝ' : 'Delete Account'}</h3>
+                    <h3 className="text-2xl font-black text-slate-900">{language === 'am' ? 'እቁብ መዝጋት / አካውንት ማጥፋት' : 'Close Ekub / Delete Account'}</h3>
                     <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{language === 'am' ? 'የመዝጊያ ጥያቄ ይላኩ' : 'Request account closure'}</p>
                   </div>
                 </div>
@@ -2902,7 +2909,7 @@ export default function Dashboard() {
                   </div>
                   <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl">
                      <p className="text-xs text-rose-700 font-medium leading-relaxed">
-                        {language === 'am' ? 'አካውንትዎ እንዲሰረዝ ጥያቄዎ ለአድሚን ይላካል አድሚን ሲፈቅድልዎት ብቻ አካውንቶ ይሰረዛል።' : 'Your deletion request will be sent to admin. Your account will only be deleted once admin approves your request.'}
+                        {language === 'am' ? 'ማሳሰቢያ፦ እቁብ መዝጋት የሚቻለው በአድሚን ፈቃድ ብቻ ነው። አባሉ በራሱ እቁቡን መደለት ወይም መውጣት አይችልም። ጥያቄዎ ለአድሚን ይላካል፤ አድሚን ሲፈቅድልዎት ብቻ አካውንቶ/እቁብዎት ይዘጋል።' : 'Note: Closing ekub/account requires Admin approval. Members cannot delete or exit ekub on their own. Your request will be sent to admin for approval.'}
                      </p>
                   </div>
                 </div>
@@ -6145,7 +6152,7 @@ export default function Dashboard() {
 
                        <div className="pt-6">
                           <button onClick={() => setShowDeletionRequestModal(true)} className="w-full py-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all">
-                             {language === 'am' ? 'አካውንት ሰርዝ' : 'Delete Account'}
+                             {language === 'am' ? 'እቁብ መዝጋት / አካውንት ማጥፋት' : 'Close Ekub / Delete Account'}
                           </button>
                        </div>
                     </div>
