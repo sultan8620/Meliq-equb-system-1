@@ -2525,17 +2525,8 @@ export default function AdminDashboard() {
         status: 'success'
       }).catch(e => console.warn(e));
 
-      for (const uid of uidsToReset) {
-        if (uid) {
-          notifyUserAdminChange(
-            uid,
-            '🔄 የእጣ ውጤት ማስተካከያ',
-            '🔄 Draw Result Reset',
-            `የነበረው የእጣ ውጤት ተሰርዟል፤ ድጋሚ እጣ ይወጣል።`,
-            `The draw result has been reset by the admin for a retry.`
-          ).catch(() => {});
-        }
-      }
+      // Note: Admin requested no automated notification when draw is reset/deleted
+      // Draw reset action remains logged in audit_logs for admin records
 
       triggerSuccess(
         language === 'am' ? 'ተሳክቷል' : 'Success',

@@ -1086,6 +1086,10 @@ export default function Dashboard() {
 
   const filteredNotifications = useMemo(() => {
     return notifications.filter(n => {
+      // Suppress any draw reset/delete notification
+      if (n.title?.includes('እጣ ውጤት ማስተካከያ') || n.title?.includes('Draw Result Reset') || n.message?.includes('ተሰርዟል፤ ድጋሚ እጣ')) {
+        return false;
+      }
       const isWinnerInfo = n.message?.includes('እጣ ለ') || n.message?.includes('winner is');
       if (isWinnerInfo) {
         const isAdminUser = userData?.role === 'admin' || userData?.role === 'super_admin' || userData?.isAdmin === true;
@@ -2984,11 +2988,20 @@ export default function Dashboard() {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{language === 'am' ? 'የሚጠበቅ ደራሽ' : 'Expected Payout'}</span>
                   <span className="text-xl font-black text-emerald-600">{((userData?.amount || group?.amount || 0) * roundDurationDays * activeGroupMembersCount * (userData?.slots || 1)).toLocaleString()} {t('common.etb')}</span>
                 </div>
-                <p className="text-[9px] font-bold text-slate-400 italic text-right mt-2">
-                   {language === 'am' 
-                     ? `${userData?.amount || group?.amount || 0} ብር × ${getDurationLabel()} × ${activeGroupMembersCount} አባላት ${userData?.slots && userData.slots !== 1 ? `× ${userData.slots} እጣ` : ''}` 
-                     : `${userData?.amount || group?.amount || 0} ETB × ${getDurationLabel()} × ${activeGroupMembersCount} members ${userData?.slots && userData.slots !== 1 ? `× ${userData.slots} slots` : ''}`}
-                </p>
+                <div className="text-[9px] font-bold text-slate-500 text-right mt-2 space-y-1">
+                   <p>
+                      {language === 'am' 
+                        ? `የ1 ሙሉ እጣ ደራሽ፦ ${(userData?.amount || group?.amount || 0).toLocaleString()} ብር × ${getDurationLabel()} × ${activeGroupMembersCount} አባላት (የጋራዎች እንደ 1) = ${((userData?.amount || group?.amount || 0) * roundDurationDays * activeGroupMembersCount).toLocaleString()} ETB` 
+                        : `1 Slot Pot: ${(userData?.amount || group?.amount || 0).toLocaleString()} ETB × ${getDurationLabel()} × ${activeGroupMembersCount} members (Joints as 1) = ${((userData?.amount || group?.amount || 0) * roundDurationDays * activeGroupMembersCount).toLocaleString()} ETB`}
+                   </p>
+                   {(userData?.isSharedSlot || (userData?.slots && Number(userData.slots) < 1) || userData?.jointId) && (
+                      <p className="text-indigo-600 font-black">
+                         {language === 'am' 
+                           ? `የእርስዎ የጋራ ድርሻ (Share)፦ ${((userData?.amount || group?.amount || 0) * roundDurationDays * activeGroupMembersCount * (userData?.slots || 1)).toLocaleString()} ETB` 
+                           : `Your Shared Portion: ${((userData?.amount || group?.amount || 0) * roundDurationDays * activeGroupMembersCount * (userData?.slots || 1)).toLocaleString()} ETB`}
+                      </p>
+                   )}
+                </div>
               </div>
 
               <div className="mb-4">
@@ -3576,8 +3589,15 @@ export default function Dashboard() {
                        <span className="text-sm text-amber-200 ml-1">ETB</span>
                     </h3>
                     <p className="text-[9px] font-black text-amber-100 uppercase tracking-widest">
-                       {language === 'am' ? `ምድቡ ባለው ${activeGroupMembersCount} አባል ልክ ደራሽ` : `Pot Payout (${activeGroupMembersCount} Members)`}
+                       {language === 'am' ? `ምድቡ ባለው ${activeGroupMembersCount} አባል (የጋራዎች እንደ 1) ልክ ደራሽ` : `Pot Payout (${activeGroupMembersCount} Members)`}
                     </p>
+                    {(userData.isSharedSlot || (userData.slots && Number(userData.slots) < 1) || userData.jointId) && (
+                       <p className="text-[8px] font-bold text-amber-200/90 mt-1.5 bg-black/10 px-2 py-0.5 rounded border border-white/10 truncate">
+                          {language === 'am'
+                            ? `የ1 ሙሉ እጣ፦ ${totalPoolPayoutPerRound.toLocaleString()} ብር (የእርስዎ፦ ${(totalPoolPayoutPerRound * (userData.slots || 1)).toLocaleString()} ብር)`
+                            : `Full Pot: ${totalPoolPayoutPerRound.toLocaleString()} ETB (Your Share: ${(totalPoolPayoutPerRound * (userData.slots || 1)).toLocaleString()} ETB)`}
+                       </p>
+                    )}
                  </div>
               </div>
 
@@ -3787,16 +3807,23 @@ export default function Dashboard() {
                          </div>
                          <div className="relative z-10">
                             <p className="text-[10px] font-black text-amber-100 uppercase tracking-widest mb-1">
-                               {language === 'am' ? `ምድቡ ባለው ${activeGroupMembersCount} አባላት ልክ የሚደርስ ደራሽ` : `Total Winner Payout (${activeGroupMembersCount} Members)`}
+                               {language === 'am' ? `ምድቡ ባለው ${activeGroupMembersCount} አባላት ልክ የሚደርስ ደራሽ (የጋራዎች እንደ 1)` : `Total Winner Payout (${activeGroupMembersCount} Members)`}
                             </p>
                             <p className="text-3xl font-display font-black text-white leading-none tracking-tight">
                                {totalPoolPayoutPerRound.toLocaleString()} <span className="text-xs font-bold text-amber-200">ETB</span>
                             </p>
                             <p className="text-[9px] font-bold text-amber-200/90 mt-2 bg-black/10 px-2.5 py-1 rounded-lg border border-white/10 inline-block">
                                {language === 'am'
-                                 ? `ስሌት፦ ${(group?.amount || userData?.amount || 0).toLocaleString()} ብር × ${roundDurationDays} ቀን × ${activeGroupMembersCount} አባላት`
-                                 : `Calc: ${(group?.amount || userData?.amount || 0).toLocaleString()} ETB × ${roundDurationDays} days × ${activeGroupMembersCount} members`}
+                                 ? `ስሌት፦ ${(group?.amount || userData?.amount || 0).toLocaleString()} ብር × ${roundDurationDays} ቀን × ${activeGroupMembersCount} አባላት (የጋራዎች እንደ 1)`
+                                 : `Calc: ${(group?.amount || userData?.amount || 0).toLocaleString()} ETB × ${roundDurationDays} days × ${activeGroupMembersCount} members (Joints as 1)`}
                             </p>
+                            {(userData?.isSharedSlot || (userData?.slots && Number(userData.slots) < 1) || userData?.jointId) && (
+                               <p className="text-[9px] font-bold text-emerald-200 mt-1.5 block">
+                                  {language === 'am'
+                                    ? `የእርስዎ የጋራ ድርሻ (Share)፦ ${(totalPoolPayoutPerRound * (userData.slots || 1)).toLocaleString()} ETB`
+                                    : `Your Joint Share: ${(totalPoolPayoutPerRound * (userData.slots || 1)).toLocaleString()} ETB`}
+                               </p>
+                            )}
                          </div>
                       </div>
                    </div>
