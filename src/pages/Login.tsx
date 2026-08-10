@@ -43,13 +43,13 @@ export default function Login() {
     if (!authLoading && user && userData) {
       if (isAdmin) {
         navigate('/admin');
-      } else if (userData.status === 'pending' || userData.status === 'rejected') {
+      } else if (userData.status !== 'active') {
         const checkFreshStatus = async () => {
           try {
             const userDoc = await getDoc(doc(db, 'users', user.uid));
             if (userDoc.exists()) {
               const freshData = userDoc.data();
-              if (freshData.status === 'active' || (freshData.status !== 'pending' && freshData.status !== 'rejected')) {
+              if (freshData.status === 'active') {
                 navigate('/dashboard');
                 return;
               }
@@ -471,11 +471,11 @@ export default function Login() {
         navigate('/admin');
       } else {
         const data = userDocData;
-        if (data && (data.status === 'pending' || data.status === 'rejected')) {
+        if (!data || data.status !== 'active') {
           await signOut(auth).catch(() => {});
           sessionStorage.removeItem('is_active_session');
           
-          if (data.status === 'rejected') {
+          if (data?.status === 'rejected') {
             setError(
               language === 'am'
                 ? 'የምዝገባ ጥያቄዎ በአድሚን ውድቅ ተደርጓል። እባክዎ አድሚኑን ያነጋግሩ።'
@@ -492,10 +492,10 @@ export default function Login() {
           navigate('/pending-approval', {
             state: {
               registeredInfo: {
-                name: data.fullName,
-                phone: data.phone,
-                group: data.group || data.groupId,
-                memberCode: data.memberCode
+                name: data?.fullName || '',
+                phone: data?.phone || '',
+                group: data?.group || data?.groupId || '',
+                memberCode: data?.memberCode || ''
               }
             }
           });
@@ -559,7 +559,7 @@ export default function Login() {
           phone: '',
           email: user.email,
           role: isSuperAdminEmail ? 'super_admin' : 'user',
-          status: 'active',
+          status: isSuperAdminEmail ? 'active' : 'pending',
           isVerified: true,
           createdAt: serverTimestamp()
         }).catch(e => {
@@ -575,7 +575,7 @@ export default function Login() {
       setTimeout(async () => {
         if (isAdmin) {
           navigate('/admin');
-        } else if (existingData && (existingData.status === 'pending' || existingData.status === 'rejected')) {
+        } else if (!existingData || existingData.status !== 'active') {
           await signOut(auth).catch(() => {});
           sessionStorage.removeItem('is_active_session');
           setError(
@@ -586,10 +586,10 @@ export default function Login() {
           navigate('/pending-approval', {
             state: {
               registeredInfo: {
-                name: existingData.fullName,
-                phone: existingData.phone,
-                group: existingData.group || existingData.groupId,
-                memberCode: existingData.memberCode
+                name: existingData?.fullName || user.displayName || 'User',
+                phone: existingData?.phone || '',
+                group: existingData?.group || existingData?.groupId || '',
+                memberCode: existingData?.memberCode || ''
               }
             }
           });

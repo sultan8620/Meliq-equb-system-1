@@ -162,7 +162,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
   
-  if (!isAdmin && (userData.status === 'pending' || userData.status === 'rejected')) {
+  if (!isAdmin && userData.status !== 'active') {
     return <Navigate to="/pending-approval" replace />;
   }
   
