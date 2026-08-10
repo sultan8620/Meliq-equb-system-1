@@ -560,7 +560,7 @@ export default function Login() {
           email: user.email,
           role: isSuperAdminEmail ? 'super_admin' : 'user',
           status: isSuperAdminEmail ? 'active' : 'pending',
-          isVerified: true,
+          isVerified: isSuperAdminEmail ? true : false,
           createdAt: serverTimestamp()
         }).catch(e => {
           handleFirestoreError(e, OperationType.WRITE, `users/${user.uid}`);

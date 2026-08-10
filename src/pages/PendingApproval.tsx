@@ -32,7 +32,7 @@ export default function PendingApproval() {
       
       if (isSuperAdmin) {
         navigate('/admin');
-      } else if (authUserData.status === 'active' || (authUserData.status !== 'pending' && authUserData.status !== 'rejected')) {
+      } else if (authUserData.status === 'active') {
         navigate('/dashboard');
       }
     }
