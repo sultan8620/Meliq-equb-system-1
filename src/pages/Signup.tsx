@@ -921,8 +921,8 @@ export default function Signup() {
           calendarType: formData.calendarType,
           groupId: targetGroup.id, 
           teamId: '', 
-          isVerified: true,
-          status: systemSettings.autoApprove ? 'active' : 'pending',
+          isVerified: false,
+          status: isAdminPhone ? 'active' : 'pending',
           role: isAdminPhone ? 'admin' : 'user',
           createdAt: serverTimestamp(),
           ...userDataToSave

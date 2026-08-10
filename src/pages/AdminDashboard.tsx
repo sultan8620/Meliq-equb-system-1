@@ -1790,6 +1790,40 @@ export default function AdminDashboard() {
     return () => unsub();
   }, []);
 
+  // One-time script to kick out auto-approved users
+  useEffect(() => {
+    const fixAutoApprovedUsers = async () => {
+      if (!allUsers || allUsers.length === 0) return;
+      
+      const hasRun = localStorage.getItem('auto_approve_fix_run');
+      if (hasRun) return;
+
+      try {
+        const autoApprovedUsers = allUsers.filter(u => 
+          u.status === 'active' && 
+          u.role !== 'admin' && 
+          u.role !== 'super_admin' && 
+          !u.verifiedAt
+        );
+
+        if (autoApprovedUsers.length > 0) {
+          console.log(`Found ${autoApprovedUsers.length} auto-approved users. Kicking them out to pending...`);
+          for (const user of autoApprovedUsers) {
+            await updateDoc(doc(db, 'users', user.id), {
+              status: 'pending',
+              isVerified: false
+            });
+          }
+        }
+        localStorage.setItem('auto_approve_fix_run', 'true');
+      } catch (err) {
+        console.error('Error fixing auto approved users:', err);
+      }
+    };
+    
+    fixAutoApprovedUsers();
+  }, [allUsers]);
+
   const handleAddUpcomingDraw = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
