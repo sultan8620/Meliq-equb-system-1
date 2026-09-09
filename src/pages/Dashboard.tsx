@@ -3398,6 +3398,7 @@ export default function Dashboard() {
             {associatedSlots.map((slot) => {
               const isActive = (activeSlotId === slot.id) || (!activeSlotId && slot.id === user?.uid);
               const isShared = slot.isSharedSlot === true || (slot.slots && Number(slot.slots) < 1);
+              const targetGroup = allGroups.find(g => g.id === slot.groupId);
               
               return (
                 <button
@@ -3411,6 +3412,7 @@ export default function Dashboard() {
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-gold-400 animate-pulse' : 'bg-slate-300'}`} />
                   <span>
+                    {targetGroup?.name ? `${targetGroup.name} • ` : ''}
                     {isShared 
                       ? (language === 'am' ? `በጋራ እጣ (${formatSlots(slot.slots)})` : `Joint Slot (${formatSlots(slot.slots)})`)
                       : (language === 'am' ? `ሙሉ እጣ (${formatSlots(slot.slots)})` : `Full Slot (${formatSlots(slot.slots)})`)

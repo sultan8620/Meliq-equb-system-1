@@ -3346,7 +3346,16 @@ export default function AdminDashboard() {
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [unsubMessages, setUnsubMessages] = useState<any>(null);
 
-  const [addUserModalTab, setAddUserModalTab] = useState<'register' | 'transfer' | 'joint'>('register');
+  const [addUserModalTab, setAddUserModalTab] = useState<'register' | 'transfer' | 'multiGroup' | 'joint'>('register');
+  const [showAddToAnotherGroupModal, setShowAddToAnotherGroupModal] = useState(false);
+  const [targetMemberForNewGroup, setTargetMemberForNewGroup] = useState<any>(null);
+  const [newGroupAssignment, setNewGroupAssignment] = useState({
+    targetGroupId: '',
+    slots: 1,
+    notes: ''
+  });
+  const [isAddingToNewGroup, setIsAddingToNewGroup] = useState(false);
+  const [multiGroupSearchQuery, setMultiGroupSearchQuery] = useState('');
   const [transferSourceGroupId, setTransferSourceGroupId] = useState<string>('');
   const [transferSelectedUserIds, setTransferSelectedUserIds] = useState<string[]>([]);
   const [isTransferringUsers, setIsTransferringUsers] = useState(false);
@@ -3906,6 +3915,276 @@ export default function AdminDashboard() {
       );
     } finally {
       setIsTransferringUsers(false);
+    }
+  };
+
+  const openAddToAnotherGroupModal = (member: any, preselectedGroupId?: string) => {
+    setTargetMemberForNewGroup(member);
+    setNewGroupAssignment({
+      targetGroupId: preselectedGroupId || '',
+      slots: 1,
+      notes: ''
+    });
+    setShowAddToAnotherGroupModal(true);
+  };
+
+  const executeAddExistingMemberToGroup = async (
+    member: any,
+    targetGroupId: string,
+    slotsCount: number,
+    notes?: string
+  ) => {
+    if (!member) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'እባክዎ አባል ይምረጡ!' : 'Please select a member!'
+      );
+      return false;
+    }
+
+    if (!targetGroupId) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'እባክዎ አባሉ የሚሳተፍበትን አዲስ ምድብ ይምረጡ!' : 'Please select the target group for the member!'
+      );
+      return false;
+    }
+
+    const targetGroup = groups.find(g => g.id === targetGroupId);
+    if (!targetGroup) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'የተመረጠው ምድብ አልተገኘም!' : 'Selected group was not found!'
+      );
+      return false;
+    }
+
+    // Check if member already has a slot in this specific target group
+    const cleanPhone = normalizePhone(member.phone || '');
+    const alreadyInTargetGroup = allUsers.some(
+      u => (normalizePhone(u.phone || '') === cleanPhone) && u.groupId === targetGroupId
+    );
+
+    if (alreadyInTargetGroup) {
+      const proceed = await confirmAction(
+        language === 'am'
+          ? `ይህ አባል (${member.fullName}) አስቀድሞ በ "${targetGroup.name}" ምድብ ውስጥ ይገኛል:: አሁንም ተጨማሪ እጣ መጨመር ይፈልጋሉ?`
+          : `This member (${member.fullName}) is already in "${targetGroup.name}". Do you still want to add an additional slot in this group?`
+      );
+      if (!proceed) return false;
+    }
+
+    // Check group capacity
+    const currentCount = Number(targetGroup.memberCount) || 0;
+    const groupLimit = Number(targetGroup.limit) || Number(targetGroup.memberLimit) || 10;
+    const requestedSlots = Number(slotsCount) || 1;
+
+    if (currentCount + requestedSlots > groupLimit) {
+      const proceed = await confirmAction(
+        language === 'am'
+          ? `ይህ ጭማሪ የምድቡን ገደብ (${groupLimit}) ያሳልፋል (አሁን ያለው: ${currentCount}፣ የሚጨመረው: ${requestedSlots}):: አሁንም መቀጠል ይፈልጋሉ?`
+          : `This will exceed the group limit of ${groupLimit} (current: ${currentCount}, adding: ${requestedSlots}). Do you still want to proceed?`
+      );
+      if (!proceed) return false;
+    }
+
+    setIsAddingToNewGroup(true);
+
+    let tempApp: any = null;
+    try {
+      // 1. Generate unique member code for this new group membership
+      const getUniqueCode = async () => {
+        let isUnique = false;
+        let memberCode = '';
+        const prefix = (targetGroup.type || 'EKUB').substring(0, 3).toUpperCase();
+        let attempts = 0;
+        while (!isUnique && attempts < 20) {
+          attempts++;
+          const randomNum = Math.floor(10000 + Math.random() * 90000);
+          memberCode = `${prefix}-${randomNum}`;
+          const qCheck = query(collection(db, 'users'), where('memberCode', '==', memberCode));
+          const snapCheck = await getDocs(qCheck);
+          if (snapCheck.empty) {
+            isUnique = true;
+          }
+        }
+        return memberCode || `${prefix}-${Math.floor(10000 + Math.random() * 90000)}`;
+      };
+
+      const newMemberCode = await getUniqueCode();
+
+      // 2. Auth user creation with email offset
+      tempApp = initializeApp(firebaseConfig, 'tempMultiGroupApp-' + Date.now());
+      const tempAuth = getAuth(tempApp);
+      const passToUse = member.password || systemSettings.defaultUserPassword || 'Password@123';
+
+      let emailOffset = 0;
+      let foundFreeEmail = false;
+      let userCredential = null;
+      let dummyEmail = '';
+
+      while (!foundFreeEmail && emailOffset < 50) {
+        dummyEmail = emailOffset === 0 ? `${cleanPhone}@melikekub.com` : `${cleanPhone}+${emailOffset}@melikekub.com`;
+        try {
+          userCredential = await createUserWithEmailAndPassword(tempAuth, dummyEmail, passToUse);
+          foundFreeEmail = true;
+        } catch (authError: any) {
+          if (authError.code === 'auth/email-already-in-use') {
+            emailOffset++;
+          } else {
+            throw authError;
+          }
+        }
+      }
+
+      if (!userCredential) {
+        throw new Error(`Failed to create Auth credential for member ${member.fullName}`);
+      }
+
+      const uid = userCredential.user.uid;
+
+      // 3. Compute group financial metrics
+      const amount = Number(targetGroup.amount) || 0;
+      const commissionPerSlot = amount * 0.1;
+      const totalPerSlot = amount + commissionPerSlot;
+      const multiplier = targetGroup.frequency === 'fivedays' ? 5 : (targetGroup.frequency === 'tendays' || targetGroup.frequency === 'daily') ? 10 : 1;
+      const totalPayoutPerSlot = amount * multiplier * groupLimit;
+      const totalCyclePayment = totalPerSlot * multiplier * groupLimit * requestedSlots;
+
+      // 4. Construct complete profile data preserving ALL existing KYC, IDs, Guarantors, and Bank Info
+      const newUserDoc: any = {
+        uid: uid,
+        fullName: member.fullName || '',
+        email: dummyEmail,
+        authEmail: dummyEmail,
+        phone: cleanPhone,
+        password: passToUse,
+        // Demographic & Birth Info
+        birthCountry: member.birthCountry || 'ኢትዮጵያ',
+        birthRegion: member.birthRegion || 'አዲስ አበባ',
+        birthZone: member.birthZone || '',
+        birthWoreda: member.birthWoreda || '',
+        birthKebele: member.birthKebele || '',
+        birthDate: member.birthDate || '',
+        birthDateEC: member.birthDateEC || '',
+        age: member.age || 0,
+        motherName: member.motherName || '',
+        // Address Info
+        addressCountry: member.addressCountry || 'ኢትዮጵያ',
+        addressRegion: member.addressRegion || 'አዲስ አበባ',
+        addressZone: member.addressZone || '',
+        addressWoreda: member.addressWoreda || '',
+        addressKebele: member.addressKebele || '',
+        // Identification & KYC
+        nationalId: member.nationalId || '',
+        jobTitle: member.jobTitle || '',
+        preferredItem: member.preferredItem || 'Cash (ጥሬ ገንዘብ)',
+        idFront: member.idFront || '',
+        idBack: member.idBack || '',
+        faceScan: member.faceScan || '',
+        // Bank and Payment Details
+        bankName: member.bankName || '',
+        accountNumber: member.accountNumber || '',
+        accountHolder: member.accountHolder || member.fullName || '',
+        cbeAccount: member.cbeAccount || '',
+        telebirrAccount: member.telebirrAccount || '',
+        boaAccount: member.boaAccount || '',
+        // Guarantor Details
+        guarantorName: member.guarantorName || '',
+        guarantorPhone: member.guarantorPhone || '',
+        guarantorAddress: member.guarantorAddress || '',
+        guarantorIdFront: member.guarantorIdFront || '',
+        guarantorIdBack: member.guarantorIdBack || '',
+        guarantorPhoto: member.guarantorPhoto || '',
+        // Slot & Target Group Data
+        slots: requestedSlots,
+        isSharedSlot: requestedSlots < 1,
+        amount: amount,
+        commission: commissionPerSlot,
+        totalPerSlot: totalPerSlot,
+        totalPayout: totalPayoutPerSlot * requestedSlots,
+        totalCyclePayment: totalCyclePayment,
+        groupId: targetGroup.id,
+        ekubType: targetGroup.type || '',
+        memberCode: newMemberCode,
+        // Status & Multi-group Tracking
+        status: 'active',
+        isVerified: true,
+        verifiedAt: new Date(),
+        isAdmin: false,
+        role: 'user',
+        isMultiGroupMember: true,
+        primaryUserId: member.uid || member.id,
+        originalMemberId: member.id,
+        notes: notes || '',
+        createdAt: serverTimestamp()
+      };
+
+      // 5. Save to Firestore
+      await setDoc(doc(db, 'users', uid), newUserDoc);
+
+      // 6. Update Target Group memberCount
+      await updateDoc(doc(db, 'groups', targetGroup.id), {
+        memberCount: increment(requestedSlots)
+      }).catch(err => console.error("Error updating group memberCount:", err));
+
+      // 7. Notify member
+      await notifyUserAdminChange(
+        member.id,
+        'ተጨማሪ የምድብ ተሳትፎ',
+        'Additional Group Membership',
+        `በአድሚን አማካኝነት ከነሙሉ መረጃዎ ወደ አዲሱ ምድብ "${targetGroup.name}" ተጨማሪ እጣ ተመድበዋል:: በመለያዎ በ Multi-Slot መቆጣጠሪያ አማካኝነት ሁለቱንም ማስተዳደር ይችላሉ::`,
+        `You have been additionally enrolled in group "${targetGroup.name}" with your complete profile. You can switch between and manage both groups in your dashboard.`
+      ).catch(err => console.error("Error notifying user:", err));
+
+      triggerSuccess(
+        language === 'am' ? 'ተሳክቷል' : 'Success',
+        language === 'am'
+          ? `አባል ${member.fullName} ከነ ሙሉ መረጃቸው ወደ "${targetGroup.name}" በ (${requestedSlots} እጣ) በተሳካ ሁኔታ ተጨምረዋል!`
+          : `Member ${member.fullName} has been successfully added to "${targetGroup.name}" with full profile (${requestedSlots} slots)!`
+      );
+
+      return true;
+    } catch (error: any) {
+      console.error("Error adding member to additional group:", error);
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am'
+          ? `አባሉን ወደ አዲሱ ምድብ ማከል አልተሳካም: ${error.message || ''}`
+          : `Failed to add member to new group: ${error.message || ''}`
+      );
+      return false;
+    } finally {
+      if (tempApp) {
+        await deleteApp(tempApp).catch(e => console.error("Error deleting tempApp:", e));
+      }
+      setIsAddingToNewGroup(false);
+    }
+  };
+
+  const handleAddToAnotherGroupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetMemberForNewGroup) {
+      triggerSuccess(
+        language === 'am' ? 'ስህተት' : 'Error',
+        language === 'am' ? 'እባክዎ አባል ይምረጡ!' : 'Please select a member!'
+      );
+      return;
+    }
+    const success = await executeAddExistingMemberToGroup(
+      targetMemberForNewGroup,
+      newGroupAssignment.targetGroupId,
+      newGroupAssignment.slots,
+      newGroupAssignment.notes
+    );
+    if (success) {
+      setShowAddToAnotherGroupModal(false);
+      setTargetMemberForNewGroup(null);
+      setNewGroupAssignment({ targetGroupId: '', slots: 1, notes: '' });
+      if (showAddUserModal) {
+        setShowAddUserModal(false);
+        setAddUserModalTab('register');
+      }
     }
   };
 
@@ -6076,6 +6355,14 @@ export default function AdminDashboard() {
 
                      <div className="p-4 pt-0 mt-auto grid grid-cols-2 gap-2">
                         <button 
+                          type="button"
+                          onClick={() => openAddToAnotherGroupModal(u)}
+                          className="col-span-2 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-[8px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/10 active:scale-95"
+                          title={language === 'am' ? 'ይህንን አባል ከነሙሉ መረጃው በሌላ ምድብ እንዲሳተፍ ጨምር' : 'Add this member to another group with full profile'}
+                        >
+                          <Layers size={12} /> {language === 'am' ? 'በሌላ ምድብ ጨምር' : 'Add to Other Group'}
+                        </button>
+                        <button 
                           onClick={() => { setEditUserForm(u); setShowEditUserModal(true); }}
                           className="py-2.5 bg-white border border-slate-100 text-slate-600 rounded-xl text-[8px] font-black uppercase tracking-widest hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center justify-center gap-1.5"
                         >
@@ -6164,6 +6451,15 @@ export default function AdminDashboard() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                           <button 
+                             type="button"
+                             onClick={() => openAddToAnotherGroupModal(u)}
+                             className="px-3 py-2.5 bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 border border-purple-100"
+                             title={language === 'am' ? 'ይህንን አባል ከነሙሉ መረጃው በሌላ ምድብ እንዲሳተፍ ጨምር' : 'Add to Other Group with full profile'}
+                           >
+                              <Layers size={14} />
+                              <span className="hidden sm:inline">{language === 'am' ? 'በሌላ ምድብ' : 'Other Group'}</span>
+                           </button>
                            <button onClick={() => { setSelectedUser(u); setShowKYCModal(true); }} className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm">
                               <Eye size={16} />
                            </button>
@@ -6448,7 +6744,10 @@ export default function AdminDashboard() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2 relative z-10">
                        <button onClick={() => { setAddUserForm({...addUserForm, groupId: vGroup.id}); setShowAddUserModal(true); }} className="px-4 py-2 border border-indigo-100 bg-indigo-50 text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-colors flex items-center gap-1.5">
-                         <User size={12} /> አባል ጨምር
+                         <User size={12} /> አዲስ አባል
+                       </button>
+                       <button onClick={() => { setTargetMemberForNewGroup(null); setNewGroupAssignment({ targetGroupId: vGroup.id, slots: 1, notes: '' }); setShowAddToAnotherGroupModal(true); }} className="px-4 py-2 border border-purple-200 bg-purple-50 text-purple-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-colors flex items-center gap-1.5 shadow-sm">
+                         <Layers size={12} /> ነባር አባል አሳትፍ
                        </button>
                        <button onClick={() => { setSelectedGroup(vGroup); setShowManageGroupModal(true); }} className="px-4 py-2 border border-slate-200 bg-white text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-colors flex items-center gap-1.5">
                          <Edit size={12} /> አርም
@@ -14754,6 +15053,54 @@ export default function AdminDashboard() {
 
               {/* Additional Member Information Section */}
               <div className="mt-8 pt-8 border-t border-slate-100 space-y-6">
+                {/* User Groups Card */}
+                {(() => {
+                  const cPhone = normalizePhone(selectedUser.phone || '');
+                  const memberSlots = allUsers.filter(u => normalizePhone(u.phone || '') === cPhone);
+                  return (
+                    <div className="p-5 bg-purple-50/50 border border-purple-100 rounded-3xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Layers size={18} className="text-purple-600" />
+                          <h4 className="text-[10px] font-black text-purple-900 uppercase tracking-[0.2em]">
+                            {language === 'am' ? `የተመዘገቡባቸው ምድቦች (${memberSlots.length})` : `Enrolled Groups (${memberSlots.length})`}
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const uToEnroll = selectedUser;
+                            setShowKYCModal(false);
+                            openAddToAnotherGroupModal(uToEnroll);
+                          }}
+                          className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-[8px] font-black uppercase tracking-wider hover:bg-purple-700 transition-all flex items-center gap-1 shadow-sm"
+                        >
+                          <Plus size={12} /> {language === 'am' ? 'በሌላ ምድብ ጨምር' : 'Add to Group'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {memberSlots.map((s, idx) => {
+                          const grp = groups.find(g => g.id === s.groupId);
+                          return (
+                            <div key={s.id || idx} className="p-3 bg-white rounded-2xl border border-purple-100 shadow-sm flex items-center justify-between">
+                              <div>
+                                <p className="text-xs font-black text-slate-900">{grp?.name || 'ያልታወቀ ምድብ'}</p>
+                                <p className="text-[9px] font-bold text-slate-400 font-mono">{s.memberCode || 'No Code'}</p>
+                              </div>
+                              <div className="text-right">
+                                <span className="px-2 py-0.5 rounded-full text-[8px] font-black bg-purple-100 text-purple-700">
+                                  {formatSlots(s.slots)} {language === 'am' ? 'እጣ' : 'slots'}
+                                </span>
+                                <p className="text-[9px] font-black text-emerald-600 mt-0.5">{(s.amount || 0).toLocaleString()} ETB</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="flex items-center gap-3">
                    <div className="p-2 bg-amber-500 rounded-xl text-white">
                       <FileText size={18} />
@@ -14933,6 +15280,17 @@ export default function AdminDashboard() {
                 </>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-3 w-full">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const uToEnroll = selectedUser;
+                      setShowKYCModal(false);
+                      openAddToAnotherGroupModal(uToEnroll);
+                    }}
+                    className="flex-1 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:from-purple-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20"
+                  >
+                    <Layers size={18} /> {language === 'am' ? 'በሌላ ምድብ አሳትፍ' : 'Enroll in Another Group'}
+                  </button>
                   {selectedUser.status === 'discontinued' ? (
                     <button 
                       onClick={async () => {
@@ -16829,7 +17187,18 @@ export default function AdminDashboard() {
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                {language === 'am' ? 'አዲስ አባል መዝግብ' : 'Register New Member'}
+                {language === 'am' ? 'አዲስ አባል' : 'Register New'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddUserModalTab('multiGroup')}
+                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider rounded-2xl transition-all ${
+                  addUserModalTab === 'multiGroup' 
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/10' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {language === 'am' ? 'ነባር አባል በሌላ ምድብ' : 'Add to Other Group'}
               </button>
               <button
                 type="button"
@@ -16840,7 +17209,7 @@ export default function AdminDashboard() {
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                {language === 'am' ? 'አባል አዛውር (Migrate)' : 'Transfer Member'}
+                {language === 'am' ? 'አባል አዛውር' : 'Transfer'}
               </button>
               <button
                 type="button"
@@ -16851,7 +17220,7 @@ export default function AdminDashboard() {
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                {language === 'am' ? 'የጋራ እጣ ፍጠር' : 'Create Joint Slot'}
+                {language === 'am' ? 'የጋራ እጣ' : 'Joint Slot'}
               </button>
             </div>
             
@@ -17825,6 +18194,250 @@ export default function AdminDashboard() {
               </form>
             )}
 
+            {addUserModalTab === 'multiGroup' && (
+              <form onSubmit={handleAddToAnotherGroupSubmit} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar pb-32">
+                {/* Information Callout */}
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-md shadow-purple-600/20">
+                    <Layers size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-purple-900 uppercase tracking-tight">
+                      {language === 'am' ? 'ነባር አባልን ወደ ሌላ ምድብ ማሳተፍ' : 'Enroll Existing Member in Another Group'}
+                    </h4>
+                    <p className="text-[10px] font-bold text-purple-700/80 leading-relaxed mt-0.5">
+                      {language === 'am'
+                        ? 'የተመረጠው አባል ሙሉ የግል፣ የፎቶ፣ የብሔራዊ መታወቂያ፣ የባንክ እና የዋስ መረጃዎች ሳይቀነሱ ወደ አዲሱ ምድብ በቀጥታ ይተላለፋሉ:: አባሉ በአንድ መለያ (ስልክ ቁጥር) ሁለቱንም ምድቦች ማስተዳደር ይችላል::'
+                        : 'All member details (KYC photo, National ID, Bank details, Guarantors) will be seamlessly retained in the new group. The member uses their single phone login to manage both groups.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Section 1: Member Selection */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">1</span>
+                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">
+                        {language === 'am' ? 'አባል ይምረጡ (Select Member) *' : 'Select Member *'}
+                      </label>
+                    </div>
+                    {targetMemberForNewGroup && (
+                      <button
+                        type="button"
+                        onClick={() => setTargetMemberForNewGroup(null)}
+                        className="text-[9px] font-black text-purple-600 hover:text-purple-800 uppercase tracking-wider underline"
+                      >
+                        {language === 'am' ? 'ሌላ አባል ምረጥ' : 'Change Member'}
+                      </button>
+                    )}
+                  </div>
+
+                  {!targetMemberForNewGroup ? (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input
+                          type="text"
+                          placeholder={language === 'am' ? 'አባል በስም፣ በስልክ ወይም በኮድ ፈልግ...' : 'Search by name, phone or code...'}
+                          value={multiGroupSearchQuery}
+                          onChange={(e) => setMultiGroupSearchQuery(e.target.value)}
+                          className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:bg-white transition-all"
+                        />
+                      </div>
+
+                      <div className="max-h-56 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                        {allUsers
+                          .filter(u => !u.isAdmin)
+                          .filter((u, index, self) => 
+                            index === self.findIndex(t => normalizePhone(t.phone || '') === normalizePhone(u.phone || ''))
+                          )
+                          .filter(u => {
+                            if (!multiGroupSearchQuery) return true;
+                            const q = multiGroupSearchQuery.toLowerCase();
+                            return (
+                              (u.fullName || '').toLowerCase().includes(q) ||
+                              (u.phone || '').includes(q) ||
+                              (u.memberCode || '').toLowerCase().includes(q)
+                            );
+                          })
+                          .slice(0, 15)
+                          .map((m) => {
+                            const mGrp = groups.find(g => g.id === m.groupId);
+                            return (
+                              <div
+                                key={m.id}
+                                onClick={() => setTargetMemberForNewGroup(m)}
+                                className="p-3 bg-white border border-slate-100 hover:border-purple-300 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-purple-50/30 transition-all group shadow-sm"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 flex items-center justify-center shrink-0">
+                                    {m.faceScan ? (
+                                      <img src={m.faceScan} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <User size={18} className="text-slate-400" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-black text-slate-900 group-hover:text-purple-600 transition-colors uppercase">
+                                      {m.fullName}
+                                    </p>
+                                    <p className="text-[9px] font-bold text-slate-400 font-mono">
+                                      {m.phone} • {mGrp?.name || 'ቡድን'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <span className="px-3 py-1 bg-purple-50 text-purple-700 group-hover:bg-purple-600 group-hover:text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all">
+                                  {language === 'am' ? 'ምረጥ' : 'Select'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50/40 border border-purple-200/60 rounded-3xl flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-white overflow-hidden border-2 border-purple-200 shadow-md flex items-center justify-center shrink-0">
+                        {targetMemberForNewGroup.faceScan ? (
+                          <img src={targetMemberForNewGroup.faceScan} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <User size={24} className="text-purple-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-black text-slate-900 uppercase truncate">
+                            {targetMemberForNewGroup.fullName}
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-emerald-100 text-emerald-800">
+                            {targetMemberForNewGroup.status === 'active' ? 'Active' : 'Pending'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-500 font-mono mt-0.5">
+                          {targetMemberForNewGroup.phone} {targetMemberForNewGroup.nationalId && `• ID: ${targetMemberForNewGroup.nationalId}`}
+                        </p>
+                        <p className="text-[9px] font-black text-purple-700 mt-1 flex items-center gap-1">
+                          <Folder size={10} /> {groups.find(g => g.id === targetMemberForNewGroup.groupId)?.name || 'ምድብ'} 
+                          <span className="opacity-70 font-mono">({formatSlots(targetMemberForNewGroup.slots)} እጣ)</span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 2: Target Group Selection */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">2</span>
+                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">
+                      {language === 'am' ? 'ተጨማሪ የሚሳተፉበት ምድብ (Target Group) *' : 'Target Group *'}
+                    </label>
+                  </div>
+                  <select
+                    required
+                    value={newGroupAssignment.targetGroupId}
+                    onChange={(e) => setNewGroupAssignment({ ...newGroupAssignment, targetGroupId: e.target.value })}
+                    className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-black text-slate-800 focus:outline-none focus:border-purple-500 focus:bg-white transition-all cursor-pointer"
+                  >
+                    <option value="">{language === 'am' ? '-- ምድብ ይምረጡ --' : '-- Select Group --'}</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} • {g.type} ({(Number(g.amount) || 0).toLocaleString()} ETB) [{g.memberCount || 0}/{g.limit || g.memberLimit || 10} አባላት]
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Section 3: Slots count */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">3</span>
+                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">
+                        {language === 'am' ? 'የእጣ ብዛት (Number of Slots)' : 'Number of Slots'}
+                      </label>
+                    </div>
+                    <span className="text-xs font-black text-purple-700 font-mono">
+                      {newGroupAssignment.slots} {language === 'am' ? 'እጣ' : 'Slot(s)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {[0.5, 1, 2, 3, 4, 5].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setNewGroupAssignment({ ...newGroupAssignment, slots: amt })}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${
+                          newGroupAssignment.slots === amt
+                            ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20 scale-105'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {amt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 4: Financial Summary Box */}
+                {(() => {
+                  const selGrp = groups.find(g => g.id === newGroupAssignment.targetGroupId);
+                  if (!selGrp) return null;
+                  const amt = Number(selGrp.amount) || 0;
+                  const comm = amt * 0.1;
+                  const totalDraw = (amt + comm) * newGroupAssignment.slots;
+                  const gLimit = Number(selGrp.limit) || Number(selGrp.memberLimit) || 10;
+                  const multiplier = selGrp.frequency === 'fivedays' ? 5 : (selGrp.frequency === 'tendays' || selGrp.frequency === 'daily') ? 10 : 1;
+                  const totalPayout = amt * multiplier * gLimit * newGroupAssignment.slots;
+
+                  return (
+                    <div className="p-5 bg-slate-900 text-white rounded-3xl space-y-3 shadow-xl">
+                      <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          {language === 'am' ? 'የገንዘብ ዝርዝር ስሌት' : 'Financial Breakdown'}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase bg-purple-500 text-white">
+                          {selGrp.name}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-[10px]">
+                        <div>
+                          <p className="text-slate-400 font-bold">{language === 'am' ? 'የዕጣ መዋጮ በዕጣ' : 'Contribution'}</p>
+                          <p className="text-xs font-black text-white">{((amt) * newGroupAssignment.slots).toLocaleString()} ETB</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 font-bold">{language === 'am' ? 'አገልግሎት ክፍያ (10%)' : 'Commission (10%)'}</p>
+                          <p className="text-xs font-black text-amber-400">{((comm) * newGroupAssignment.slots).toLocaleString()} ETB</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 font-bold">{language === 'am' ? 'በየዕጣው የሚከፈል ድምር' : 'Total per Draw'}</p>
+                          <p className="text-sm font-black text-emerald-400 font-mono">{totalDraw.toLocaleString()} ETB</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 font-bold">{language === 'am' ? 'የሚደርሰው ጠቅላላ ዕጣ' : 'Total Expected Payout'}</p>
+                          <p className="text-sm font-black text-indigo-300 font-mono">{totalPayout.toLocaleString()} ETB</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Section 5: Admin Notes */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    {language === 'am' ? 'ማስታወሻ (አማራጭ)' : 'Notes (Optional)'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={language === 'am' ? 'ለምሳሌ፡ ተጨማሪ ምድብ ተሳትፎ ጥያቄ' : 'e.g. Requested second group'}
+                    value={newGroupAssignment.notes}
+                    onChange={(e) => setNewGroupAssignment({ ...newGroupAssignment, notes: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </form>
+            )}
+
             {/* Footer Actions */}
              <div className="absolute bottom-0 left-0 right-0 p-8 pt-4 bg-white/80 backdrop-blur-md border-t border-slate-50 flex gap-4">
                <button 
@@ -17832,6 +18445,7 @@ export default function AdminDashboard() {
                  onClick={() => {
                    setShowAddUserModal(false);
                    setAddUserModalTab("register");
+                   setTargetMemberForNewGroup(null);
                  }}
                  className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-100 transition-all"
                >
@@ -17842,6 +18456,8 @@ export default function AdminDashboard() {
                    e.preventDefault(); 
                    if (addUserModalTab === 'register') {
                      handleAddUserSubmit(e); 
+                   } else if (addUserModalTab === 'multiGroup') {
+                     handleAddToAnotherGroupSubmit(e);
                    } else if (addUserModalTab === 'transfer') {
                      handleTransferUsersSubmit(e);
                    } else {
@@ -17851,14 +18467,18 @@ export default function AdminDashboard() {
                  disabled={
                    addUserModalTab === 'register' 
                      ? isAddingUser 
-                     : addUserModalTab === 'transfer' 
-                       ? isTransferringUsers 
-                       : isCreatingJointSlot
+                     : addUserModalTab === 'multiGroup'
+                       ? isAddingToNewGroup
+                       : addUserModalTab === 'transfer' 
+                         ? isTransferringUsers 
+                         : isCreatingJointSlot
                  }
                  className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                >
                  {addUserModalTab === 'register' ? (
                    isAddingUser ? <RefreshCw size={18} className="animate-spin" /> : <><Users size={18} /> አባሉን መዝግብ</>
+                 ) : addUserModalTab === 'multiGroup' ? (
+                   isAddingToNewGroup ? <RefreshCw size={18} className="animate-spin" /> : <><Layers size={18} /> ከነሙሉ መረጃቸው በሌላ ምድብ ጨምር</>
                  ) : addUserModalTab === 'transfer' ? (
                    isTransferringUsers ? <RefreshCw size={18} className="animate-spin" /> : <><RefreshCw size={18} /> አባላትን አዛውር/አሸጋግር</>
                  ) : (
@@ -17866,6 +18486,320 @@ export default function AdminDashboard() {
                  )}
                </button>
              </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Standalone Add Existing Member to Another Group Modal */}
+      {showAddToAnotherGroupModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl flex items-center justify-center p-4 z-[115]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 40 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col relative"
+          >
+            {/* Modal Header */}
+            <div className="p-8 pb-6 bg-gradient-to-r from-purple-700 via-indigo-700 to-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md shadow-inner border border-white/20 text-purple-200">
+                  <Layers size={28} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black tracking-tight leading-none uppercase">
+                    {language === 'am' ? 'አባልን በሌላ ምድብ ማሳተፍ' : 'Enroll Member in Another Group'}
+                  </h3>
+                  <p className="text-[10px] font-bold text-purple-200/80 tracking-widest uppercase mt-1">
+                    {language === 'am' ? 'ሙሉ መረጃ ሳይቀነስ ወደ ተጨማሪ ምድብ ማካተት' : 'Multi-Group Enrollment with Complete Profile'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowAddToAnotherGroupModal(false);
+                  setTargetMemberForNewGroup(null);
+                }} 
+                className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-2xl transition-all text-white"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleAddToAnotherGroupSubmit} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar pb-32">
+              {/* Guarantee Banner */}
+              <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-md shadow-purple-600/20">
+                  <CheckCircle size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-purple-900 uppercase tracking-tight">
+                    {language === 'am' ? 'ሙሉ የአባሉ መረጃ በቀጥታ ይተላለፋል' : 'Full Profile Guaranteed Transfer'}
+                  </h4>
+                  <p className="text-[10px] font-bold text-purple-700/80 leading-relaxed mt-0.5">
+                    {language === 'am'
+                      ? 'የዚህ አባል የፊት ፎቶ፣ የብሔራዊ መታወቂያ (ፊት እና ጀርባ)፣ አድራሻ፣ የባንክ ሂሳብ እና የዋስ መረጃዎች በሙሉ ያለምንም ዳግም ምዝገባ በቀጥታ ወደ አዲሱ ምድብ ይተላለፋሉ::'
+                      : 'Member photo, National ID (front & back), address, bank accounts, and guarantor details are all automatically retained in the new group.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 1: Member Card / Selector */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">1</span>
+                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">
+                      {language === 'am' ? 'አባል (Member)' : 'Member'}
+                    </label>
+                  </div>
+                  {targetMemberForNewGroup && (
+                    <button
+                      type="button"
+                      onClick={() => setTargetMemberForNewGroup(null)}
+                      className="text-[9px] font-black text-purple-600 hover:text-purple-800 uppercase tracking-wider underline"
+                    >
+                      {language === 'am' ? 'ሌላ አባል ምረጥ' : 'Change Member'}
+                    </button>
+                  )}
+                </div>
+
+                {!targetMemberForNewGroup ? (
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input
+                        type="text"
+                        placeholder={language === 'am' ? 'አባል በስም፣ በስልክ ወይም በኮድ ፈልግ...' : 'Search by name, phone or code...'}
+                        value={multiGroupSearchQuery}
+                        onChange={(e) => setMultiGroupSearchQuery(e.target.value)}
+                        className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:bg-white transition-all"
+                      />
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                      {allUsers
+                        .filter(u => !u.isAdmin)
+                        .filter((u, index, self) => 
+                          index === self.findIndex(t => normalizePhone(t.phone || '') === normalizePhone(u.phone || ''))
+                        )
+                        .filter(u => {
+                          if (!multiGroupSearchQuery) return true;
+                          const q = multiGroupSearchQuery.toLowerCase();
+                          return (
+                            (u.fullName || '').toLowerCase().includes(q) ||
+                            (u.phone || '').includes(q) ||
+                            (u.memberCode || '').toLowerCase().includes(q)
+                          );
+                        })
+                        .slice(0, 15)
+                        .map((m) => {
+                          const mGrp = groups.find(g => g.id === m.groupId);
+                          return (
+                            <div
+                              key={m.id}
+                              onClick={() => setTargetMemberForNewGroup(m)}
+                              className="p-3 bg-white border border-slate-100 hover:border-purple-300 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-purple-50/30 transition-all group shadow-sm"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 flex items-center justify-center shrink-0">
+                                  {m.faceScan ? (
+                                    <img src={m.faceScan} alt="" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <User size={18} className="text-slate-400" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-xs font-black text-slate-900 group-hover:text-purple-600 transition-colors uppercase">
+                                    {m.fullName}
+                                  </p>
+                                  <p className="text-[9px] font-bold text-slate-400 font-mono">
+                                    {m.phone} • {mGrp?.name || 'ቡድን'}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="px-3 py-1 bg-purple-50 text-purple-700 group-hover:bg-purple-600 group-hover:text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all">
+                                {language === 'am' ? 'ምረጥ' : 'Select'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50/40 border border-purple-200/60 rounded-3xl flex items-center gap-4 shadow-sm">
+                    <div className="w-16 h-16 rounded-2xl bg-white overflow-hidden border-2 border-purple-200 shadow-md flex items-center justify-center shrink-0">
+                      {targetMemberForNewGroup.faceScan ? (
+                        <img src={targetMemberForNewGroup.faceScan} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={28} className="text-purple-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-base font-black text-slate-900 uppercase truncate">
+                          {targetMemberForNewGroup.fullName}
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-emerald-100 text-emerald-800">
+                          {targetMemberForNewGroup.status === 'active' ? 'Active' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] font-bold text-slate-500 font-mono mt-0.5">
+                        {targetMemberForNewGroup.phone} {targetMemberForNewGroup.nationalId && `• ID: ${targetMemberForNewGroup.nationalId}`}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                        <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-indigo-100 text-indigo-700 flex items-center gap-1">
+                          <Folder size={9} /> {groups.find(g => g.id === targetMemberForNewGroup.groupId)?.name || 'ዋና ምድብ'} ({formatSlots(targetMemberForNewGroup.slots)} እጣ)
+                        </span>
+                        {targetMemberForNewGroup.addressRegion && (
+                          <span className="text-[9px] font-bold text-slate-500">
+                            📍 {targetMemberForNewGroup.addressRegion}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Step 2: Target Group */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">2</span>
+                  <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">
+                    {language === 'am' ? 'አዲሱ የሚሳተፉበት ምድብ (Target Group) *' : 'Target Group *'}
+                  </label>
+                </div>
+                <select
+                  required
+                  value={newGroupAssignment.targetGroupId}
+                  onChange={(e) => setNewGroupAssignment({ ...newGroupAssignment, targetGroupId: e.target.value })}
+                  className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-black text-slate-800 focus:outline-none focus:border-purple-500 focus:bg-white transition-all cursor-pointer"
+                >
+                  <option value="">{language === 'am' ? '-- ምድብ ይምረጡ --' : '-- Select Group --'}</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} • {g.type} ({(Number(g.amount) || 0).toLocaleString()} ETB) [{g.memberCount || 0}/{g.limit || g.memberLimit || 10} አባላት]
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 3: Slots */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">3</span>
+                    <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest">
+                      {language === 'am' ? 'የእጣ ብዛት (Slots in New Group)' : 'Slots in New Group'}
+                    </label>
+                  </div>
+                  <span className="text-xs font-black text-purple-700 font-mono">
+                    {newGroupAssignment.slots} {language === 'am' ? 'እጣ' : 'Slot(s)'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {[0.5, 1, 2, 3, 4, 5].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setNewGroupAssignment({ ...newGroupAssignment, slots: amt })}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${
+                        newGroupAssignment.slots === amt
+                          ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20 scale-105'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {amt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 4: Live Financial Calculations */}
+              {(() => {
+                const selGrp = groups.find(g => g.id === newGroupAssignment.targetGroupId);
+                if (!selGrp) return null;
+                const amt = Number(selGrp.amount) || 0;
+                const comm = amt * 0.1;
+                const totalDraw = (amt + comm) * newGroupAssignment.slots;
+                const gLimit = Number(selGrp.limit) || Number(selGrp.memberLimit) || 10;
+                const multiplier = selGrp.frequency === 'fivedays' ? 5 : (selGrp.frequency === 'tendays' || selGrp.frequency === 'daily') ? 10 : 1;
+                const totalPayout = amt * multiplier * gLimit * newGroupAssignment.slots;
+
+                return (
+                  <div className="p-5 bg-slate-900 text-white rounded-3xl space-y-3 shadow-xl">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        {language === 'am' ? 'የገንዘብ ዝርዝር ስሌት' : 'Financial Breakdown'}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase bg-purple-500 text-white">
+                        {selGrp.name}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-[10px]">
+                      <div>
+                        <p className="text-slate-400 font-bold">{language === 'am' ? 'የዕጣ መዋጮ' : 'Contribution'}</p>
+                        <p className="text-xs font-black text-white">{((amt) * newGroupAssignment.slots).toLocaleString()} ETB</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 font-bold">{language === 'am' ? 'አገልግሎት ክፍያ (10%)' : 'Commission (10%)'}</p>
+                        <p className="text-xs font-black text-amber-400">{((comm) * newGroupAssignment.slots).toLocaleString()} ETB</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 font-bold">{language === 'am' ? 'በየዕጣው የሚከፈል ድምር' : 'Total per Draw'}</p>
+                        <p className="text-sm font-black text-emerald-400 font-mono">{totalDraw.toLocaleString()} ETB</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 font-bold">{language === 'am' ? 'የሚደርሰው ጠቅላላ ዕጣ' : 'Total Expected Payout'}</p>
+                        <p className="text-sm font-black text-indigo-300 font-mono">{totalPayout.toLocaleString()} ETB</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Step 5: Notes */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                  {language === 'am' ? 'የአድሚን ማስታወሻ (አማራጭ)' : 'Admin Notes (Optional)'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={language === 'am' ? 'ለምሳሌ፡ ተጨማሪ ምድብ ተሳትፎ ጥያቄ' : 'e.g. Member requested secondary group'}
+                  value={newGroupAssignment.notes}
+                  onChange={(e) => setNewGroupAssignment({ ...newGroupAssignment, notes: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              {/* Footer Actions */}
+              <div className="absolute bottom-0 left-0 right-0 p-8 pt-4 bg-white/80 backdrop-blur-md border-t border-slate-50 flex gap-4">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setShowAddToAnotherGroupModal(false);
+                    setTargetMemberForNewGroup(null);
+                  }}
+                  className="flex-1 py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-100 transition-all"
+                >
+                  አቋርጥ (Cancel)
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isAddingToNewGroup || !targetMemberForNewGroup || !newGroupAssignment.targetGroupId}
+                  className="flex-[2] py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-2xl shadow-purple-600/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                >
+                  {isAddingToNewGroup ? (
+                    <RefreshCw size={18} className="animate-spin" />
+                  ) : (
+                    <>
+                      <Layers size={18} />
+                      {language === 'am' ? 'ከነሙሉ መረጃቸው ወደ ምድቡ ጨምር' : 'Add to Group with Full Profile'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}
