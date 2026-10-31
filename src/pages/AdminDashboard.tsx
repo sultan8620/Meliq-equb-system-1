@@ -2442,6 +2442,93 @@ export default function AdminDashboard() {
     }
   };
 
+  const openRevertRoundModal = (group: any) => {
+    setSelectedRevertGroup(group);
+    const curRound = Number(group.currentRound) || 1;
+    setTargetRevertRound(Math.max(1, curRound > 1 ? curRound - 1 : 1));
+    setRestoreArchivedMembers(true);
+    setShowRevertRoundModal(true);
+  };
+
+  const handleExecuteRevertRound = async () => {
+    if (!selectedRevertGroup) return;
+    setIsRevertingRound(true);
+    try {
+      const groupId = selectedRevertGroup.id;
+      const targetRound = Number(targetRevertRound) || 1;
+      let restoredCount = 0;
+
+      // Restore archived members if selected
+      if (restoreArchivedMembers) {
+        const archivedForGroup = archivedMembers.filter((m: any) => m.groupId === groupId);
+        for (const arch of archivedForGroup) {
+          const originalId = arch.originalUserId || arch.id;
+          const { id: _archId, originalUserId: _orig, archivedAt: _at, round: _r, ...memberRestoredData } = arch;
+          const userDocRef = doc(db, "users", originalId);
+          const userSnap = await getDoc(userDocRef);
+          if (!userSnap.exists()) {
+            await setDoc(userDocRef, {
+              ...memberRestoredData,
+              status: "active",
+              groupId: groupId,
+              restoredAt: serverTimestamp(),
+              restoredRound: targetRound,
+              updatedAt: serverTimestamp()
+            });
+            restoredCount++;
+          } else {
+            await updateDoc(userDocRef, {
+              status: "active",
+              groupId: groupId,
+              restoredRound: targetRound,
+              updatedAt: serverTimestamp()
+            });
+            restoredCount++;
+          }
+          if (arch.id) {
+            await deleteDoc(doc(db, "archived_members", arch.id)).catch(() => {});
+          }
+        }
+      }
+
+      // Compute active member count
+      const activeMembersInGroup = allUsers.filter((u: any) => u.groupId === groupId);
+      const newCount = Math.max(Number(selectedRevertGroup.memberCount) || 0, activeMembersInGroup.length + restoredCount);
+
+      await updateDoc(doc(db, "groups", groupId), {
+        currentRound: targetRound,
+        status: "active",
+        memberCount: newCount,
+        updatedAt: serverTimestamp(),
+        roundRevertedAt: serverTimestamp(),
+        reopenedRoundAt: serverTimestamp(),
+        reopenedBy: user?.email || "admin"
+      });
+
+      setGroups(prev => prev.map(g => g.id === groupId ? {
+        ...g,
+        currentRound: targetRound,
+        status: "active",
+        memberCount: newCount
+      } : g));
+
+      setShowRevertRoundModal(false);
+      setSelectedRevertGroup(null);
+
+      triggerSuccess(
+        language === "am" ? "ዙሩ በተሳካ ሁኔታ ተመልሷል" : "Round Reverted Successfully",
+        language === "am"
+          ? `የምድብ "${selectedRevertGroup.name}" ዙር ወደ ዙር ${targetRound} ተመልሷል፤ ምድቡም ንቁ (Active) ሆኗል።${restoredCount > 0 ? ` ${restoredCount} አባላት ከማህደር ተመልሰዋል።` : ""}`
+          : `Group "${selectedRevertGroup.name}" reverted to Round ${targetRound} and is now active.${restoredCount > 0 ? ` Restored ${restoredCount} member(s).` : ""}`
+      );
+    } catch (err) {
+      console.error("Error reverting round:", err);
+      handleFirestoreError(err, OperationType.UPDATE, `groups/${selectedRevertGroup?.id}`);
+    } finally {
+      setIsRevertingRound(false);
+    }
+  };
+
   const adjustGroupRound = async (groupId: string, newRound: number) => {
     if (newRound < 1) return;
     if (!await confirmAction(language === 'am' ? `የምድቡን ዙር ወደ ዙር ${newRound} መመለስ/ማስተካከል እርግጠኛ ነዎት?` : `Are you sure you want to adjust group round to Round ${newRound}?`)) return;
@@ -4760,6 +4847,11 @@ export default function AdminDashboard() {
   };
 
   const [showEndCycleModal, setShowEndCycleModal] = useState(false);
+  const [showRevertRoundModal, setShowRevertRoundModal] = useState(false);
+  const [selectedRevertGroup, setSelectedRevertGroup] = useState<any>(null);
+  const [targetRevertRound, setTargetRevertRound] = useState<number>(1);
+  const [restoreArchivedMembers, setRestoreArchivedMembers] = useState<boolean>(true);
+  const [isRevertingRound, setIsRevertingRound] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const [showManualPaymentModal, setShowManualPaymentModal] = useState(false);
@@ -6793,6 +6885,14 @@ export default function AdminDashboard() {
                        <button onClick={() => { setSelectedGroup(vGroup); setShowEndCycleModal(true); }} className="px-4 py-2 border border-rose-200 bg-rose-50 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-colors flex items-center gap-1.5">
                          <RefreshCw size={12} /> ዙር መዝጊያ
                        </button>
+                        <button onClick={() => openRevertRoundModal(vGroup)} className="px-4 py-2 border border-amber-200 bg-amber-50 text-amber-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-600 hover:text-white transition-colors flex items-center gap-1.5 shadow-sm" title={language === "am" ? "የተዘጋ ዙር መመለስ" : "Revert/Reopen Round"}>
+                          <RotateCcw size={12} /> {language === "am" ? "የተዘጋ ዙር መመለስ" : "Revert Round"}
+                        </button>
+                        {(vGroup.status === "completed" || vGroup.status === "closed") && (
+                          <button onClick={() => reopenGroup(vGroup.id)} className="px-4 py-2 border border-emerald-200 bg-emerald-50 text-emerald-700 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-colors flex items-center gap-1.5 shadow-sm">
+                            <Zap size={12} /> {language === "am" ? "ምድቡን ክፈት (Reopen)" : "Reopen Group"}
+                          </button>
+                        )}
                     </div>
                   </div>
 
@@ -7071,6 +7171,14 @@ export default function AdminDashboard() {
                                              </span>
                                              <span>
                                                {language === 'am' ? `ዙር ${adminTrackerRound}:` : `Round ${adminTrackerRound}:`}{' '}
+                                              <button
+                                                type="button"
+                                                onClick={() => openRevertRoundModal(vGroup)}
+                                                className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[8px] font-black uppercase tracking-widest transition-colors shadow-xs"
+                                                title={language === "am" ? "የተዘጋ ዙር መመለስ" : "Revert Round"}
+                                              >
+                                                <RotateCcw size={8} /> {language === "am" ? "ዙር መልስ" : "Revert"}
+                                              </button>{' '}
                                                <strong className="text-slate-800">{paidStepsInSelectedRound}/{stepsPerRound} {language === 'am' ? 'ቀናት' : 'Days'}</strong>
                                              </span>
                                            </div>
@@ -7553,9 +7661,11 @@ export default function AdminDashboard() {
                           <span className={`px-2 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-widest border shrink-0 ${
                             group.status === 'active' 
                             ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                            : (group.status === 'completed' || group.status === 'closed')
+                            ? 'bg-rose-50 text-rose-600 border-rose-100'
                             : 'bg-amber-50 text-amber-600 border-amber-100'
                           }`}>
-                            {group.status === 'active' ? 'ንቁ (Active)' : 'ምዝገባ ላይ'}
+                            {group.status === 'active' ? 'ንቁ (Active)' : (group.status === 'completed' || group.status === 'closed') ? (language === 'am' ? 'የተዘጋ/የተጠናቀቀ' : 'Closed') : 'ምዝገባ ላይ'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mt-3">
@@ -7587,6 +7697,22 @@ export default function AdminDashboard() {
                           >
                             <RefreshCw size={10} /> ዙር መዝጊያ
                           </button>
+                          <button 
+                            onClick={() => openRevertRoundModal(group)} 
+                            className="h-8 px-3 bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-600 hover:text-white rounded-xl text-[8px] font-black uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
+                            title={language === "am" ? "የተዘጋ ዙር መመለስ" : "Revert/Reopen Round"}
+                          >
+                            <RotateCcw size={10} /> {language === "am" ? "ዙር መልስ" : "Revert Round"}
+                          </button>
+                          {(group.status === 'completed' || group.status === 'closed') && (
+                            <button 
+                              onClick={() => reopenGroup(group.id)} 
+                              className="h-8 px-3 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-xl text-[8px] font-black uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
+                              title={language === "am" ? "የተዘጋ ምድብ ክፈት" : "Reopen Group"}
+                            >
+                              <Zap size={10} /> {language === "am" ? "ምድብ ክፈት" : "Reopen"}
+                            </button>
+                          )}
                           <button 
                             onClick={() => openChat(group)} 
                             className="w-8 h-8 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-indigo-50 hover:text-indigo-500 transition-all border border-slate-100 group/chat"
@@ -11026,7 +11152,7 @@ export default function AdminDashboard() {
                                 </button>
                              )}
                              <button
-                                onClick={() => adjustGroupRound(group.id, Math.max(1, (group.currentRound || 1) - 1))}
+                                onClick={() => openRevertRoundModal(group)}
                                 className="py-2 px-3 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1"
                                 title="ዙር መልስ (-1)"
                              >
@@ -16049,6 +16175,28 @@ export default function AdminDashboard() {
                     </div>
                   </>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManageGroupModal(false);
+                    openRevertRoundModal(selectedGroup);
+                  }}
+                  className="w-full py-2.5 bg-amber-50 text-amber-700 hover:bg-amber-600 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2 border border-amber-200"
+                >
+                  <RotateCcw size={13} /> {language === 'am' ? 'የተዘጋ ዙር መመለስ' : 'Revert / Reopen Round'}
+                </button>
+                {(selectedGroup.status === 'completed' || selectedGroup.status === 'closed') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowManageGroupModal(false);
+                      reopenGroup(selectedGroup.id);
+                    }}
+                    className="w-full py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2 border border-emerald-200"
+                  >
+                    <Zap size={13} /> {language === 'am' ? 'ምድቡን እንደገና ክፈት (Reopen)' : 'Reopen Group'}
+                  </button>
+                )}
                 
                 {(isSuperAdmin || userData?.permissions?.manageGroups) && (
                   <button 
@@ -19381,6 +19529,198 @@ export default function AdminDashboard() {
                      {isLoading ? <RefreshCw size={14} className="animate-spin" /> : <Archive size={14} />}
                      {language === 'am' ? 'እርግጠኛ ነኝ ዘጋው' : 'Confirm End Cycle'}
                   </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Revert / Reopen Group Round Modal */}
+      <AnimatePresence>
+        {showRevertRoundModal && selectedRevertGroup && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isRevertingRound && setShowRevertRoundModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[2.5rem] p-6 md:p-8 shadow-2xl border border-slate-100 overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 blur-3xl rounded-full -mr-20 -mt-20"></div>
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full -ml-16 -mb-16"></div>
+
+              <button
+                onClick={() => !isRevertingRound && setShowRevertRoundModal(false)}
+                className="absolute top-6 right-6 p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-4 mb-6 relative z-10">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shadow-inner">
+                  <RotateCcw size={26} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                    {language === "am" ? "የተዘጋ ምድብ ዙር መመለስ" : "Revert / Reopen Group Round"}
+                  </h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                    {language === "am" ? "ምድብ አስተዳደር እና ዙር መልሶ ማግበር" : "Group Round Rollback & Reactivation"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100 mb-6 space-y-3 relative z-10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Folder size={16} className="text-indigo-500" />
+                    <span className="text-sm font-black text-slate-900 uppercase">{selectedRevertGroup.name}</span>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                    selectedRevertGroup.status === "active"
+                      ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                      : "bg-rose-50 text-rose-600 border border-rose-100"
+                  }`}>
+                    {selectedRevertGroup.status === "active" 
+                      ? (language === "am" ? "ንቁ (Active)" : "Active") 
+                      : (language === "am" ? "የተዘጋ/የተጠናቀቀ (Closed)" : "Closed/Completed")}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-center">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-xs">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{language === "am" ? "የአሁኑ ዙር" : "Current Round"}</p>
+                    <p className="text-base font-black text-slate-800">ዙር {selectedRevertGroup.currentRound || 1}</p>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-xs">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{language === "am" ? "ንቁ አባላት" : "Active Members"}</p>
+                    <p className="text-base font-black text-emerald-600">{allUsers.filter((u: any) => u.groupId === selectedRevertGroup.id).length}</p>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-100 shadow-xs">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{language === "am" ? "በማህደር ያሉ" : "Archived"}</p>
+                    <p className="text-base font-black text-amber-600">{archivedMembers.filter((m: any) => m.groupId === selectedRevertGroup.id).length}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-6 relative z-10">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block">
+                  {language === "am" ? "የሚመለስበት / የሚከፈትበት ዙር ይምረጡ" : "Select Target Round to Reopen"}
+                </label>
+                
+                <div className="flex items-center justify-between p-3 bg-white rounded-2xl border-2 border-amber-200 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setTargetRevertRound(prev => Math.max(1, prev - 1))}
+                    disabled={targetRevertRound <= 1}
+                    className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center disabled:opacity-40 transition-colors"
+                  >
+                    -
+                  </button>
+                  <div className="text-center">
+                    <span className="text-2xl font-black text-amber-700 tracking-tight">
+                      {language === "am" ? `ዙር ${targetRevertRound}` : `Round ${targetRevertRound}`}
+                    </span>
+                    <p className="text-[9px] font-bold text-slate-400">
+                      {targetRevertRound < (selectedRevertGroup.currentRound || 1)
+                        ? (language === "am" ? `ከዙር ${selectedRevertGroup.currentRound || 1} ወደ ዙር ${targetRevertRound} መመለስ` : `Reverting back to Round ${targetRevertRound}`)
+                        : (language === "am" ? "ይህንን ዙር እንደገና ንቁ ማድረግ" : "Reactivating this round")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTargetRevertRound(prev => prev + 1)}
+                    className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-[9px] font-bold text-slate-400">{language === "am" ? "ፈጣን ምርጫ:" : "Quick Select:"}</span>
+                  {Array.from({ length: Math.max(Number(selectedRevertGroup.currentRound) || 1, 3) }).map((_, idx) => {
+                    const rNum = idx + 1;
+                    const isSelected = targetRevertRound === rNum;
+                    return (
+                      <button
+                        key={rNum}
+                        type="button"
+                        onClick={() => setTargetRevertRound(rNum)}
+                        className={`px-3 py-1 rounded-xl text-[10px] font-black transition-all ${
+                          isSelected
+                            ? "bg-amber-600 text-white shadow-md shadow-amber-600/20 scale-105"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        {language === "am" ? `ዙር ${rNum}` : `R${rNum}`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {archivedMembers.filter((m: any) => m.groupId === selectedRevertGroup.id).length > 0 && (
+                <div className="mb-6 p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/80 relative z-10">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={restoreArchivedMembers}
+                      onChange={e => setRestoreArchivedMembers(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300"
+                    />
+                    <div className="flex-1">
+                      <p className="text-xs font-black text-amber-900 leading-tight">
+                        {language === "am"
+                          ? `የተዘጉትን ${archivedMembers.filter((m: any) => m.groupId === selectedRevertGroup.id).length} አባላት ከማህደር መልስ`
+                          : `Restore ${archivedMembers.filter((m: any) => m.groupId === selectedRevertGroup.id).length} archived members to active`}
+                      </p>
+                      <p className="text-[10px] text-amber-700/90 font-medium mt-0.5 leading-snug">
+                        {language === "am"
+                          ? "ዙሩ ሲዘጋ ወደ ማህደር የተዛወሩ አባላትን ወደ ዋናው የአባላት ዝርዝር ይመልሳቸዋል።"
+                          : "Restores members archived during cycle closure back to the active member list."}
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100/80 text-[10px] text-blue-800 font-medium leading-relaxed mb-6 relative z-10 flex items-start gap-2">
+                <ShieldCheck size={14} className="text-blue-600 shrink-0 mt-0.5" />
+                <span>
+                  {language === "am"
+                    ? "ዙሩ ሲመለስ የምድቡ ሁኔታ ወደ \"ንቁ (Active)\" ይቀየራል፤ አባላት በየዕለቱ መክፈላቸውን መከታተል እና ዕጣ ማካሄድ ይቻላል።"
+                    : "Reverting the round restores the group to Active status, allowing daily payment tracking and lottery draws to resume."}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 relative z-10">
+                <button
+                  type="button"
+                  disabled={isRevertingRound}
+                  onClick={() => setShowRevertRoundModal(false)}
+                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors disabled:opacity-50"
+                >
+                  {language === "am" ? "ተመለስ" : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isRevertingRound}
+                  onClick={handleExecuteRevertRound}
+                  className="flex-[2] py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-amber-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isRevertingRound ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <RotateCcw size={14} />
+                  )}
+                  {language === "am" ? "ዙሩን መልስ እና ምድቡን ክፈት" : "Revert Round & Reopen"}
+                </button>
               </div>
             </motion.div>
           </div>
