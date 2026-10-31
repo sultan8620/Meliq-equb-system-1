@@ -13,6 +13,7 @@ import { useLanguage } from '../lib/LanguageContext';
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, or, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
+import { formatToEthiopianDate, getEthiopianDateDetails } from '../utils/ethiopianDate';
 
 const formatSlots = (s: number | undefined): string => {
   if (!s) return '1';
@@ -107,29 +108,8 @@ const generateReceiptId = (bankName: string) => {
 };
 
 const formatPaymentDate = (createdAt: any, lang: string = 'am') => {
-  if (!createdAt) return new Date().toLocaleDateString(lang === 'am' ? 'am-ET' : 'en-US');
-  let date: Date;
-  if (typeof createdAt.toDate === 'function') {
-    date = createdAt.toDate();
-  } else if (createdAt.seconds !== undefined) {
-    date = new Date(createdAt.seconds * 1000);
-  } else if (createdAt._seconds !== undefined) {
-    date = new Date(createdAt._seconds * 1000);
-  } else if (createdAt instanceof Date) {
-    date = createdAt;
-  } else {
-    date = new Date(createdAt);
-  }
-  
-  if (isNaN(date.getTime())) {
-    date = new Date();
-  }
-  
-  return date.toLocaleDateString(lang === 'am' ? 'am-ET' : 'en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
+  if (!createdAt) return formatToEthiopianDate(new Date(), lang as 'am' | 'en');
+  return formatToEthiopianDate(createdAt, lang as 'am' | 'en');
 };
 
 const displayReceiptId = (payment: any) => {
@@ -1318,6 +1298,10 @@ export default function Dashboard() {
       const paymentRef = collection(db, 'payments');
       const baseAmount = getSinglePaymentAmount(userData, group);
       const calculatedAmount = baseAmount * paymentDays;
+      const now = new Date();
+      const ethDate = getEthiopianDateDetails(now);
+      const currentR = group?.currentRound || 1;
+
       await addDoc(paymentRef, {
         userId: user.uid,
         userName: userData.fullName || 'Unknown User',
@@ -1326,6 +1310,11 @@ export default function Dashboard() {
         groupName: group?.name || 'Unknown Group',
         amount: calculatedAmount,
         paymentDays: paymentDays,
+        round: currentR,
+        targetRound: currentR,
+        ethiopianDate: ethDate.formattedAm,
+        ethiopianDateTime: ethDate.fullFormattedAm,
+        ethiopianDateEC: ethDate.formattedAm,
         bank: paymentBank,
         payerName: '',
         payerAccount: '',
@@ -1333,6 +1322,17 @@ export default function Dashboard() {
         receiptImages: receiptImages || [],
         receiptId: generateReceiptId(paymentBank),
         status: 'pending',
+        paymentDetails: {
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+          day: now.getDate(),
+          time: now.toLocaleTimeString(),
+          ethiopianDate: ethDate.formattedAm,
+          ethiopianYear: ethDate.year,
+          ethiopianMonth: ethDate.monthNameAm,
+          ethiopianDay: ethDate.day,
+          method: paymentBank || 'Bank Transfer'
+        },
         createdAt: serverTimestamp()
       });
       
@@ -2259,7 +2259,9 @@ export default function Dashboard() {
     setIsSubmitting(true);
     try {
       const now = new Date();
+      const ethDate = getEthiopianDateDetails(now);
       const generatedReceiptId = generateReceiptId(paymentBank);
+      const currentR = group?.currentRound || 1;
 
       await addDoc(collection(db, 'payments'), {
         userId: user.uid,
@@ -2268,6 +2270,12 @@ export default function Dashboard() {
         groupName: group.name,
         memberCode: userData.memberCode || '',
         amount: getSinglePaymentAmount(userData, group),
+        paymentDays: paymentDays || 1,
+        round: currentR,
+        targetRound: currentR,
+        ethiopianDate: ethDate.formattedAm,
+        ethiopianDateTime: ethDate.fullFormattedAm,
+        ethiopianDateEC: ethDate.formattedAm,
         status: systemSettings.autoApprove ? 'approved' : 'pending',
         type: 'contribution',
         bank: paymentBank,
@@ -2276,6 +2284,17 @@ export default function Dashboard() {
         receiptImage: receiptImage || '',
         transactionCode: paymentCode || '',
         receiptId: generatedReceiptId,
+        paymentDetails: {
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+          day: now.getDate(),
+          time: now.toLocaleTimeString(),
+          ethiopianDate: ethDate.formattedAm,
+          ethiopianYear: ethDate.year,
+          ethiopianMonth: ethDate.monthNameAm,
+          ethiopianDay: ethDate.day,
+          method: paymentBank || 'Bank Transfer'
+        },
         createdAt: serverTimestamp()
       });
       setShowContributeModal(false);
@@ -3689,6 +3708,10 @@ export default function Dashboard() {
                        <span className="px-4 py-2 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-100 shadow-sm">
                          {language === 'am' ? 'የእቁብ መረጃ' : 'Community Info'}
                        </span>
+                       <span className="px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border border-purple-100 shadow-sm flex items-center gap-1.5">
+                         <Calendar size={13} />
+                         {language === 'am' ? 'የተቀላቀሉበት ቀን:' : 'Joined:'} {userData?.joinedDateEC || userData?.ethiopianJoinedDate || formatToEthiopianDate(userData?.joinedGroupAt || userData?.createdAt)}
+                       </span>
                        {(userData?.isSharedSlot || (userData?.slots && Number(userData?.slots) < 1)) && (
                          <span className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-md flex items-center gap-1.5">
                            <Layers size={14} /> {language === 'am' ? 'የጋራ እጣ (1 ሙሉ እጣ)' : 'Joint Slot (1 Combined Slot)'}
@@ -4130,6 +4153,7 @@ export default function Dashboard() {
                               const absoluteDayNo = (selectedTrackerRound - 1) * stepsPerRound + stepNo;
 
                               // Calculate status for each display slot
+                              // Calculate status for each display slot with matched payment & Ethiopian date
                               const slotStatuses = displaySlots.map(s => {
                                 const sPayments = groupPayments.filter(p => p.userId === s.id);
                                 const sActiveDays = sPayments.filter(p => p.status === 'active' || p.status === 'verified' || p.status === 'completed')
@@ -4141,11 +4165,36 @@ export default function Dashboard() {
                                 const isPaidPending = !isPaidActive && absoluteDayNo <= (sActiveDays + sPendingDays);
                                 const isPaid = isPaidActive || isPaidPending;
 
+                                const allSlotPayments = [...sPayments]
+                                  .filter(p => ['active', 'verified', 'completed', 'approved', 'pending'].includes(p.status))
+                                  .sort((a, b) => {
+                                    const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+                                    const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+                                    return tA - tB;
+                                  });
+
+                                let runningDay = 0;
+                                let matchedPayment = null;
+                                for (const p of allSlotPayments) {
+                                  const pDays = Number(p.paymentDays) || 1;
+                                  if (absoluteDayNo >= runningDay + 1 && absoluteDayNo <= runningDay + pDays) {
+                                    matchedPayment = p;
+                                    break;
+                                  }
+                                  runningDay += pDays;
+                                }
+
+                                const paymentEthDate = matchedPayment ? (matchedPayment.ethiopianDate || formatToEthiopianDate(matchedPayment.createdAt || matchedPayment.approvedAt, language)) : null;
+                                const paymentTime = matchedPayment ? (matchedPayment.paymentDetails?.time || getEthiopianDateDetails(matchedPayment.createdAt || matchedPayment.approvedAt).timeString) : null;
+
                                 return {
                                   ...s,
                                   isPaidActive,
                                   isPaidPending,
-                                  isPaid
+                                  isPaid,
+                                  matchedPayment,
+                                  paymentEthDate,
+                                  paymentTime
                                 };
                               });
 
@@ -4172,34 +4221,40 @@ export default function Dashboard() {
                                       }
                                     }}
                                   >
-                                    {/* Decorative circle */}
                                     <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-md opacity-20 ${allPaid ? 'bg-emerald-400' : !allUnpaid ? 'bg-amber-400' : 'bg-slate-300'}`} />
 
                                     <div className="flex justify-between items-center relative z-10 pb-1.5 border-b border-black/5">
                                       <span className="text-[10px] font-black uppercase tracking-widest font-mono opacity-60">
                                         {language === 'am' ? `ቀን ${stepNo}` : `Day ${stepNo}`}
                                       </span>
-                                      <span className="text-[9px] font-black bg-white/70 px-2 py-0.5 rounded-full border border-black/5">
+                                      <span className="text-[9px] font-black bg-white/70 px-2 py-0.5 rounded-full border border-black/5 font-mono">
                                         {slotStatuses.filter(s => s.isPaidActive).length}/{displaySlots.length}
                                       </span>
                                     </div>
 
                                     <div className="mt-2.5 space-y-2 relative z-10">
                                       {slotStatuses.map((sStatus, idx) => (
-                                        <div key={idx} className="flex items-center justify-between gap-2 text-[10px] font-bold">
-                                          <div className="flex items-center gap-1.5 min-w-0">
-                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${sStatus.isPaidActive ? 'bg-emerald-500' : sStatus.isPaidPending ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} />
-                                            <span className={`truncate text-slate-700 ${sStatus.isSelf ? 'font-black underline decoration-indigo-500' : ''}`} title={isAdmin || sStatus.isSelf ? sStatus.fullName : (language === 'am' ? 'የጋራ አባል' : 'Shared Member')}>
-                                              {sStatus.isSelf ? (language === 'am' ? 'የእኔ' : 'Me') : (isAdmin ? sStatus.fullName.split(' ')[0] : (language === 'am' ? 'የጋራ አባል' : 'Shared Member'))} ({sStatus.label})
+                                        <div key={idx} className="flex flex-col gap-0.5 border-b border-black/5 pb-1 last:border-0">
+                                          <div className="flex items-center justify-between gap-2 text-[10px] font-bold">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${sStatus.isPaidActive ? 'bg-emerald-500' : sStatus.isPaidPending ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} />
+                                              <span className={`truncate text-slate-700 ${sStatus.isSelf ? 'font-black underline decoration-indigo-500' : ''}`} title={isAdmin || sStatus.isSelf ? sStatus.fullName : (language === 'am' ? 'የጋራ አባል' : 'Shared Member')}>
+                                                {sStatus.isSelf ? (language === 'am' ? 'የእኔ' : 'Me') : (isAdmin ? sStatus.fullName.split(' ')[0] : (language === 'am' ? 'የጋራ አባል' : 'Shared Member'))}
+                                              </span>
+                                            </div>
+                                            <span className={`text-[10px] uppercase font-black tracking-tight shrink-0 ${sStatus.isPaidActive ? 'text-emerald-600' : sStatus.isPaidPending ? 'text-amber-500' : 'text-slate-400'}`}>
+                                              {sStatus.isPaidActive 
+                                                ? (language === 'am' ? '✓ ተከፍሏል' : '✓ Paid')
+                                                : sStatus.isPaidPending
+                                                  ? (language === 'am' ? '⏳ ይገምገም' : '⏳ Pend')
+                                                  : (language === 'am' ? '✗ ባዶ' : '✗ Unpaid')}
                                             </span>
                                           </div>
-                                          <span className={`text-[10px] uppercase font-black tracking-tight shrink-0 ${sStatus.isPaidActive ? 'text-emerald-600' : sStatus.isPaidPending ? 'text-amber-500' : 'text-slate-400'}`}>
-                                            {sStatus.isPaidActive 
-                                              ? (language === 'am' ? '✓ ሙሉ' : '✓ Paid')
-                                              : sStatus.isPaidPending
-                                                ? (language === 'am' ? '⏳ ይገምገም' : '⏳ Pend')
-                                                : (language === 'am' ? '✗ ባዶ' : '✗ Unpaid')}
-                                          </span>
+                                          {sStatus.paymentEthDate && (
+                                            <span className="text-[8px] font-bold text-indigo-700 truncate pl-3">
+                                              {sStatus.paymentEthDate}
+                                            </span>
+                                          )}
                                         </div>
                                       ))}
                                     </div>
@@ -4211,6 +4266,8 @@ export default function Dashboard() {
                               const isPaidActive = slotStatuses[0]?.isPaidActive || false;
                               const isPaidPending = slotStatuses[0]?.isPaidPending || false;
                               const isPaid = slotStatuses[0]?.isPaid || false;
+                              const paymentEthDate = slotStatuses[0]?.paymentEthDate;
+                              const paymentTime = slotStatuses[0]?.paymentTime;
 
                               let statusTextAm = isPaidActive
                                 ? `የራይት ምልክት (ተረጋግጧል)${(userData?.slots || 1) > 1 ? ` - ተደርቧል (x${userData.slots})` : ''}`
@@ -4232,7 +4289,7 @@ export default function Dashboard() {
                                       setActiveTab('payment-send');
                                     }
                                   }}
-                                  className={`p-4 rounded-[1.5rem] border flex flex-col justify-between h-32 relative overflow-hidden transition-all shadow-sm ${
+                                  className={`p-4 rounded-[1.5rem] border flex flex-col justify-between min-h-[140px] relative overflow-hidden transition-all shadow-sm ${
                                     isPaidActive 
                                       ? "bg-emerald-50/75 border-emerald-200/60 hover:border-emerald-400/40 hover:bg-emerald-100/40 text-emerald-900" 
                                       : isPaidPending
@@ -4240,13 +4297,12 @@ export default function Dashboard() {
                                         : selectedTrackerRound === (group.currentRound || 1)
                                           ? "bg-white border-slate-100 hover:border-indigo-200 hover:bg-slate-50/30 text-slate-900 cursor-pointer"
                                           : "bg-slate-100/50 border-slate-100 text-slate-400 opacity-60"
-                                    }`}
+                                  }`}
                                 >
-                                  {/* Decorative circle */}
                                   <div className={`absolute -right-4 -bottom-4 w-12 h-12 rounded-full blur-md opacity-20 ${isPaidActive ? 'bg-emerald-400' : isPaidPending ? 'bg-amber-400' : 'bg-slate-300'}`} />
 
                                   <div className="flex justify-between items-start relative z-10">
-                                    <span className="text-[9px] font-black uppercase tracking-widest font-mono opacity-60">
+                                    <span className="text-[10px] font-black uppercase tracking-widest font-mono opacity-60">
                                       {language === 'am' ? `ቀን ${stepNo}` : `Day ${stepNo}`}
                                     </span>
                                     {isPaid ? (
@@ -4260,28 +4316,144 @@ export default function Dashboard() {
                                     )}
                                   </div>
 
-                                  <div className="mt-auto relative z-10">
-                                    <p className="text-xs font-black tracking-tight leading-none mb-1">
+                                  <div className="mt-auto relative z-10 space-y-1">
+                                    <p className="text-xs font-black tracking-tight leading-none">
                                       {isPaidActive 
-                                        ? (language === 'am' ? 'የራይት ምልክት (ተረጋግጧል)' : 'Verified')
+                                        ? (language === 'am' ? 'የተረጋገጠ ክፍያ' : 'Verified')
                                         : isPaidPending
                                           ? (language === 'am' ? 'በግምገማ ላይ (Pending)' : 'Under Review')
                                           : (language === 'am' ? 'ኤክስ ምልክት (ያልተከፈለ)' : 'Unpaid')}
                                     </p>
+                                    {paymentEthDate && (
+                                      <p className="text-[8.5px] font-black text-indigo-700 bg-white/80 px-2 py-0.5 rounded-md border border-indigo-100/80 inline-block">
+                                        {paymentEthDate} {paymentTime ? `(${paymentTime})` : ''}
+                                      </p>
+                                    )}
                                     {isPaid && (userData?.slots || 1) > 1 && (
-                                      <div className="mb-1">
+                                      <div className="pt-0.5">
                                         <span className="bg-amber-100 border border-amber-200 text-amber-900 text-[6px] px-1 py-0.5 rounded font-black uppercase tracking-widest">
                                           {language === 'am' ? 'የድርብ እጣ ክፍያ' : 'Stacked Payment'}
                                         </span>
                                       </div>
                                     )}
-                                    <p className="text-[8px] font-bold uppercase tracking-widest opacity-60 leading-tight">
+                                    <p className="text-[7.5px] font-bold uppercase tracking-widest opacity-60 leading-tight">
                                       {language === 'am' ? statusTextAm : statusTextEn}
                                     </p>
                                   </div>
                                 </motion.div>
                               );
                             });
+                          })()}
+                        </div>
+
+                        {/* Daily Payment Tracking Table with Ethiopian Dates for Member */}
+                        <div className="mt-6 pt-5 border-t border-slate-100 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                <History size={14} />
+                              </div>
+                              <div>
+                                <h6 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                                  {language === 'am' ? `የዙር ${selectedTrackerRound} የቀን ክፍያዎች መዝገብ` : `Round ${selectedTrackerRound} Daily Payments Log`}
+                                </h6>
+                                <p className="text-[9px] font-bold text-slate-400">
+                                  {language === 'am' ? 'የዕለት ክፍያዎች በኢትዮጵያ ዘመን አቆጣጠር' : 'Daily installments in Ethiopian Calendar'}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
+                              {language === 'am' ? 'የኢትዮጵያ አቆጣጠር' : 'Ethiopian Calendar'}
+                            </span>
+                          </div>
+
+                          {(() => {
+                            const userPayments = groupPayments.filter(p => p.userId === userData.id && ['active', 'verified', 'completed', 'approved', 'pending'].includes(p.status));
+                            const sortedP = [...userPayments].sort((a, b) => {
+                              const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+                              const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+                              return tA - tB;
+                            });
+
+                            const roundDaysLog = [];
+                            for (let sIdx = 0; sIdx < stepsPerRound; sIdx++) {
+                              const stepNo = sIdx + 1;
+                              const absDay = (selectedTrackerRound - 1) * stepsPerRound + stepNo;
+                              
+                              let runningDay = 0;
+                              let p = null;
+                              for (const item of sortedP) {
+                                const pDays = Number(item.paymentDays) || 1;
+                                if (absDay >= runningDay + 1 && absDay <= runningDay + pDays) {
+                                  p = item;
+                                  break;
+                                }
+                                runningDay += pDays;
+                              }
+
+                              if (p) {
+                                roundDaysLog.push({
+                                  dayNo: stepNo,
+                                  absDay: absDay,
+                                  round: selectedTrackerRound,
+                                  payment: p,
+                                  ethDate: p.ethiopianDate || formatToEthiopianDate(p.createdAt || p.approvedAt, language),
+                                  time: p.paymentDetails?.time || getEthiopianDateDetails(p.createdAt || p.approvedAt).timeString,
+                                  amount: (p.amount && p.paymentDays) ? Math.round(p.amount / p.paymentDays) : (p.amount || 0),
+                                  status: p.status,
+                                  receiptId: p.receiptId || p.transactionCode || p.bank || 'CASH'
+                                });
+                              }
+                            }
+
+                            if (roundDaysLog.length === 0) {
+                              return (
+                                <div className="p-4 bg-slate-50/70 rounded-2xl text-center text-[10px] font-bold text-slate-400 border border-slate-100">
+                                  {language === 'am' ? 'በዚህ ዙር የተመዘገበ የቀን ክፍያ የለም' : 'No daily payments recorded for this round'}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white shadow-sm">
+                                <table className="w-full text-left text-[9px]">
+                                  <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-black border-b border-slate-100">
+                                    <tr>
+                                      <th className="p-2.5">{language === 'am' ? 'ዕለት' : 'Day'}</th>
+                                      <th className="p-2.5">{language === 'am' ? 'ዙር' : 'Round'}</th>
+                                      <th className="p-2.5">{language === 'am' ? 'የተከፈለበት ቀን (ኢትዮጵያ)' : 'Payment Date (EC)'}</th>
+                                      <th className="p-2.5">{language === 'am' ? 'ሰዓት' : 'Time'}</th>
+                                      <th className="p-2.5">{language === 'am' ? 'መጠን' : 'Amount'}</th>
+                                      <th className="p-2.5">{language === 'am' ? 'ደረሰኝ / ባንክ' : 'Ref / Method'}</th>
+                                      <th className="p-2.5 text-right">{language === 'am' ? 'ሁኔታ' : 'Status'}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
+                                    {roundDaysLog.map((log, lIdx) => (
+                                      <tr key={lIdx} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="p-2.5 font-black text-slate-900">ቀን {log.dayNo}</td>
+                                        <td className="p-2.5 font-mono text-slate-500">ዙር {log.round}</td>
+                                        <td className="p-2.5 text-indigo-700 font-black">{log.ethDate}</td>
+                                        <td className="p-2.5 font-mono text-slate-400">{log.time}</td>
+                                        <td className="p-2.5 text-emerald-600 font-black">{log.amount.toLocaleString()} ETB</td>
+                                        <td className="p-2.5 font-mono text-slate-500 truncate max-w-[100px]">{log.receiptId}</td>
+                                        <td className="p-2.5 text-right">
+                                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${
+                                            log.status === 'active' || log.status === 'verified' || log.status === 'completed'
+                                              ? 'bg-emerald-100 text-emerald-700'
+                                              : 'bg-amber-100 text-amber-700'
+                                          }`}>
+                                            {log.status === 'active' || log.status === 'verified' || log.status === 'completed'
+                                              ? (language === 'am' ? 'ተረጋግጧል' : 'Verified')
+                                              : (language === 'am' ? 'በግምገማ' : 'Pending')}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            );
                           })()}
                         </div>
 

@@ -14,6 +14,7 @@ import { collection, query, getDocs, getDoc, addDoc, where, doc, updateDoc, onSn
 import { Bell, Image as ImageIcon, Users, DollarSign, Wallet, CheckCircle, XCircle, X, Eye, EyeOff, ShieldCheck, Clock, Search, Trophy, Zap, MessageCircle, Send, Video, Mic, Square, Play, Edit, LayoutDashboard, CreditCard, AlertOctagon, HelpCircle, FileText, Settings, LogOut, Filter, LayoutGrid, Activity, Shield, Layers, ShieldAlert, MapPin, User, Phone, Lock, Hash, RefreshCw, Scale, ShoppingBag, Gift, Calendar, Trash2, RotateCcw, Star, UserCheck, Mail, Plus, Download, History, TrendingUp, Archive, Award, PieChart as PieChartIcon, Globe, Palette, Save, Moon, Sun, Sliders, BellRing, ToggleLeft, ToggleRight, Camera, FileSignature, AlertTriangle, Folder, FolderOpen, ChevronRight, ChevronDown, ArrowRight, Sparkles, Edit3, UserPlus, ArrowUpNarrowWide, ArrowDownWideNarrow, Share2, Home, List, Copy, MicOff, VideoOff, Volume2, PhoneOff, UserMinus, Ban } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { sendSMS } from '../lib/smsHelper';
+import { formatToEthiopianDate, getEthiopianDateDetails } from '../utils/ethiopianDate';
 
 const formatSlots = (s: number | undefined): string => {
   if (!s) return '1';
@@ -3861,13 +3862,22 @@ export default function AdminDashboard() {
         }
       }
 
-      // 1. Update each user in Firestore
+      // 1. Update each user in Firestore with Ethiopian transfer/join date
+      const transferNow = new Date();
+      const transferEthDate = getEthiopianDateDetails(transferNow);
+
       for (const u of selectedUsers) {
         const userRef = doc(db, 'users', u.id);
         await updateDoc(userRef, {
           groupId: targetGroup.id,
           ekubType: targetGroup.type,
           amount: targetGroup.amount, // Set their amount and type to match target group
+          transferredAt: transferNow,
+          transferredAtEC: transferEthDate.formattedAm,
+          joinedDateEC: transferEthDate.formattedAm,
+          ethiopianJoinedDate: transferEthDate.formattedAm,
+          joinedGroupAtEC: transferEthDate.formattedAm,
+          joinedGroupAt: transferNow
         });
 
         // Also notify the user about group transfer
@@ -4052,6 +4062,9 @@ export default function AdminDashboard() {
       const totalCyclePayment = totalPerSlot * multiplier * groupLimit * requestedSlots;
 
       // 4. Construct complete profile data preserving ALL existing KYC, IDs, Guarantors, and Bank Info
+      const joinNow = new Date();
+      const joinEthDate = getEthiopianDateDetails(joinNow);
+
       const newUserDoc: any = {
         uid: uid,
         fullName: member.fullName || '',
@@ -4107,10 +4120,18 @@ export default function AdminDashboard() {
         groupId: targetGroup.id,
         ekubType: targetGroup.type || '',
         memberCode: newMemberCode,
+        // Group Enrollment Dates in Ethiopian & Gregorian Calendar
+        joinedGroupAt: joinNow,
+        joinedDate: joinNow.toISOString(),
+        joinedDateEC: joinEthDate.formattedAm,
+        ethiopianJoinedDate: joinEthDate.formattedAm,
+        joinedDateEthiopian: joinEthDate.formattedAm,
+        joinedGroupAtEC: joinEthDate.formattedAm,
+        enrollmentDateEC: joinEthDate.formattedAm,
         // Status & Multi-group Tracking
         status: 'active',
         isVerified: true,
-        verifiedAt: new Date(),
+        verifiedAt: joinNow,
         isAdmin: false,
         role: 'user',
         isMultiGroupMember: true,
@@ -4634,9 +4655,14 @@ export default function AdminDashboard() {
 
   const approvePayment = async (paymentId: string) => {
     try {
+      const now = new Date();
+      const ethDate = getEthiopianDateDetails(now);
       await updateDoc(doc(db, 'payments', paymentId), {
         status: 'active',
-        approvedAt: new Date(),
+        approvedAt: now,
+        approvedAtEC: ethDate.formattedAm,
+        ethiopianDate: ethDate.formattedAm,
+        ethiopianDateTime: ethDate.fullFormattedAm,
         reviewMessage: paymentReviewMessage || ''
       });
       const pt = allPayments.find(p => p.id === paymentId);
@@ -4779,7 +4805,9 @@ export default function AdminDashboard() {
       const totalAmount = baseAmount * paymentCount;
       
       const now = new Date();
+      const ethDate = getEthiopianDateDetails(now);
       const receiptId = generateReceiptId('CASH');
+      const targetRound = manualPaymentGroup.currentRound || 1;
 
       await addDoc(collection(db, 'payments'), {
         userId: targetAccount.id,
@@ -4789,6 +4817,8 @@ export default function AdminDashboard() {
         memberCode: targetAccount.memberCode || '',
         amount: totalAmount,
         paymentDays: paymentCount,
+        round: targetRound,
+        targetRound: targetRound,
         status: 'active',
         type: 'manual_contribution',
         cycles: paymentCount,
@@ -4796,12 +4826,20 @@ export default function AdminDashboard() {
         receiptId: receiptId,
         createdAt: now,
         approvedAt: now,
+        approvedAtEC: ethDate.formattedAm,
+        ethiopianDate: ethDate.formattedAm,
+        ethiopianDateTime: ethDate.fullFormattedAm,
+        ethiopianDateEC: ethDate.formattedAm,
         approvedBy: 'admin',
         paymentDetails: {
           year: now.getFullYear(),
           month: now.getMonth() + 1,
           day: now.getDate(),
           time: now.toLocaleTimeString(),
+          ethiopianDate: ethDate.formattedAm,
+          ethiopianYear: ethDate.year,
+          ethiopianMonth: ethDate.monthNameAm,
+          ethiopianDay: ethDate.day,
           method: 'Manual/Cash'
         }
       });
@@ -6825,6 +6863,10 @@ export default function AdminDashboard() {
                                           <span className="text-[9px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-indigo-100">
                                              Slots: {formatSlots(member.slots)}
                                           </span>
+                                          <span className="text-[9px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-black uppercase tracking-wider border border-purple-100 flex items-center gap-1">
+                                             <Calendar size={9} />
+                                             <span>{language === 'am' ? 'የተቀላቀሉበት:' : 'Joined:'} {member.joinedDateEC || member.ethiopianJoinedDate || formatToEthiopianDate(member.joinedGroupAt || member.createdAt || member.verifiedAt)}</span>
+                                          </span>
                                           {member.wonDraw && (
                                             <div className="flex items-center gap-1">
                                               <span className="text-[9px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest border border-amber-100 flex items-center gap-1">
@@ -7040,101 +7082,259 @@ export default function AdminDashboard() {
                                                const absoluteDayNo = (adminTrackerRound - 1) * stepsPerRound + stepNo;
 
                                                // Calculate status for each slot
-                                               const slotStatuses = displaySlots.map(s => {
-                                                 const sPayments = groupPayments.filter(p => p.userId === s.id);
-                                                 const sActiveDays = sPayments.filter(p => p.status === 'active' || p.status === 'verified' || p.status === 'completed')
-                                                   .reduce((acc, p) => acc + (p.paymentDays || 1), 0);
-                                                 const sPendingDays = sPayments.filter(p => p.status === 'pending')
-                                                   .reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                                                // Calculate status for each slot with matched payment & Ethiopian date
+                                                const slotStatuses = displaySlots.map(s => {
+                                                  const sPayments = groupPayments.filter(p => p.userId === s.id);
+                                                  const sActiveDays = sPayments.filter(p => p.status === 'active' || p.status === 'verified' || p.status === 'completed')
+                                                    .reduce((acc, p) => acc + (p.paymentDays || 1), 0);
+                                                  const sPendingDays = sPayments.filter(p => p.status === 'pending')
+                                                    .reduce((acc, p) => acc + (p.paymentDays || 1), 0);
 
-                                                 const isPaid = absoluteDayNo <= sActiveDays;
-                                                 const isPending = !isPaid && absoluteDayNo <= (sActiveDays + sPendingDays);
+                                                  const isPaid = absoluteDayNo <= sActiveDays;
+                                                  const isPending = !isPaid && absoluteDayNo <= (sActiveDays + sPendingDays);
 
-                                                 return {
-                                                   ...s,
-                                                   isPaid,
-                                                   isPending
-                                                 };
-                                               });
+                                                  const allSlotPayments = [...sPayments]
+                                                    .filter(p => ['active', 'verified', 'completed', 'approved', 'pending'].includes(p.status))
+                                                    .sort((a, b) => {
+                                                      const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+                                                      const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+                                                      return tA - tB;
+                                                    });
 
-                                               const allPaid = slotStatuses.every(s => s.isPaid);
-                                               const anyPaid = slotStatuses.some(s => s.isPaid || s.isPending);
+                                                  let runningDay = 0;
+                                                  let matchedPayment: any = null;
+                                                  for (const p of allSlotPayments) {
+                                                    const pDays = Number(p.paymentDays) || 1;
+                                                    if (absoluteDayNo >= runningDay + 1 && absoluteDayNo <= runningDay + pDays) {
+                                                      matchedPayment = p;
+                                                      break;
+                                                    }
+                                                    runningDay += pDays;
+                                                  }
 
-                                               if (displaySlots.length > 1) {
-                                                 return (
-                                                   <div 
-                                                     key={stepNo} 
-                                                     className={`p-2 rounded-xl border relative overflow-hidden transition-all duration-300 col-span-2 xs:col-span-1 min-h-[90px] flex flex-col justify-between ${
-                                                       allPaid
-                                                         ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-950"
-                                                         : anyPaid
-                                                           ? "bg-amber-500/5 border-amber-500/20 text-amber-950 animate-pulse"
-                                                           : "bg-slate-50 border-slate-100 text-slate-400"
-                                                     }`}
-                                                   >
-                                                     <div className="flex justify-between items-center pb-1 border-b border-black/5">
-                                                       <span className="text-[8px] font-black uppercase tracking-wider opacity-60">
-                                                         ቀን {stepNo}
-                                                       </span>
-                                                       <span className="text-[8px] font-bold text-slate-500 bg-white/60 px-1 rounded">
-                                                         {slotStatuses.filter(s => s.isPaid).length}/{displaySlots.length}
-                                                       </span>
-                                                     </div>
-                                                     
-                                                     <div className="mt-1.5 space-y-1">
-                                                       {slotStatuses.map((sStatus, idx) => (
-                                                         <div key={idx} className="flex items-center justify-between gap-1 text-[8px] font-bold">
-                                                           <span className="truncate max-w-[70px] text-slate-600" title={sStatus.fullName}>
-                                                             {sStatus.fullName.split(' ')[0]} ({sStatus.label})
+                                                  const paymentEthDate = matchedPayment ? (matchedPayment.ethiopianDate || formatToEthiopianDate(matchedPayment.createdAt || matchedPayment.approvedAt, language)) : null;
+                                                  const paymentTime = matchedPayment ? (matchedPayment.paymentDetails?.time || getEthiopianDateDetails(matchedPayment.createdAt || matchedPayment.approvedAt).timeString) : null;
+
+                                                  return {
+                                                    ...s,
+                                                    isPaid,
+                                                    isPending,
+                                                    matchedPayment,
+                                                    paymentEthDate,
+                                                    paymentTime
+                                                  };
+                                                });
+
+                                                const allPaid = slotStatuses.every(s => s.isPaid);
+                                                const anyPaid = slotStatuses.some(s => s.isPaid || s.isPending);
+
+                                                if (displaySlots.length > 1) {
+                                                  return (
+                                                    <div 
+                                                      key={stepNo} 
+                                                      className={`p-2 rounded-xl border relative overflow-hidden transition-all duration-300 col-span-2 xs:col-span-1 min-h-[95px] flex flex-col justify-between ${
+                                                        allPaid
+                                                          ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-950"
+                                                          : anyPaid
+                                                            ? "bg-amber-500/5 border-amber-500/20 text-amber-950 animate-pulse"
+                                                            : "bg-slate-50 border-slate-100 text-slate-400"
+                                                      }`}
+                                                    >
+                                                      <div className="flex justify-between items-center pb-1 border-b border-black/5">
+                                                        <span className="text-[8px] font-black uppercase tracking-wider opacity-60">
+                                                          ቀን {stepNo}
+                                                        </span>
+                                                        <span className="text-[7.5px] font-bold text-slate-500 bg-white/70 px-1 rounded font-mono">
+                                                          {slotStatuses.filter(s => s.isPaid).length}/{displaySlots.length}
+                                                        </span>
+                                                      </div>
+                                                      
+                                                      <div className="mt-1 space-y-1">
+                                                        {slotStatuses.map((sStatus, idx) => (
+                                                          <div key={idx} className="flex flex-col gap-0.5 text-[7.5px] border-b border-black/5 pb-0.5 last:border-0">
+                                                            <div className="flex items-center justify-between gap-1 font-bold">
+                                                              <span className="truncate max-w-[65px] text-slate-700" title={sStatus.fullName}>
+                                                                {sStatus.fullName.split(' ')[0]}
+                                                              </span>
+                                                              <span className={sStatus.isPaid ? "text-emerald-600 font-black" : sStatus.isPending ? "text-amber-500 font-black" : "text-slate-300"}>
+                                                                {sStatus.isPaid ? "✓" : sStatus.isPending ? "⏳" : "✗"}
+                                                              </span>
+                                                            </div>
+                                                            {sStatus.paymentEthDate && (
+                                                              <span className="text-[6.5px] text-indigo-700 font-bold truncate">
+                                                                {sStatus.paymentEthDate}
+                                                              </span>
+                                                            )}
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                }
+
+                                                // Standard Single Slot view with Ethiopian Date
+                                                const sStatus = slotStatuses[0];
+                                                const isPaid = sStatus?.isPaid || false;
+                                                const isPending = sStatus?.isPending || false;
+                                                const paymentEthDate = sStatus?.paymentEthDate;
+                                                const paymentTime = sStatus?.paymentTime;
+
+                                                return (
+                                                  <div 
+                                                    key={stepNo} 
+                                                    className={`p-2 rounded-xl border text-center relative overflow-hidden flex flex-col justify-between min-h-[78px] transition-all ${
+                                                      isPaid
+                                                        ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-950 shadow-sm"
+                                                        : isPending
+                                                          ? "bg-amber-500/10 border-amber-500/25 text-amber-950 animate-pulse"
+                                                          : "bg-slate-50 border-slate-100 text-slate-400"
+                                                    }`}
+                                                  >
+                                                    <div className="flex justify-between items-center text-[7.5px] font-black uppercase tracking-wider opacity-60 border-b border-black/5 pb-0.5">
+                                                      <span>ቀን {stepNo}</span>
+                                                      <span className="font-mono text-[6.5px]">ዙር {adminTrackerRound}</span>
+                                                    </div>
+                                                    <div className="flex flex-col items-center justify-center my-1 leading-tight">
+                                                       {isPaid ? (
+                                                         <div className="flex flex-col items-center">
+                                                           <span className="text-emerald-600 font-black text-xs leading-none">✓</span>
+                                                           <span className="text-[7.5px] font-black text-emerald-900 mt-1 truncate max-w-full leading-tight">
+                                                             {paymentEthDate || (language === 'am' ? 'ተከፍሏል' : 'Paid')}
                                                            </span>
-                                                           <span className={sStatus.isPaid ? "text-emerald-600" : sStatus.isPending ? "text-amber-500" : "text-slate-300"}>
-                                                             {sStatus.isPaid ? "✓" : sStatus.isPending ? "⏳" : "✗"}
+                                                           {paymentTime && (
+                                                             <span className="text-[6.5px] text-emerald-700 font-mono opacity-80 leading-none mt-0.5">
+                                                               {paymentTime}
+                                                             </span>
+                                                           )}
+                                                           {(member.slots || 1) > 1 && (
+                                                             <span className="bg-amber-100 text-amber-800 text-[6px] px-1 rounded font-black tracking-tighter mt-0.5" title="Stacked Payment">
+                                                               x{member.slots}
+                                                             </span>
+                                                           )}
+                                                         </div>
+                                                       ) : isPending ? (
+                                                         <div className="flex flex-col items-center">
+                                                           <span className="text-amber-500 font-black text-xs leading-none">⏳</span>
+                                                           <span className="text-[7.5px] font-black text-amber-900 mt-1 truncate max-w-full leading-tight">
+                                                             {paymentEthDate || (language === 'am' ? 'በግምገማ' : 'Pending')}
                                                            </span>
                                                          </div>
-                                                       ))}
-                                                     </div>
-                                                   </div>
-                                                 );
-                                               }
+                                                       ) : (
+                                                         <div className="flex flex-col items-center">
+                                                           <span className="text-slate-300 font-bold text-xs leading-none">✗</span>
+                                                           <span className="text-[7.5px] font-bold text-slate-400 mt-1 leading-tight">
+                                                             {language === 'am' ? 'ያልተከፈለ' : 'Unpaid'}
+                                                           </span>
+                                                         </div>
+                                                       )}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
 
-                                               // Standard Single Slot view
-                                               const sStatus = slotStatuses[0];
-                                               const isPaid = sStatus?.isPaid || false;
-                                               const isPending = sStatus?.isPending || false;
+                                            {/* Daily Payment Tracking Table with Ethiopian Calendar Dates */}
+                                            <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
+                                              <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-1.5">
+                                                  <History size={12} className="text-indigo-600" />
+                                                  <h6 className="text-[10px] font-black uppercase tracking-wider text-slate-800">
+                                                    {language === 'am' ? `የዙር ${adminTrackerRound} የቀን ክፍያዎች ክትትል ዝርዝር` : `Round ${adminTrackerRound} Daily Payments Log`}
+                                                  </h6>
+                                                </div>
+                                                <span className="text-[8px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                                                  {language === 'am' ? 'የኢትዮጵያ ዘመን አቆጣጠር' : 'Ethiopian Calendar'}
+                                                </span>
+                                              </div>
 
-                                               return (
-                                                 <div 
-                                                   key={stepNo} 
-                                                   className={`p-2 rounded-lg border text-center relative overflow-hidden ${
-                                                     isPaid
-                                                       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-900"
-                                                       : isPending
-                                                         ? "bg-amber-500/10 border-amber-500/20 text-amber-900 animate-pulse"
-                                                         : "bg-slate-50 border-slate-100 text-slate-400"
-                                                   }`}
-                                                 >
-                                                   <div className="text-[8px] font-black uppercase tracking-wider opacity-60">
-                                                     ቀን {stepNo}
-                                                   </div>
-                                                   <div className="flex flex-col items-center justify-center mt-1">
-                                                      {isPaid ? (
-                                                        <div className="flex flex-col items-center">
-                                                          <span className="text-emerald-600 font-bold text-xs">✓</span>
-                                                          {(member.slots || 1) > 1 && (
-                                                            <span className="bg-amber-100 text-amber-800 text-[6px] px-1 rounded font-black tracking-tighter" title="Stacked Payment">
-                                                              x{member.slots}
-                                                            </span>
-                                                          )}
-                                                        </div>
-                                                      ) : isPending ? (
-                                                        <span className="text-amber-500 font-bold text-xs">⏳</span>
-                                                      ) : (
-                                                        <span className="text-slate-300 font-bold text-xs">✗</span>
-                                                      )}
-                                                   </div>
-                                                 </div>
-                                               );
-                                             })}
+                                              {(() => {
+                                                const memberPayments = groupPayments.filter(p => p.userId === member.id && ['active', 'verified', 'completed', 'approved', 'pending'].includes(p.status));
+                                                const sortedP = [...memberPayments].sort((a, b) => {
+                                                  const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+                                                  const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+                                                  return tA - tB;
+                                                });
+
+                                                const roundDaysLog = [];
+                                                for (let sIdx = 0; sIdx < stepsPerRound; sIdx++) {
+                                                  const stepNo = sIdx + 1;
+                                                  const absDay = (adminTrackerRound - 1) * stepsPerRound + stepNo;
+                                                  
+                                                  let runningDay = 0;
+                                                  let p = null;
+                                                  for (const item of sortedP) {
+                                                    const pDays = Number(item.paymentDays) || 1;
+                                                    if (absDay >= runningDay + 1 && absDay <= runningDay + pDays) {
+                                                      p = item;
+                                                      break;
+                                                    }
+                                                    runningDay += pDays;
+                                                  }
+
+                                                  if (p) {
+                                                    roundDaysLog.push({
+                                                      dayNo: stepNo,
+                                                      absDay: absDay,
+                                                      round: adminTrackerRound,
+                                                      payment: p,
+                                                      ethDate: p.ethiopianDate || formatToEthiopianDate(p.createdAt || p.approvedAt, language),
+                                                      time: p.paymentDetails?.time || getEthiopianDateDetails(p.createdAt || p.approvedAt).timeString,
+                                                      amount: (p.amount && p.paymentDays) ? Math.round(p.amount / p.paymentDays) : (p.amount || 0),
+                                                      status: p.status,
+                                                      receiptId: p.receiptId || p.transactionCode || p.bank || 'CASH'
+                                                    });
+                                                  }
+                                                }
+
+                                                if (roundDaysLog.length === 0) {
+                                                  return (
+                                                    <div className="p-3 bg-slate-50/70 rounded-xl text-center text-[9px] font-bold text-slate-400 border border-slate-100">
+                                                      {language === 'am' ? 'በዚህ ዙር የተመዘገበ የቀን ክፍያ የለም' : 'No daily payments recorded for this round'}
+                                                    </div>
+                                                  );
+                                                }
+
+                                                return (
+                                                  <div className="overflow-x-auto rounded-xl border border-slate-100 bg-slate-50/40">
+                                                    <table className="w-full text-left text-[8px]">
+                                                      <thead className="bg-slate-100 text-slate-500 uppercase tracking-wider font-black">
+                                                        <tr>
+                                                          <th className="p-1.5">{language === 'am' ? 'ዕለት' : 'Day'}</th>
+                                                          <th className="p-1.5">{language === 'am' ? 'ዙር' : 'Round'}</th>
+                                                          <th className="p-1.5">{language === 'am' ? 'የተከፈለበት ቀን (ኢትዮጵያ)' : 'Payment Date (EC)'}</th>
+                                                          <th className="p-1.5">{language === 'am' ? 'ሰዓት' : 'Time'}</th>
+                                                          <th className="p-1.5">{language === 'am' ? 'መጠን' : 'Amount'}</th>
+                                                          <th className="p-1.5">{language === 'am' ? 'ደረሰኝ / ባንክ' : 'Ref / Method'}</th>
+                                                          <th className="p-1.5 text-right">{language === 'am' ? 'ሁኔታ' : 'Status'}</th>
+                                                        </tr>
+                                                      </thead>
+                                                      <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
+                                                        {roundDaysLog.map((log, lIdx) => (
+                                                          <tr key={lIdx} className="hover:bg-white transition-colors">
+                                                            <td className="p-1.5 font-black text-slate-900">ቀን {log.dayNo}</td>
+                                                            <td className="p-1.5 font-mono text-slate-500">ዙር {log.round}</td>
+                                                            <td className="p-1.5 text-indigo-700 font-black">{log.ethDate}</td>
+                                                            <td className="p-1.5 font-mono text-slate-400">{log.time}</td>
+                                                            <td className="p-1.5 text-emerald-600 font-black">{log.amount.toLocaleString()} ETB</td>
+                                                            <td className="p-1.5 font-mono text-slate-500 truncate max-w-[85px]">{log.receiptId}</td>
+                                                            <td className="p-1.5 text-right">
+                                                              <span className={`px-1.5 py-0.5 rounded-full text-[7px] font-black uppercase ${
+                                                                log.status === 'active' || log.status === 'verified' || log.status === 'completed'
+                                                                  ? 'bg-emerald-100 text-emerald-700'
+                                                                  : 'bg-amber-100 text-amber-700'
+                                                              }`}>
+                                                                {log.status === 'active' || log.status === 'verified' || log.status === 'completed'
+                                                                  ? (language === 'am' ? 'ተረጋግጧል' : 'Verified')
+                                                                  : (language === 'am' ? 'በግምገማ' : 'Pending')}
+                                                              </span>
+                                                            </td>
+                                                          </tr>
+                                                        ))}
+                                                      </tbody>
+                                                    </table>
+                                                  </div>
+                                                );
+                                              })()}
                                            </div>
                                          </div>
                                        );
@@ -15086,6 +15286,10 @@ export default function AdminDashboard() {
                               <div>
                                 <p className="text-xs font-black text-slate-900">{grp?.name || 'ያልታወቀ ምድብ'}</p>
                                 <p className="text-[9px] font-bold text-slate-400 font-mono">{s.memberCode || 'No Code'}</p>
+                                <div className="mt-1 flex items-center gap-1 text-[8px] font-bold text-purple-700">
+                                  <Calendar size={10} />
+                                  <span>{language === 'am' ? 'የተቀላቀሉበት:' : 'Joined:'} {s.joinedDateEC || s.ethiopianJoinedDate || formatToEthiopianDate(s.joinedGroupAt || s.createdAt || s.verifiedAt)}</span>
+                                </div>
                               </div>
                               <div className="text-right">
                                 <span className="px-2 py-0.5 rounded-full text-[8px] font-black bg-purple-100 text-purple-700">
